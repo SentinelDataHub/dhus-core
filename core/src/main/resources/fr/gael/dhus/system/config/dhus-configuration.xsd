@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2013-2018 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           version="1.0" elementFormDefault="qualified" xmlns:jxb="http://java.sun.com/xml/ns/jaxb"
+           jxb:version="2.1" xmlns:inheritance="http://jaxb2-commons.dev.java.net/basic/inheritance"
+           xmlns:annox="http://annox.dev.java.net" jxb:extensionBindingPrefixes="inheritance annox"
+           xmlns:dhus="fr.gael.dhus.database.object.config" targetNamespace="fr.gael.dhus.database.object.config"
+           xmlns:dhusCron="fr.gael.dhus.database.object.config.cron"
+           xmlns:dhusMessaging="fr.gael.dhus.database.object.config.messaging"
+           xmlns:dhusNetwork="fr.gael.dhus.database.object.config.network"
+           xmlns:dhusProduct="fr.gael.dhus.database.object.config.product"
+           xmlns:dhusSearch="fr.gael.dhus.database.object.config.search"
+           xmlns:dhusServer="fr.gael.dhus.database.object.config.server"
+           xmlns:dhusSystem="fr.gael.dhus.database.object.config.system"
+           xmlns:dhusDataStore="org.dhus.store.datastore.config"
+           xmlns:dhusScanner="fr.gael.dhus.database.object.config.scanner"
+           xmlns:dhusSynchronizer="fr.gael.dhus.database.object.config.synchronizer"
+           xmlns:dhusProductSource="fr.gael.dhus.database.object.config.productsource"
+           xmlns:dhusEviction="fr.gael.dhus.database.object.config.eviction"
+           xmlns:dhusSource="fr.gael.dhus.database.object.config.source">
+        
+
+   <xs:import namespace="fr.gael.dhus.database.object.config.cron" schemaLocation="dhus-cron.xsd" />
+   <xs:import namespace="fr.gael.dhus.database.object.config.network" schemaLocation="dhus-network.xsd" />
+   <xs:import namespace="fr.gael.dhus.database.object.config.messaging" schemaLocation="dhus-messaging.xsd" />
+   <xs:import namespace="fr.gael.dhus.database.object.config.product" schemaLocation="dhus-product.xsd" />
+   <xs:import namespace="fr.gael.dhus.database.object.config.search" schemaLocation="dhus-search.xsd" />
+   <xs:import namespace="fr.gael.dhus.database.object.config.server" schemaLocation="dhus-server.xsd" />
+   <xs:import namespace="fr.gael.dhus.database.object.config.system" schemaLocation="dhus-system.xsd" />
+   <xs:import namespace="fr.gael.dhus.database.object.config.scanner" schemaLocation="dhus-scanner.xsd" />
+   <xs:import namespace="fr.gael.dhus.database.object.config.synchronizer" schemaLocation="dhus-synchronizer.xsd" />
+   <xs:import namespace="org.dhus.store.datastore.config" schemaLocation="dhus-datastore.xsd" />
+   <xs:import namespace="fr.gael.dhus.database.object.config.eviction" schemaLocation="dhus-eviction.xsd" />
+   <xs:import namespace="fr.gael.dhus.database.object.config.source" schemaLocation="dhus-source.xsd" />
+   <xs:import namespace="fr.gael.dhus.database.object.config.productsource" schemaLocation="dhus-product-source.xsd" />
+
+   <xs:annotation>
+      <xs:appinfo>
+         <jxb:schemaBindings>
+            <jxb:package name="fr.gael.dhus.database.object.config" />
+         </jxb:schemaBindings>
+      </xs:appinfo>
+   </xs:annotation>
+
+   <xs:element name="configuration">
+      <xs:complexType>
+         <xs:all>
+            <xs:element minOccurs="0" maxOccurs="1" name="crons" type="dhusCron:cronConfiguration">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="cronConfiguration" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="messaging" type="dhusMessaging:messagingConfiguration">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="messagingConfiguration" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="network" type="dhusNetwork:networkConfiguration">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="networkConfiguration" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="products" type="dhusProduct:productConfiguration">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="productConfiguration" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="search" type="dhusSearch:searchConfiguration">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="searchConfiguration" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="server" type="dhusServer:abstractServerConfiguration">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="serverConfiguration" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="system" type="dhusSystem:systemConfiguration">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="systemConfiguration" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="dataStores" type="dhusDataStore:dataStores">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="dataStores" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="scanners" type="dhusScanner:scanners">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="scanners" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="synchronizers" type="dhusSynchronizer:synchronizers">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="synchronizers" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="productSources" type="dhusProductSource:productSources">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="productSources" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="evictions" type="dhusEviction:evictions">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="evictions" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="1" name="sources" type="dhusSource:sources">
+               <xs:annotation>
+                  <xs:appinfo>
+                     <jxb:property name="sources" />
+                  </xs:appinfo>
+               </xs:annotation>
+            </xs:element>
+         </xs:all>
+         <!-- Not used, only for class generation -->
+         <xs:attribute name="ID" use="optional" type="xs:long" />
+
+         <xs:attribute name="workingDir" type="xs:string" default="">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="workingDirectory" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:attribute>
+      </xs:complexType>
+   </xs:element>
+</xs:schema>

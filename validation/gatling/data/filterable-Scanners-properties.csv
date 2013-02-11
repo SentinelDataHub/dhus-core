@@ -1,0 +1,8 @@
+property, eqValue, neValue
+Id, 0, 0
+Url, '', ''
+Status, '', ''
+StatusMessage, '', ''
+Active, true, true
+Username, '', ''
+Pattern, '', ''

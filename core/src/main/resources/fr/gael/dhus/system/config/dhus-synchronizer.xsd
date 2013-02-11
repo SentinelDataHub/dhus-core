@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2017,2018 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           version="1.0" elementFormDefault="qualified" xmlns:jxb="http://java.sun.com/xml/ns/jaxb"
+           jxb:version="2.1" xmlns:inheritance="http://jaxb2-commons.dev.java.net/basic/inheritance"
+           xmlns:annox="http://annox.dev.java.net" jxb:extensionBindingPrefixes="inheritance annox"
+           xmlns:dhusSynchronizer="fr.gael.dhus.database.object.config.synchronizer"
+           targetNamespace="fr.gael.dhus.database.object.config.synchronizer">
+
+   <xs:annotation>
+      <xs:appinfo>
+         <jxb:schemaBindings>
+            <jxb:package name="fr.gael.dhus.database.object.config.synchronizer" />
+         </jxb:schemaBindings>
+      </xs:appinfo>
+   </xs:annotation>
+
+   <xs:complexType name="synchronizers">
+      <xs:annotation>
+         <xs:appinfo>
+            <jxb:class name="Synchronizers" implClass="fr.gael.dhus.database.object.config.synchronizer.SynchronizerManager" />
+         </xs:appinfo>
+      </xs:annotation>
+      <xs:sequence>
+         <xs:element name="synchronizer" type="dhusSynchronizer:synchronizerConfiguration" minOccurs="0" maxOccurs="unbounded" />
+      </xs:sequence>
+   </xs:complexType>
+
+   <xs:complexType name="synchronizerConfiguration" abstract="true">
+      <xs:sequence>
+         <xs:element name="id" type="xs:long" minOccurs="1" maxOccurs="1"/>
+         <xs:element name="label" type="xs:string" minOccurs="0" maxOccurs="1" />
+         <xs:element name="schedule" type="xs:string" minOccurs="1" maxOccurs="1" />
+         <xs:element name="active" type="xs:boolean" minOccurs="1" maxOccurs="1" />
+         <xs:element name="created" type="xs:dateTime" minOccurs="1" maxOccurs="1" />
+         <xs:element name="modified" type="xs:dateTime" minOccurs="1" maxOccurs="1" />
+         <xs:element name="pageSize" minOccurs="1" maxOccurs="1">
+            <xs:simpleType>
+               <xs:restriction base="xs:int">
+                  <xs:minExclusive value="0" />
+               </xs:restriction>
+            </xs:simpleType>
+         </xs:element>
+      </xs:sequence>
+   </xs:complexType>
+
+   <xs:complexType name="synchronizerAuthentification" abstract="true">
+      <xs:complexContent>
+         <xs:extension base="dhusSynchronizer:synchronizerConfiguration">
+            <xs:sequence>
+               <xs:element name="serviceUrl" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="serviceLogin" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="servicePassword" type="xs:string" minOccurs="1" maxOccurs="1" />
+            </xs:sequence>
+         </xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
+
+   <xs:complexType name="productSynchronizer">
+      <xs:complexContent>
+         <xs:extension base="dhusSynchronizer:synchronizerConfiguration">
+            <xs:sequence>
+               <xs:element name="targetCollection" type="xs:string" minOccurs="0" maxOccurs="1" />
+               <xs:element name="copyProduct" type="xs:boolean" minOccurs="0" maxOccurs="1" default="false"/>
+               <xs:element name="filterParam" type="xs:string" minOccurs="0" maxOccurs="1" />
+               <xs:element name="geofilterOp" type="xs:string" minOccurs="0" maxOccurs="1" />
+               <xs:element name="geofilterShape" type="xs:string" minOccurs="0" maxOccurs="1" />
+               <xs:element name="skipOnError" type="xs:boolean" minOccurs="0" maxOccurs="1" default="true"/>
+               <xs:element name="syncOfflineProducts" type="xs:boolean" minOccurs="0" maxOccurs="1" default="false"/>
+               <xs:element name="rankingSchedule" type="xs:string" minOccurs="0" maxOccurs="1" />
+               <xs:element name="sources" minOccurs="1" maxOccurs="1">
+                  <xs:complexType>
+                     <xs:sequence>
+                        <xs:element name="source" type="dhusSynchronizer:source" minOccurs="1" maxOccurs="unbounded"/>
+                     </xs:sequence>
+                  </xs:complexType>
+               </xs:element>
+            </xs:sequence>
+            <!-- number of retries for each skipped product -->
+            <xs:attribute name="retriesForSkippedProducts" type="xs:int" default="3"/>
+   			<!-- timeout in milliseconds of each request of synchronization for skipped products-->
+   			<xs:attribute name="timeoutSkippedProducts" type="xs:long" default="60000"/>
+   			<!-- Delay for retrying a source to check its ranking. In minutes  -->
+   			<xs:attribute name="retryingSourceDelay" type="xs:long" default="60"/>
+         </xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
+
+   <xs:complexType name="eventSynchronizer">
+      <xs:complexContent>
+         <xs:extension base="dhusSynchronizer:synchronizerAuthentification">
+            <xs:sequence>
+               <xs:element name="filterParam" type="xs:string" minOccurs="0" maxOccurs="1" />
+               <xs:element name="skip" type="xs:int" minOccurs="0" maxOccurs="1" default="0"/>
+            </xs:sequence>
+         </xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
+
+   <xs:complexType name="userSynchronizer">
+      <xs:complexContent>
+         <xs:extension base="dhusSynchronizer:synchronizerAuthentification">
+            <xs:sequence>
+               <xs:element name="force" type="xs:boolean" minOccurs="0" maxOccurs="1" default="false"/>
+               <xs:element name="skip" type="xs:int" minOccurs="0" maxOccurs="1" default="0" />
+            </xs:sequence>
+         </xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
+
+   <xs:complexType name="smartProductSynchronizer">
+      <xs:complexContent>
+         <xs:extension base="dhusSynchronizer:synchronizerAuthentification">
+            <xs:sequence>
+               <xs:element name="targetCollection" type="xs:string" minOccurs="0" maxOccurs="1"/>
+               <xs:element name="filterParam" type="xs:string" minOccurs="0" maxOccurs="1"/>
+               <xs:element name="geofilterOp" type="xs:string" minOccurs="0" maxOccurs="1"/>
+               <xs:element name="geofilterShape" type="xs:string" minOccurs="0" maxOccurs="1"/>
+               <xs:element name="timeout" minOccurs="0" maxOccurs="1" default="30000">
+                  <xs:simpleType>
+                     <xs:restriction base="xs:long">
+                        <xs:minExclusive value="0" />
+                     </xs:restriction>
+                  </xs:simpleType>
+               </xs:element>
+               <xs:element name="attempts" minOccurs="0" maxOccurs="1" default="10">
+                  <xs:simpleType>
+                     <xs:restriction base="xs:int">
+                        <xs:minExclusive value="0" />
+                     </xs:restriction>
+                  </xs:simpleType>
+               </xs:element>
+               <xs:element name="threshold" minOccurs="0" maxOccurs="1" default="0">
+                  <xs:simpleType>
+                     <xs:restriction base="xs:int">
+                        <xs:minInclusive value="0" />
+                        <xs:maxInclusive value="2147483647" />
+                     </xs:restriction>
+                  </xs:simpleType>
+               </xs:element>
+               <xs:element name="sources" minOccurs="1" maxOccurs="1">
+                  <xs:complexType>
+                     <xs:sequence>
+                        <xs:element name="source" type="dhusSynchronizer:synchronizerSource" minOccurs="0" maxOccurs="unbounded"/>
+                     </xs:sequence>
+                  </xs:complexType>
+               </xs:element>
+            </xs:sequence>
+         </xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
+
+   <xs:complexType name="synchronizerSource">
+      <xs:annotation>
+         <xs:appinfo>
+            <jxb:class name="SynchronizerSource" />
+         </xs:appinfo>
+      </xs:annotation>
+      <xs:all>
+         <xs:element name="sourceId" type="xs:int" minOccurs="1" maxOccurs="1" />
+         <xs:element name="lastCreated" type="xs:dateTime" minOccurs="0" maxOccurs="1" default="1970-01-01T00:00:00.000" />
+         <xs:element name="sourceCollection" type="xs:string" minOccurs="0" maxOccurs="1" />
+      </xs:all>
+   </xs:complexType>
+   
+   <xs:complexType name="source">
+      <xs:all>
+         <xs:element name="referenceId" type="xs:long" minOccurs="1" maxOccurs="1"/>
+         <xs:element name="sourceCollection" type="xs:string" minOccurs="0" maxOccurs="1" />
+         <xs:element name="lastCreationDate" type="xs:dateTime" minOccurs="0" maxOccurs="1" />
+         <xs:element name="lastDateSourceUsed" type="xs:dateTime" minOccurs="0" maxOccurs="1" />
+     </xs:all>
+  </xs:complexType>
+
+</xs:schema>

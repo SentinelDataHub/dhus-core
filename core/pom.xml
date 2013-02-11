@@ -1,0 +1,1151 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2013-2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses />.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+   <modelVersion>4.0.0</modelVersion>
+
+   <properties>
+      <aspectj.version>1.9.4</aspectj.version>
+      <cxf.version>3.3.4</cxf.version>
+      <hibernate.version>5.4.8.Final</hibernate.version>
+      <olingo.version>2.0.11</olingo.version>
+      <solr.version>5.5.3</solr.version>
+      <spring.version>5.2.1.RELEASE</spring.version>
+      <spring_security.version>5.2.1.RELEASE</spring_security.version>
+      <log4j.version>2.17.1</log4j.version>
+      <tomcat.version>8.5.42</tomcat.version>
+      <skipUTs>${skipTests}</skipUTs>
+      <testing.argline></testing.argline>
+      <argLine></argLine>
+   </properties>
+
+   <parent>
+      <groupId>fr.gael.dhus</groupId>
+      <artifactId>dhus-core-suite</artifactId>
+      <version>2.1.10-osf</version>
+      <relativePath>../pom.xml</relativePath>
+   </parent>
+
+   <artifactId>dhus-core</artifactId>
+   <packaging>jar</packaging>
+
+   <name>DHuS - Core</name>
+   <url>http://www.gael.fr/software/dhus</url>
+   <inceptionYear>2016</inceptionYear>
+
+   <dependencies>
+      <dependency>
+         <groupId>fr.gael.dhus</groupId>
+         <artifactId>dhus-api</artifactId>
+         <version>${project.version}</version>
+      </dependency>
+
+      <!-- TMP for retrocompatibility -->
+      <dependency>
+         <scope>runtime</scope>
+         <groupId>org.jumpmind.symmetric</groupId>
+         <artifactId>symmetric-client</artifactId>
+         <version>3.7.33</version>
+         <exclusions>
+            <exclusion>
+               <groupId>*</groupId>
+               <artifactId>*</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+
+      <!-- Cache -->
+      <dependency>
+         <groupId>net.sf.ehcache</groupId>
+         <artifactId>ehcache</artifactId>
+         <version>2.10.6</version>
+         <exclusions>
+            <exclusion>
+               <groupId>org.slf4j</groupId>
+               <artifactId>slf4j-api</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+      
+      <!-- Commons -->
+      <dependency>
+         <groupId>commons-io</groupId>
+         <artifactId>commons-io</artifactId>
+         <version>2.6</version>
+      </dependency>
+      <dependency>
+         <groupId>commons-net</groupId>
+         <artifactId>commons-net</artifactId>
+         <version>3.6</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.commons</groupId>
+         <artifactId>commons-email</artifactId>
+         <version>1.5</version>
+      </dependency>
+
+      <!-- Database -->
+      <dependency>
+         <groupId>com.jolbox</groupId>
+         <artifactId>bonecp</artifactId>
+         <version>0.8.0.RELEASE</version>
+         <exclusions>
+            <exclusion>
+               <groupId>org.slf4j</groupId>
+               <artifactId>slf4j-api</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>com.google.guava</groupId><!-- clashes with jClouds -->
+               <artifactId>guava</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.commons</groupId>
+         <artifactId>commons-dbcp2</artifactId>
+         <version>2.7.0</version>
+         <exclusions>
+            <exclusion>
+               <groupId>commons-logging</groupId>
+               <artifactId>commons-logging</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+      <dependency>
+         <groupId>org.hibernate</groupId>
+         <artifactId>hibernate-core</artifactId>
+         <version>${hibernate.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.hibernate</groupId>
+         <artifactId>hibernate-entitymanager</artifactId>
+         <version>${hibernate.version}</version>
+      </dependency>
+
+      <dependency>
+         <groupId>org.hsqldb</groupId>
+         <artifactId>hsqldb</artifactId>
+         <version>2.4.1</version>
+      </dependency>
+      <dependency>
+         <groupId>org.liquibase</groupId>
+         <artifactId>liquibase-core</artifactId>
+         <version>3.8.5-FIX-CHECKSUMS</version>
+         <exclusions>
+            <exclusion>
+               <groupId>org.yaml</groupId>
+               <artifactId>snakeyaml</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>ch.qos.logback</groupId>
+               <artifactId>logback-classic</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+
+      <!-- DRB -->
+      <dependency>
+         <groupId>fr.gael.drb</groupId>
+         <artifactId>drb</artifactId>
+         <version>2.5.13</version>
+         <exclusions>
+            <exclusion>
+               <groupId>log4j</groupId>
+               <artifactId>log4j</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>net.sf.ehcache</groupId>
+               <artifactId>ehcache-core</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+      <dependency>
+         <groupId>fr.gael.drb</groupId>
+         <artifactId>drbx-cortex</artifactId>
+         <version>1.0.8</version>
+         <exclusions>
+            <exclusion>
+               <groupId>fr.gael.drb</groupId>
+               <artifactId>drb</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>log4j</groupId>
+               <artifactId>log4j</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>commons-logging</groupId>
+               <artifactId>commons-logging</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.codehaus.woodstox</groupId>
+               <artifactId>wstx-asl</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>net.sf.ehcache</groupId>
+               <artifactId>ehcache-core</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.restlet.jse</groupId>
+               <artifactId>org.restlet</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+      <dependency>
+         <groupId>fr.gael.drb</groupId>
+         <artifactId>drbx-image</artifactId>
+         <version>1.10</version>
+         <exclusions>
+            <!-- replaced by GPL compatible com.github.jai-imageio:jai-imageio-core -->
+            <exclusion>
+               <groupId>javax.media</groupId>
+               <artifactId>jai_imageio</artifactId><!-- contains bugged jp2k support provided by JJ2000 -->
+            </exclusion>
+			<exclusion>
+               <groupId>fr.gael.drb</groupId>
+               <artifactId>drb</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+
+      <!-- Use the lastest version of the Streams optimization -->
+      <dependency>
+         <groupId>fr.gael.streams</groupId>
+         <artifactId>streams</artifactId>
+         <version>1.0.14</version>
+      </dependency>
+
+      <!-- DRB Implementations -->
+      <dependency>
+         <groupId>fr.gael.drb</groupId>
+         <artifactId>drbx-impl-ftp</artifactId>
+         <version>1.0.9</version>
+      </dependency>
+      <dependency>
+         <groupId>fr.gael.drb</groupId>
+         <artifactId>drbx-impl-image</artifactId>
+         <version>1.6</version>
+      </dependency>
+      <dependency>
+         <groupId>fr.gael.drb</groupId>
+         <artifactId>drbx-impl-tar</artifactId>
+         <version>1.0.17</version>
+         <exclusions>
+            <exclusion>
+               <groupId>fr.gael.drb</groupId>
+               <artifactId>drb</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.apache.commons</groupId>
+               <artifactId>commons-compress</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+      <dependency>
+         <groupId>fr.gael.drb</groupId>
+         <artifactId>drbx-impl-text</artifactId>
+         <version>1.0.5</version>
+      </dependency>
+      <dependency>
+         <groupId>fr.gael.drb</groupId>
+         <artifactId>drbx-impl-tiff</artifactId>
+         <version>1.2.7</version>
+         <exclusions>
+            <!-- replaced by GPL compatible com.github.jai-imageio:jai-imageio-core -->
+			<exclusion>
+               <groupId>javax.media</groupId>
+               <artifactId>jai_imageio</artifactId><!-- contains bugged jp2k support provided by JJ2000 -->
+            </exclusion>
+            <exclusion>
+               <groupId>fr.gael.drb</groupId>
+               <artifactId>drb</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+      <dependency>
+         <groupId>fr.gael.drb</groupId>
+         <artifactId>drbx-impl-zip</artifactId>
+         <version>1.1.28</version>
+         <exclusions>
+            <exclusion>
+               <groupId>fr.gael.drb</groupId>
+               <artifactId>drb</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>log4j</groupId>
+               <artifactId>log4j</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+
+      <dependency>
+         <groupId>fr.gael.drb</groupId>
+         <artifactId>drbx-impl-swift</artifactId>
+         <version>1.0.25</version>
+         <exclusions>
+            <exclusion>
+               <groupId>fr.gael.drb</groupId>
+               <artifactId>drb</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>javax.ws.rs</groupId>
+               <artifactId>jsr311-api</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>log4j</groupId>
+               <artifactId>log4j</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+
+      <!-- Geometry for nominatim -->
+      <dependency>
+         <groupId>com.vividsolutions</groupId>
+         <artifactId>jts</artifactId>
+         <version>1.13</version>
+      </dependency>
+
+      <!-- Geonames -->
+      <dependency>
+         <groupId>org.geonames</groupId>
+         <artifactId>geonames</artifactId>
+         <version>1.0</version>
+      </dependency>
+      <dependency>
+         <groupId>com.esri.geometry</groupId>
+         <artifactId>esri-geometry-api</artifactId>
+         <version>2.2.3</version>
+      </dependency>
+
+      <!-- Geotools -->
+      <dependency>
+         <groupId>org.geotools</groupId>
+         <artifactId>gt2-xml-gml2</artifactId>
+         <version>2.4.1</version>
+         <scope>compile</scope>
+         <exclusions>
+            <exclusion>
+               <artifactId>jaxb-api</artifactId>
+               <groupId>jaxb</groupId>
+            </exclusion>
+            <exclusion>
+               <artifactId>jaxb-impl</artifactId>
+               <groupId>jaxb</groupId>
+            </exclusion>
+            <exclusion>
+               <artifactId>jaxb-libs</artifactId>
+               <groupId>jaxb</groupId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+      <dependency>
+         <groupId>org.geotools</groupId>
+         <artifactId>gt2-epsg-wkt</artifactId>
+         <version>2.4.1</version>
+      </dependency>
+
+      <!-- JAI -->
+      <dependency>
+         <groupId>com.github.jai-imageio</groupId>
+         <artifactId>jai-imageio-core</artifactId>
+         <version>1.4.0</version>
+      </dependency>
+
+      <!-- JMS -->
+      <!-- <dependency>
+         <groupId>org.apache.activemq</groupId>
+         <artifactId>activemq-web</artifactId>
+         <version>5.10.0</version>
+      </dependency> -->
+
+      <dependency>
+         <groupId>com.google.code.gson</groupId>
+         <artifactId>gson</artifactId>
+         <version>2.5</version><!-- /!\ newer versions of gson incompatible with JClouds!! see which version of gson is used by jclouds before changing that version /!\ -->
+      </dependency>
+
+      <!-- Logs -->
+      <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-api</artifactId>
+         <version>${log4j.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-core</artifactId>
+         <version>${log4j.version}</version>
+      </dependency>
+      <!-- SLF4J adapter -->
+      <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-slf4j-impl</artifactId>
+         <version>${log4j.version}</version>
+      </dependency>
+      <!-- java.util.logging adapter -->
+      <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-jul</artifactId>
+         <version>${log4j.version}</version>
+      </dependency>
+      <!-- Commons Logging adapter -->
+      <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-jcl</artifactId>
+         <version>${log4j.version}</version>
+      </dependency>
+      <!-- java.io.* to write to Loggers -->
+      <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-iostreams</artifactId>
+         <version>${log4j.version}</version>
+      </dependency>
+      <!-- Log4j1.2 adapter -->
+      <dependency>
+         <groupId>org.apache.logging.log4j</groupId>
+         <artifactId>log4j-1.2-api</artifactId>
+         <version>${log4j.version}</version>
+      </dependency>
+
+      <!-- Quartz -->
+      <dependency>
+         <groupId>org.quartz-scheduler</groupId>
+         <artifactId>quartz</artifactId>
+         <version>2.3.2</version>
+      </dependency>
+
+      <!-- SOLR -->
+      <dependency>
+         <groupId>org.apache.solr</groupId>
+         <artifactId>solr-core</artifactId>
+         <version>${solr.version}</version>
+         <exclusions>
+            <exclusion>
+               <groupId>jdk.tools</groupId>
+               <artifactId>jdk.tools</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>log4j</groupId>
+               <artifactId>log4j</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.slf4j</groupId>
+               <artifactId>slf4j-log4j12</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.slf4j</groupId>
+               <artifactId>jcl-over-slf4j</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-continuation</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-deploy</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-http</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-io</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-jmx</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-security</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-server</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-servlet</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-util</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-webapp</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-xml</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-rewrite</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty</groupId>
+               <artifactId>jetty-servlets</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.eclipse.jetty.orbit</groupId>
+               <artifactId>javax.servlet</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.apache.httpcomponents</groupId>
+               <artifactId>httpclient</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.apache.httpcomponents</groupId>
+               <artifactId>httpcore</artifactId>
+            </exclusion>
+            <exclusion>
+               <artifactId>javax.servlet-api</artifactId>
+               <groupId>javax.servlet</groupId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.antlr</groupId><!-- clashes with JDBI -->
+               <artifactId>antlr4-runtime</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>com.google.guava</groupId><!-- clashes with jClouds -->
+               <artifactId>guava</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+
+      <!-- Spring -->
+      <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-core</artifactId>
+         <version>${spring.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-context</artifactId>
+         <version>${spring.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-context-support</artifactId>
+         <version>${spring.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-jdbc</artifactId>
+         <version>${spring.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-orm</artifactId>
+         <version>${spring.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-tx</artifactId>
+         <version>${spring.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-web</artifactId>
+         <version>${spring.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-webmvc</artifactId>
+         <version>${spring.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-aop</artifactId>
+         <version>${spring.version}</version>
+      </dependency>
+
+      <!-- Spring security -->
+      <dependency>
+         <groupId>org.springframework.security</groupId>
+         <artifactId>spring-security-core</artifactId>
+         <version>${spring_security.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework.security</groupId>
+         <artifactId>spring-security-web</artifactId>
+         <version>${spring_security.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework.security</groupId>
+         <artifactId>spring-security-config</artifactId>
+         <version>${spring_security.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework.security.extensions</groupId>
+         <artifactId>spring-security-saml2-core</artifactId>
+         <version>1.0.10.RELEASE</version>
+      </dependency>
+
+      <!-- Keycloak adapter, imported for internal checks in KeycloakLogoutAll handler (saml webapp) -->
+      <dependency>
+         <groupId>org.keycloak</groupId>
+         <artifactId>keycloak-adapter-core</artifactId>
+         <version>12.0.4</version>
+      </dependency>
+      <dependency>
+         <groupId>org.keycloak</groupId>
+         <artifactId>keycloak-core</artifactId>
+         <version>12.0.4</version>
+      </dependency>
+
+      <!-- Jackson + databind required by Spring 5 -->
+      <dependency>
+         <groupId>com.fasterxml.jackson.core</groupId>
+         <artifactId>jackson-core</artifactId>
+         <version>2.10.1</version>
+      </dependency>
+      <dependency>
+         <groupId>com.fasterxml.jackson.core</groupId>
+         <artifactId>jackson-databind</artifactId>
+         <version>2.10.1</version>
+      </dependency>
+
+      <!-- AspectJ -->
+      <dependency>
+         <groupId>org.aspectj</groupId>
+         <artifactId>aspectjrt</artifactId>
+         <version>${aspectj.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.aspectj</groupId>
+         <artifactId>aspectjweaver</artifactId>
+         <version>${aspectj.version}</version>
+      </dependency>
+
+      <!-- Tests -->
+      <dependency>
+         <groupId>org.testng</groupId>
+         <artifactId>testng</artifactId>
+         <version>7.0.0</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.springframework</groupId>
+         <artifactId>spring-test</artifactId>
+         <version>${spring.version}</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.easymock</groupId>
+         <artifactId>easymock</artifactId>
+         <version>4.0.2</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.mockftpserver</groupId>
+         <artifactId>MockFtpServer</artifactId>
+         <version>2.7.1</version>
+         <scope>test</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.mockito</groupId>
+         <artifactId>mockito-core</artifactId>
+         <version>2.28.2</version>
+         <scope>test</scope>
+      </dependency>
+
+      <!-- Tomcat -->
+      <dependency>
+         <groupId>org.apache.tomcat</groupId>
+         <artifactId>tomcat-catalina</artifactId>
+         <version>${tomcat.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.tomcat</groupId>
+         <artifactId>tomcat-jasper</artifactId>
+         <version>${tomcat.version}</version>
+      </dependency>
+
+      <!-- Tomcat cluster -->
+      <dependency>
+         <groupId>org.apache.tomcat</groupId>
+         <artifactId>tomcat-catalina-ha</artifactId>
+         <version>${tomcat.version}</version>
+      </dependency>
+
+      <!-- Apache Olingo Odata -->
+      <dependency>
+         <groupId>org.apache.olingo</groupId>
+         <artifactId>olingo-odata2-api</artifactId>
+         <version>${olingo.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.olingo</groupId>
+         <artifactId>olingo-odata2-core</artifactId>
+         <version>${olingo.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.cxf</groupId>
+         <artifactId>cxf-rt-frontend-jaxrs</artifactId>
+         <version>${cxf.version}</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.cxf</groupId>
+         <artifactId>cxf-rt-transports-http</artifactId>
+         <version>${cxf.version}</version>
+      </dependency>
+      <!-- Required by cxf-rt-frontend-jaxrs -->
+      <dependency>
+         <groupId>javax.ws.rs</groupId>
+         <artifactId>javax.ws.rs-api</artifactId>
+         <version>2.1.1</version>
+      </dependency>
+
+      <!-- Interruptible Http Client -->
+      <dependency>
+         <groupId>org.apache.httpcomponents</groupId>
+         <artifactId>httpclient</artifactId>
+         <version>4.5.10</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.httpcomponents</groupId>
+         <artifactId>httpcore</artifactId>
+         <version>4.4.12</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.httpcomponents</groupId>
+         <artifactId>httpcore-nio</artifactId>
+         <version>4.4.12</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.httpcomponents</groupId>
+         <artifactId>httpasyncclient</artifactId>
+         <version>4.1.4</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.commons</groupId>
+         <artifactId>commons-collections4</artifactId>
+         <version>4.4</version>
+      </dependency>
+
+      <dependency>
+         <groupId>de.odysseus.staxon</groupId>
+         <artifactId>staxon</artifactId>
+         <version>1.4-dhus</version>
+      </dependency>
+
+      <!-- Apache Commons -->
+      <dependency>
+         <groupId>org.apache.commons</groupId>
+         <artifactId>commons-math3</artifactId>
+         <version>3.6.1</version>
+      </dependency>
+
+      <!-- GMP Store -->
+      <dependency>
+         <groupId>mysql</groupId>
+         <artifactId>mysql-connector-java</artifactId>
+         <version>8.0.18</version>
+      </dependency>
+
+      <!-- Monitoring -->
+      <dependency>
+         <groupId>com.ryantenney.metrics</groupId>
+         <artifactId>metrics-spring</artifactId>
+         <version>3.1.3</version>
+         <exclusions>
+            <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-core</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-beans</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-context-support</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-aop</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-web</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.slf4j</groupId>
+               <artifactId>slf4j-api</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+      <!-- Embedded metrics storage -->
+      <dependency>
+         <groupId>org.jdbi</groupId>
+         <artifactId>jdbi3-core</artifactId>
+         <version>3.11.1</version>
+      </dependency>
+      <dependency>
+         <groupId>org.jdbi</groupId>
+         <artifactId>jdbi3-spring4</artifactId>
+         <version>3.11.1</version>
+      </dependency>
+      <dependency>
+         <groupId>org.jdbi</groupId>
+         <artifactId>jdbi3-sqlobject</artifactId>
+         <version>3.11.1</version>
+      </dependency>
+      <!-- InfluxDB reporter -->
+      <dependency>
+         <groupId>eu.metrics</groupId>
+         <artifactId>metrics-spring-influxdb-reporter</artifactId>
+         <version>1.0.1-priv2</version>
+         <scope>runtime</scope>
+         <exclusions>
+            <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-core</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-beans</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-context-support</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-aop</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.springframework</groupId>
+               <artifactId>spring-web</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>org.slf4j</groupId>
+               <artifactId>slf4j-api</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>ch.qos.logback</groupId>
+               <artifactId>logback-classic</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+
+      <!-- InfluxDB java client -->
+      <dependency>
+    		<groupId>org.influxdb</groupId>
+    		<artifactId>influxdb-java</artifactId>
+    		<version>2.22</version>
+		</dependency>
+      
+		<dependency>
+         <groupId>com.google.guava</groupId>
+         <artifactId>guava</artifactId>
+			<version>18.0</version>
+		</dependency>
+   </dependencies>
+
+   <profiles>
+      <profile>
+         <id>using-jdk9-or-greater</id>
+         <activation>
+            <jdk>[9,)</jdk><!-- profile activated when using java 9 or greater -->
+         </activation>
+         <properties>
+            <testing.argline>--illegal-access=permit</testing.argline>
+         </properties>
+         <dependencies>
+            <!-- JAXB removed from the JDK at version 9 -->
+            <dependency>
+               <groupId>javax.xml.bind</groupId>
+               <artifactId>jaxb-api</artifactId>
+               <version>2.3.1</version>
+            </dependency>
+            <dependency>
+               <groupId>org.glassfish.jaxb</groupId>
+               <artifactId>jaxb-runtime</artifactId>
+               <version>2.3.2</version>
+               <scope>runtime</scope>
+            </dependency>
+            <!-- the `xjc` and `schemagen` utilities have been removed from the JDK at version 11, download the runtime
+                 distribution here: https://repo1.maven.org/maven2/com/sun/xml/bind/jaxb-ri/2.3.2/jaxb-ri-2.3.2.zip
+                 FIXME: is it possible to fetch, extract, and use that runtime? it already is in the maven central repo-->
+         </dependencies>
+      </profile>
+
+      <!-- Code Coverage -->
+      <profile>
+         <id>codecov</id>
+         <build>
+            <plugins>
+               <plugin>
+                  <groupId>org.jacoco</groupId>
+                  <artifactId>jacoco-maven-plugin</artifactId>
+                  <version>0.8.5</version>
+                  <executions>
+                     <execution>
+                        <id>codecov-prepare-ut</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                     </execution>
+                     <execution>
+                        <id>codecov-prepare-it</id>
+                        <goals><goal>prepare-agent-integration</goal></goals>
+                     </execution>
+                     <execution>
+                        <id>codecov-merge-ut-it</id>
+                        <phase>post-integration-test</phase>
+                        <goals><goal>merge</goal></goals>
+                        <configuration>
+                           <fileSets>
+                              <fileSet>
+                                 <directory>${project.build.directory}</directory>
+                                 <includes><include>jacoco*.exec</include></includes>
+                              </fileSet>
+                           </fileSets>
+                           <destFile>${project.build.directory}/merged.exec</destFile>
+                        </configuration>
+                     </execution>
+                     <execution>
+                        <id>codecov-report-ut-it</id>
+                        <goals><goal>report</goal></goals>
+                        <configuration>
+                           <dataFile>${project.build.directory}/merged.exec</dataFile>
+                        </configuration>
+                     </execution>
+                  </executions>
+               </plugin>
+            </plugins>
+         </build>
+      </profile>
+   </profiles>
+
+   <build>
+      <resources>
+         <resource>
+            <directory>src/main/resources</directory>
+         </resource>
+      </resources>
+
+      <plugins>
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>${plugin.compiler.version}</version>
+            <configuration>
+               <source>${maven.compiler.source}</source>
+               <target>${maven.compiler.target}</target>
+               <encoding>${project.build.sourceEncoding}</encoding>
+               <compilerArgs>
+                  <arg>-Xlint:all,-options,-path</arg>
+               </compilerArgs>
+            </configuration>
+         </plugin>
+
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>${plugin.source.version}</version>
+            <executions>
+               <execution>
+                  <id>attach-sources</id>
+                  <goals>
+                     <goal>jar-no-fork</goal>
+                  </goals>
+               </execution>
+            </executions>
+         </plugin>
+
+         <!-- solr.war is not required from compilation but for execution and packaging -->
+         <!-- This component is not required in dhus-core compilation file but in dhus package assembly -->
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <version>${plugin.dependency.version}</version>
+            <executions>
+               <execution>
+                  <goals>
+                     <goal>copy</goal>
+                  </goals>
+                  <phase>prepare-package</phase>
+               </execution>
+            </executions>
+            <configuration>
+               <artifactItems>
+                  <artifactItem>
+                     <groupId>org.dhus</groupId>
+                     <artifactId>solr-webapp</artifactId>
+                     <version>${solr.version}</version>
+                     <type>war</type>
+                     <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                     <destFileName>dhus-solr.war</destFileName>
+                  </artifactItem>
+               </artifactItems>
+            </configuration>
+         </plugin>
+
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-jar-plugin</artifactId>
+            <version>${plugin.jar.version}</version>
+            <configuration>
+               <archive>
+                  <manifest>
+                     <mainClass>fr.gael.dhus.DHuS</mainClass>
+                     <addClasspath>true</addClasspath>
+                     <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                     <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+                  </manifest>
+               </archive>
+            </configuration>
+         </plugin>
+
+         <!-- JAXB2 Plug-in -->
+         <plugin>
+            <groupId>org.jvnet.jaxb2.maven2</groupId>
+            <artifactId>maven-jaxb2-plugin</artifactId>
+            <version>0.14.0</version>
+            <executions>
+               <execution>
+                  <id>config</id>
+                  <goals>
+                     <goal>generate</goal>
+                  </goals>
+                  <configuration>
+                     <extension>true</extension>
+                     <args>
+                        <arg>-Xinheritance</arg>
+                        <arg>-Xannotate</arg>
+                        <arg>-Xsetters</arg>
+                        <arg>-Xsetters-mode=direct</arg>
+                        <arg>-Xdefault-value</arg>
+                        <arg>-Xnamespace-prefix</arg>
+                     </args>
+                     <locale>en</locale>
+                     <schemaDirectory>${basedir}/src/main/resources</schemaDirectory>
+                     <schemaIncludes>
+                        <include>fr/gael/dhus/system/config/dhus-configuration.xsd</include>
+                        <include>fr/gael/dhus/service/metadata/metadata-types.xsd</include>
+                     </schemaIncludes>
+                     <bindingIncludes>
+                        <include>fr/gael/dhus/system/config/bindings.xml</include>
+                     </bindingIncludes>
+                     <plugins>
+                        <plugin>
+                           <groupId>org.jvnet.jaxb2_commons</groupId>
+                           <artifactId>jaxb2-basics</artifactId>
+                           <version>0.11.1</version>
+                        </plugin>
+                        <plugin>
+                           <groupId>org.jvnet.jaxb2_commons</groupId>
+                           <artifactId>jaxb2-basics-annotate</artifactId>
+                           <version>1.0.2</version>
+                        </plugin>
+                        <plugin>
+                           <groupId>org.jvnet.jaxb2_commons</groupId>
+                           <artifactId>jaxb2-default-value</artifactId>
+                           <version>1.1</version>
+                        </plugin>
+                        <plugin>
+                           <groupId>org.jvnet.jaxb2_commons</groupId>
+                           <artifactId>jaxb2-namespace-prefix</artifactId>
+                           <version>1.3</version>
+                        </plugin>
+                     </plugins>
+                  </configuration>
+               </execution>
+            </executions>
+            <dependencies>
+               <!-- Hibernate Persistence Annotations -->
+               <dependency>
+                  <groupId>org.hibernate.javax.persistence</groupId>
+                  <artifactId>hibernate-jpa-2.1-api</artifactId>
+                  <version>1.0.2.Final</version>
+               </dependency>
+            </dependencies>
+         </plugin>
+
+         <!-- Unit Tests -->
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>${plugin.surefire.version}</version>
+            <configuration>
+               <skipTests>${skipUTs}</skipTests>
+               <argLine>@{argLine} ${testing.argline}</argLine>
+               <redirectTestOutputToFile>true</redirectTestOutputToFile>
+               <!--<parallel>classes</parallel>  issue: java.lang.InterruptedException: null
+               <threadCount>3</threadCount>-->
+            </configuration>
+         </plugin>
+
+         <!-- Integration Tests -->
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <version>${plugin.failsafe.version}</version>
+            <configuration>
+               <suiteXmlFiles>
+                  <suiteXmlFile>${project.basedir}/src/test/resources/xml/integration-tests.xml</suiteXmlFile>
+               </suiteXmlFiles>
+               <redirectTestOutputToFile>true</redirectTestOutputToFile>
+               <testFailureIgnore>false</testFailureIgnore>
+               <systemPropertyVariables>
+                  <user.timezone>UTC</user.timezone>
+               </systemPropertyVariables>
+               <argLine>-Xmx2048m @{argLine} ${testing.argline}</argLine>
+            </configuration>
+            <executions>
+               <execution>
+                  <goals>
+                     <goal>integration-test</goal>
+                     <goal>verify</goal>
+                  </goals>
+               </execution>
+            </executions>
+         </plugin>
+      </plugins>
+   </build>
+
+   <repositories>
+      <repository><!--  to get opensaml 2.6.6 (dependency of spring saml) -->
+          <id>Shibbolet</id>
+          <name>Shibbolet</name>
+          <url>https://build.shibboleth.net/nexus/content/repositories/releases/</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+      </repository>
+      <repository>
+         <id>osgeo</id><!-- repository providing the geotools dependency -->
+         <name>Open Source Geospatial Foundation Repository</name>
+         <url>https://repo.osgeo.org/repository/release/</url>
+         <releases><enabled>true</enabled></releases>
+         <snapshots><enabled>false</enabled></snapshots>
+      </repository>
+      <repository>
+          <id>symds</id>
+          <name>Symmetric DS repository</name>
+          <url>http://maven.jumpmind.com/repo/</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+      </repository>
+   </repositories>
+</project>

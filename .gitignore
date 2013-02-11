@@ -1,0 +1,51 @@
+# Maven
+/target/
+/*/target/
+/*/*/target/
+/core/local_dhus_test/
+/core/test-output/
+/core/etc/
+
+# IDE files
+.~lock.*
+.buildpath
+
+# Netbeans
+nbproject
+nbactions.xml
+nb-configuration.xml
+
+# Eclipse
+.classpath
+.checkstyle
+.project
+.settings/
+
+# Intellij
+.idea/
+*.iml
+*.iws
+
+# Archives
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.xz
+*.zip
+
+# Logs and databases
+*.log
+*.sqlite
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2017 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
+
+   <changeSet id="persistent-DataStore" author="julien">
+      <createTable tableName="DATASTORE_CONF">
+         <column name="ID" type="BIGINT">
+            <constraints primaryKey="true" primaryKeyName="PK_DATASTORE" />
+         </column>
+         <column name="TYPE" type="VARCHAR(32)">
+            <constraints nullable="false" />
+         </column>
+         <column name="NAME" type="VARCHAR(64)">
+            <constraints nullable="false" unique="true" />
+         </column>
+         <column name="READ_ONLY" type="BOOLEAN">
+            <constraints nullable="false" />
+         </column>
+         <column name="PATH" type="VARCHAR(512)" />
+         <column name="MAX_FILE_DEPTH" type="INT" />
+         <column name="PROVIDER" type="VARCHAR(32)" />
+         <column name="IDENTITY" type="VARCHAR(32)" />
+         <column name="CREDENTIAL" type="VARCHAR(64)" />
+         <column name="URL" type="VARCHAR(512)" />
+         <column name="REGION" type="VARCHAR(64)" />
+         <column name="CONTAINER" type="VARCHAR(64)" />
+      </createTable>
+   </changeSet>
+
+   <changeSet id="persistent-DataStore-autoIncrementId" author="tdegueurce" dbms="hsqldb">
+      <preConditions onFail="MARK_RAN" onFailMessage="change already applied">
+         <sqlCheck expectedResult="0">
+            select count(*) from DATABASECHANGELOG where ID LIKE 'persistent-DataStore-autoIncrementId'
+         </sqlCheck>
+      </preConditions>
+      <addAutoIncrement
+         columnDataType="BIGINT"
+         columnName="ID"
+         incrementBy="1"
+         tableName="DATASTORE_CONF"/>
+   </changeSet>
+
+   <changeSet id="persistent-DataStore-autoIncrementId" author="patrick" dbms="postgresql">
+      <preConditions onFail="MARK_RAN" onFailMessage="change already applied">
+         <sqlCheck expectedResult="0">
+            select count(*) from DATABASECHANGELOG where ID LIKE 'persistent-DataStore-autoIncrementId'
+         </sqlCheck>
+      </preConditions>
+      <sql>
+         CREATE SEQUENCE datastore_id_seq;
+         ALTER TABLE DATASTORE_CONF alter COLUMN id set default nextval('datastore_id_seq');
+      </sql>
+   </changeSet>
+
+   <changeSet id="addInsertionDateColumn" author="tdegueurce">
+      <preConditions onFail="MARK_RAN" onFailMessage="change already applied">
+         <sqlCheck expectedResult="0">
+            select count(*) from DATABASECHANGELOG where ID LIKE 'addInsertionDateColumn'
+         </sqlCheck>
+      </preConditions>
+      <addColumn tableName="KEYSTOREENTRIES">
+         <column name="INSERTIONDATE" type="BIGINT" defaultValue="0">
+            <constraints nullable="false"/>
+         </column>
+      </addColumn>
+   </changeSet>
+
+   <changeSet author="nico" id="removeSymDSTables" dbms="hsqldb">
+      <customChange class="fr.gael.dhus.database.liquibase.RemoveSymDSTables" />
+   </changeSet>
+
+   <changeSet id="removeDatabaseBLOB" author="julien">
+      <!-- add newly field -->
+      <addColumn tableName="DELETED_PRODUCTS">
+         <column name="CHECKSUM_ALGORITHM" type="VARCHAR(16)" />
+         <column name="CHECKSUM_VALUE" type="VARCHAR(255)" />
+      </addColumn>
+
+      <!-- fill newly fields with associated data -->
+      <customChange class="fr.gael.dhus.database.liquibase.RemoveDeletedProductBlobFields" />
+
+      <!-- remove blob fields -->
+      <dropColumn tableName="DELETED_PRODUCTS" columnName="CHECKSUMS" />
+      <dropColumn tableName="DELETED_PRODUCTS" columnName="METADATAINDEXES" />
+   </changeSet>
+</databaseChangeLog>

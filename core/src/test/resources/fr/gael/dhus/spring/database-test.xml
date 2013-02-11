@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2014-2017,2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+                              http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd" >
+
+   <!-- In-memory HSQLDB database, configurable DB name (by setting the ${dbname} property) -->
+   <bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+      <property name="driverClassName" value="org.hsqldb.jdbcDriver" />
+      <property name="url" value="jdbc:hsqldb:mem:${dbname};hsqldb.write_delay=false;hsqldb.tx=mvcc;hsqldb.default_table_type=cached" />
+      <property name="username" value="SA" />
+      <property name="password" value="" />
+   </bean>
+
+   <bean id="sessionFactory" class="org.springframework.orm.hibernate5.LocalSessionFactoryBean">
+      <property name="dataSource" ref="dataSource" />
+      <property name="packagesToScan">
+         <list>
+            <value>fr.gael.dhus.database.object</value>
+         </list>
+      </property>
+      <property name="hibernateProperties">
+         <props>
+            <prop key="hibernate.dialect">org.hibernate.dialect.HSQLDialect</prop>
+            <prop key="hibernate.hbm2ddl.auto">create</prop><!-- In-Memory database -->
+            <prop key="hibernate.show_sql">true</prop>
+            <prop key="hibernate.format_sql">true</prop>
+            <prop key="hibernate.use_sql_comments">true</prop>
+            <prop key="hibernate.query.substitutions">true 1, false 0, yes 'Y', no 'N'</prop>
+            <prop key="hibernate.id.new_generator_mappings">false</prop><!-- Required by Hibernate5 to create IDENTITY generators -->
+            <prop key="javax.persistence.validation.mode">none</prop>
+         </props>
+      </property>
+   </bean>
+
+   <bean id="transactionManager" class="org.springframework.orm.hibernate5.HibernateTransactionManager">
+      <property name="dataSource" ref="dataSource" />
+      <property name="sessionFactory" ref="sessionFactory" />
+   </bean>
+
+   <tx:annotation-driven />
+</beans>

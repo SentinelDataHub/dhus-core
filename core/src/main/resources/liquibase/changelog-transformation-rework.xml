@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
+
+   <changeSet id="transformation-rework" author="tdegueurce">
+      <addColumn tableName="TRANSFORMATIONS">
+         <!-- URL where the product resulting of a transformation will be -->
+         <column name="RESULT_URL" type="VARCHAR(1024)" />
+         <!-- current status of the transformation: PENDING/RUNNING/COMPLETED/INGESTED -->
+         <column name="STATUS" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+      </addColumn>
+
+      <createTable tableName="TRANSFO_PARAMETERS">
+         <column name="TRANSFO_UUID" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+         <column name="NAME" type="VARCHAR(255)">
+            <constraints nullable="false" />
+         </column>
+         <column name="VALUE" type="VARCHAR(1024)">
+            <constraints nullable="false" />
+         </column>
+      </createTable>
+
+      <addPrimaryKey tableName="TRANSFO_PARAMETERS" columnNames="TRANSFO_UUID, NAME" constraintName="PK_TRANSFO_PARAM" />
+
+      <addForeignKeyConstraint
+         constraintName="FK_TRANSFO_PARAM_UUID"
+         baseTableName="TRANSFO_PARAMETERS"
+         baseColumnNames="TRANSFO_UUID"
+         referencedTableName="TRANSFORMATIONS"
+         referencedColumnNames="UUID"
+         onDelete="CASCADE"
+      />
+
+      <createIndex tableName="TRANSFO_PARAMETERS" indexName="IDX_TRANSFO_PARAM_UUID">
+         <column name="TRANSFO_UUID" />
+      </createIndex>
+   </changeSet>
+
+   <changeSet author="dihia" id="createTableUserTransformations">
+      <createTable tableName="USER_TRANSFORMATIONS">
+         <column name="USER_UUID" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+         <column name="TRANSFORMATION_UUID" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+      </createTable>
+      <addForeignKeyConstraint constraintName="FK_USER_UUID"
+         referencedTableName="USERS" referencedColumnNames="UUID"
+         baseTableName="USER_TRANSFORMATIONS" baseColumnNames="USER_UUID"
+         onDelete="CASCADE" />
+      <addForeignKeyConstraint constraintName="FK_TRANSFORMATION_UUID"
+         referencedTableName="TRANSFORMATIONS" referencedColumnNames="UUID"
+         baseTableName="USER_TRANSFORMATIONS" baseColumnNames="TRANSFORMATION_UUID"
+         onDelete="CASCADE" />
+   </changeSet>
+</databaseChangeLog>

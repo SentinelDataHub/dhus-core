@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2014-2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+         http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+         http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd">
+
+   <context:component-scan base-package="fr.gael.dhus.database" />
+
+   <bean id="sessionFactory" depends-on="liquibase" class="org.springframework.orm.hibernate5.LocalSessionFactoryBean">
+      <property name="dataSource" ref="dataSource" />
+      <property name="packagesToScan">
+         <list>
+            <value>fr.gael.dhus.database.object</value>
+         </list>
+      </property>
+      <property name="hibernateProperties">
+         <props>
+            <prop key="hibernate.dialect">#{ configurationManager.getHibernateDialect() }</prop>
+            <prop key="hibernate.hbm2ddl.auto">validate</prop>
+            <prop key="hibernate.id.new_generator_mappings">false</prop><!-- defaults to true, hibernate uses a sequence table instead of the built-in IDENTITY or AUTO_INCREMENT functionality if set to true -->
+            <prop key="hibernate.show_sql">false</prop>
+            <prop key="hibernate.format_sql">false</prop>
+            <prop key="hibernate.use_sql_comments">false</prop>
+            <prop key="hibernate.query.substitutions">true 1, false 0, yes 'Y', no 'N'</prop>
+            <prop key="javax.persistence.validation.mode">none</prop>
+         </props>
+      </property>
+   </bean>
+
+   <bean id="transactionManager" class="org.springframework.orm.hibernate5.HibernateTransactionManager">
+      <property name="dataSource" ref="dataSource" />
+      <property name="sessionFactory" ref="sessionFactory" />
+   </bean>
+   <tx:annotation-driven />
+
+</beans>

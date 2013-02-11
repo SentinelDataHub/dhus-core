@@ -1,0 +1,103 @@
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<!-- The ConfigFileEraserBean prevents the parallelisation of these integration tests -->
+<suite name="IT" verbose="1" parallel="false">
+
+    <test name="DataStores" preserve-order="true">
+        <classes>
+            <class name="org.dhus.store.datastore.openstack.OpenStackDataStoreIT" />
+            <class name="org.dhus.store.datastore.hfs.HfsDataStoreIT" />
+            <class name="org.dhus.store.datastore.DefaultDataStoreManagerIT" />
+            <class name="org.dhus.store.keystore.PersistentKeyStoreIT" />
+        </classes>
+    </test>
+
+    <test name="MetaDataStores" preserve-order="true">
+        <classes>
+            <class name="org.dhus.store.RelationalMetadataStoreFilterIT" />
+        </classes>
+    </test>
+
+    <test name="ODataV2" preserve-order="true">
+        <classes>
+            <class name="org.dhus.olingo.v2.scanner.ScannerDataHandlerIT" />
+        </classes>
+    </test>
+
+    <test name="Metrics" preserve-order="true">
+        <classes>
+            <class name="org.dhus.metrics.TemplateProviderBeanIT" />
+            <class name="org.dhus.metrics.embed.MetricsServiceIT" />
+        </classes>
+    </test>
+
+    <test name="DAOs" preserve-order="true">
+        <classes>
+            <class name="fr.gael.dhus.database.dao.CollectionDaoIT" />
+            <class name="fr.gael.dhus.database.dao.ProductDaoIT" />
+            <class name="fr.gael.dhus.database.dao.UserDaoIT" />
+            <class name="fr.gael.dhus.database.dao.ProductCartDaoIT" />
+            <class name="fr.gael.dhus.database.dao.NetworkUsageDaoIT" />
+            <class name="fr.gael.dhus.database.dao.AccessRestrictionDaoIT" />
+            <class name="fr.gael.dhus.database.dao.AbstractHibernateDaoIT" />
+            <class name="fr.gael.dhus.database.dao.SearchDaoIT" />
+            <class name="fr.gael.dhus.database.dao.KeyStoreEntryDaoIT" />
+            <class name="fr.gael.dhus.database.dao.OrderDaoIT" />
+            <class name="fr.gael.dhus.database.dao.TransformationDaoIT" />
+        </classes>
+    </test>
+
+    <test name="Configuration" preserve-order="true">
+        <classes>
+            <class name="fr.gael.dhus.system.config.ScannerConfigurationManagerIT" />
+            <class name="fr.gael.dhus.system.config.ConfigurationManagerIT" />
+            <class name="fr.gael.dhus.system.config.SourceManagerIT" />
+            <class name="fr.gael.dhus.system.config.SynchronizerManagerIT" />
+            <class name="org.dhus.store.datastore.config.DataStoreManagerIT" />
+        </classes>
+    </test>
+
+    <test name="Services" preserve-order="true">
+        <classes>
+            <!--<class name="fr.gael.dhus.service.NetworkServiceIT" /> Takes too much time, probably an issue in the configuration -->
+            <class name="fr.gael.dhus.service.OrderServiceIT" />
+            <class name="fr.gael.dhus.service.KeyStoreServiceIT" />
+            <class name="fr.gael.dhus.service.ProductCartServiceIT" />
+            <class name="fr.gael.dhus.service.SourceServiceIT" /><!-- The source service class is a ConfigurationManager, should be renamed and moved -->
+            <class name="fr.gael.dhus.service.TransformationServiceIT" />
+        </classes>
+    </test>
+
+    <test name="Jobs" preserve-order="true">
+        <classes>
+            <class name="fr.gael.dhus.service.job.SchedulerIT" />
+        </classes>
+    </test>
+
+    <test name="Caches" preserve-order="true">
+        <classes>
+            <class name="fr.gael.dhus.service.CacheNetworkServiceIT" />
+            <class name="fr.gael.dhus.service.CacheProductServiceIT" />
+            <class name="fr.gael.dhus.service.CacheUserServiceIT" />
+        </classes>
+    </test>
+
+</suite>

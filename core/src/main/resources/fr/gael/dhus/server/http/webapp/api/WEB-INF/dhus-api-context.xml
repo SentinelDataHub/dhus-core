@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2015-2017,2019,2020 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:security="http://www.springframework.org/schema/security"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       	http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+       	http://www.springframework.org/schema/security https://www.springframework.org/schema/security/spring-security.xsd">
+
+   <bean class="fr.gael.dhus.spring.context.DHuSContextLoader" />
+
+   <bean id="apiAuthEntryPoint" class="org.springframework.security.web.authentication.DelegatingAuthenticationEntryPoint">
+      <constructor-arg>
+         <map>
+            <entry key="hasHeader('X-Requested-With','XMLHttpRequest')" value-ref="ajaxEntyPoint" />
+         </map>
+      </constructor-arg>
+      <property name="defaultEntryPoint" ref="defaultEntryPoint"/>
+   </bean>
+
+   <bean id="ajaxEntyPoint" class="org.springframework.security.web.authentication.HttpStatusEntryPoint">
+      <constructor-arg name="httpStatus" value="#{T(org.springframework.http.HttpStatus).UNAUTHORIZED}"/>
+   </bean>
+
+   <bean id="defaultEntryPoint" class="org.springframework.security.web.authentication.www.BasicAuthenticationEntryPoint">
+      <property name="realmName" value="#{ configurationManager.getNameConfiguration ().getLongName () } API"/>
+   </bean>
+
+   <security:http entry-point-ref="apiAuthEntryPoint" use-expressions="true" disable-url-rewriting="true" create-session="never">
+      <security:custom-filter position="PRE_AUTH_FILTER" ref="preAuthFilter" />
+      <security:custom-filter before="BASIC_AUTH_FILTER" ref="gdprAuthFilter" />
+      <security:custom-filter position="BASIC_AUTH_FILTER" ref="basicAuthFilter" />
+      <security:intercept-url pattern="/**" access="isAuthenticated()" />
+      <security:session-management session-fixation-protection="none" />
+      <security:csrf disabled="true" />
+   </security:http>
+   <security:http-firewall ref="firewall" />
+</beans>

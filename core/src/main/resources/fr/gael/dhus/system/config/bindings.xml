@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2017-2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<jxb:bindings version="2.1" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+              xmlns:annox="http://annox.dev.java.net"
+              xmlns:jxb="http://java.sun.com/xml/ns/jaxb"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xmlns:namespace="http://jaxb2-commons.dev.java.net/namespace-prefix"
+              xsi:schemaLocation="http://java.sun.com/xml/ns/jaxb http://java.sun.com/xml/ns/jaxb/bindingschema_2_0.xsd
+                                  http://jaxb2-commons.dev.java.net/namespace-prefix https://raw.githubusercontent.com/Siggen/jaxb2-namespace-prefix/master/src/main/resources/prefix-namespace-schema.xsd">
+
+   <jxb:bindings schemaLocation="dhus-configuration.xsd">
+      <namespace:prefix name="conf" />
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-messaging.xsd">
+      <namespace:prefix name="msg" />
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-network.xsd">
+      <namespace:prefix name="network" />
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-product.xsd">
+      <namespace:prefix name="product" />
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-search.xsd">
+      <namespace:prefix name="search" />
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-server.xsd">
+      <namespace:prefix name="server" />
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-system.xsd">
+      <namespace:prefix name="system" />
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-cron.xsd">
+      <namespace:prefix name="cron" />
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-datastore.xsd">
+      <namespace:prefix name="ds" />
+      <jxb:bindings node="//xs:complexType[@name='dataStores']/xs:sequence">
+         <jxb:property collectionType="java.util.Vector"/>
+      </jxb:bindings>
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-scanner.xsd">
+      <namespace:prefix name="scanner" />
+      <jxb:bindings node="//xs:complexType[@name='scanners']/xs:sequence">
+         <jxb:property collectionType="java.util.Vector"/>
+      </jxb:bindings>
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-synchronizer.xsd">
+      <namespace:prefix name="sync" />
+      <jxb:bindings node="//xs:complexType[@name='synchronizers']/xs:sequence">
+         <jxb:property collectionType="java.util.Vector"/>
+      </jxb:bindings>
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-eviction.xsd">
+      <namespace:prefix name="evict" />
+      <jxb:bindings node="//xs:complexType[@name='evictions']/xs:sequence">
+         <jxb:property collectionType="java.util.Vector"/>
+      </jxb:bindings>
+   </jxb:bindings>
+
+   <jxb:bindings schemaLocation="dhus-source.xsd">
+      <namespace:prefix name="source" />
+      <jxb:bindings node="//xs:complexType[@name='sources']/xs:sequence">
+         <jxb:property collectionType="java.util.Vector"/>
+      </jxb:bindings>
+   </jxb:bindings>
+
+     <jxb:bindings schemaLocation="dhus-product-source.xsd">
+      <namespace:prefix name="ps" />
+      <jxb:bindings node="//xs:complexType[@name='productSources']/xs:sequence">
+         <jxb:property collectionType="java.util.Vector"/>
+      </jxb:bindings>
+   </jxb:bindings>
+
+</jxb:bindings>

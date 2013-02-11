@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+                         http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+                            http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+   <!-- Loads DAO and Services -->
+   <context:component-scan base-package="fr.gael.dhus.database.dao" />
+   <context:component-scan base-package="fr.gael.dhus.service">
+      <!-- Exclude services that are not tested -->
+      <context:exclude-filter type="regex" expression=".*(StatisticsService)$" />
+   </context:component-scan>
+   <!-- Dependencies of various services -->
+   <bean name="defaultDataStoreManager" class="org.dhus.store.datastore.DefaultDataStoreManager" />
+   <bean name="storeService" class="org.dhus.store.StoreService" />
+   <bean name="metadataStoreService" class="org.dhus.store.metadatastore.MetadataStoreService" />
+   <bean name="relationalMetadataStore" class="org.dhus.store.metadatastore.RelationalMetadataStore" />
+   <bean name="solrMetadataStore" class="org.dhus.store.metadatastore.SolrMetadataStore" />
+   <bean name="securityContextProvider" class="fr.gael.dhus.spring.context.SecurityContextProvider" />
+   <bean name="productDownloadStreamFactory" class="fr.gael.dhus.util.stream.ProductDownloadStreamFactory" />
+   <bean name="multiSourceInputStreamFactory" class="fr.gael.dhus.util.stream.MultiSourceInputStreamFactory" />
+   <bean name="productSynchronizerUtils" class="fr.gael.dhus.sync.ProductSynchronizerUtils" />
+   <bean name="ingestionPageFactory" class="fr.gael.dhus.sync.smart.IngestionPageFactory" />
+
+   <!-- Mock the SolrDAO and MailServer -->
+   <bean name="solrDao" class="org.dhus.test.MockFactory" factory-method="createSolrDaoMock" />
+   <bean name="mailServer" class="org.dhus.test.MockFactory" factory-method="createMailServerMock" />
+
+   <!-- Dummy metrics registry -->
+   <bean name="DHuSMetrics" class="org.dhus.metrics.DummyRegistry" />
+
+   <!-- Dummy cache manager -->
+   <bean name="cacheManager" class="org.springframework.cache.support.NoOpCacheManager" />
+
+</beans>

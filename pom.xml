@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2017-2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses />.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+   <modelVersion>4.0.0</modelVersion>
+
+   <groupId>fr.gael.dhus</groupId>
+   <artifactId>dhus-core-suite</artifactId>
+   <version>2.1.10-osf</version>
+   <packaging>pom</packaging>
+
+   <name>DHuS - Core Suite</name>
+   <url>http://www.dhus.org/</url>
+   <inceptionYear>2017</inceptionYear>
+
+   <properties>
+      <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+      <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+      <maven.compiler.source>1.8</maven.compiler.source>
+      <maven.compiler.target>1.8</maven.compiler.target>
+
+      <!-- plugin versions for all modules (updates: mvn versions:display-plugin-updates) -->
+      <plugin.clean.version>3.1.0</plugin.clean.version>
+      <plugin.compiler.version>3.8.1</plugin.compiler.version>
+      <plugin.dependency.version>3.1.1</plugin.dependency.version>
+      <plugin.deploy.version>3.0.0-M1</plugin.deploy.version>
+      <plugin.install.version>3.0.0-M1</plugin.install.version>
+      <plugin.jar.version>3.2.0</plugin.jar.version>
+      <plugin.source.version>3.2.0</plugin.source.version>
+      <plugin.surefire.version>2.18.1</plugin.surefire.version>
+      <plugin.failsafe.version>2.18.1</plugin.failsafe.version>
+      <plugin.enforcer.version>3.0.0-M3</plugin.enforcer.version>
+   </properties>
+
+   <modules>
+      <module>api</module>
+      <module>core</module>
+   </modules>
+
+   <build>
+      <plugins>
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <version>${plugin.enforcer.version}</version>
+            <executions>
+               <execution>
+                  <id>enforce-maven</id>
+                  <goals>
+                     <goal>enforce</goal>
+                  </goals>
+                  <configuration>
+                     <rules>
+                        <requireMavenVersion>
+                           <version>3.0.5</version>
+                        </requireMavenVersion>
+                     </rules>
+                  </configuration>
+               </execution>
+            </executions>
+         </plugin>
+      </plugins>
+   </build>
+
+   <repositories>
+      <repository>
+         <id>osf-public</id>
+         <name>OSF Public Repository</name>
+         <url>https://nexus-repository.onda-dias.eu/repository/Public_Repositories/</url>
+         <layout>default</layout>      
+      </repository>
+   </repositories>
+
+   <distributionManagement>
+      <repository>
+         <uniqueVersion>true</uniqueVersion>
+         <id>osf-delivery</id>
+         <name>OSF Releases Repository</name>
+         <url>https://nexus-repository.onda-dias.eu/repository/OSF_releases/</url>
+         <layout>default</layout>
+      </repository>      
+   </distributionManagement>
+
+   <issueManagement>
+      <system>Jira</system>
+      <url>https://copernicus.serco.eu/jira-osf</url>
+   </issueManagement>
+
+   <scm>
+      <connection>scm:git:https://github.com/SercoSPA/dhus-core</connection>
+      <developerConnection>scm:git:https://github.com/SercoSPA/dhus-core</developerConnection>
+      <tag>HEAD</tag>
+      <url>https://github.com/SercoSPA/dhus-core</url>
+   </scm>
+
+   <profiles>
+      <profile>
+         <id>validation</id>
+         <modules>
+            <module>validation/distribution</module>
+         </modules>
+      </profile>
+   </profiles>
+
+</project>

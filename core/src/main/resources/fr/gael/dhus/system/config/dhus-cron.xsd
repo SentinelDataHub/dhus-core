@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2015,2017,2018 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           version="1.0" elementFormDefault="qualified" xmlns:jxb="http://java.sun.com/xml/ns/jaxb"
+           jxb:version="2.1" xmlns:inheritance="http://jaxb2-commons.dev.java.net/basic/inheritance"
+           xmlns:annox="http://annox.dev.java.net" jxb:extensionBindingPrefixes="inheritance annox"
+           xmlns:dhusCron="fr.gael.dhus.database.object.config.cron"
+           targetNamespace="fr.gael.dhus.database.object.config.cron">
+
+   <xs:annotation>
+      <xs:appinfo>
+         <jxb:schemaBindings>
+            <jxb:package name="fr.gael.dhus.database.object.config.cron" />
+         </jxb:schemaBindings>
+      </xs:appinfo>
+   </xs:annotation>
+
+   <xs:complexType name="cronConfiguration">
+      <xs:all>
+         <xs:element minOccurs="0" name="archiveSynchronization" type="dhusCron:archiveSynchronizationCronConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="archiveSynchronizationConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="cleanDatabase" type="dhusCron:cleanDatabaseCronConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="cleanDatabaseConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="cleanDatabaseDump" type="dhusCron:cleanDatabaseDumpCronConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="cleanDatabaseDumpConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="dumpDatabase" type="dhusCron:dumpDatabaseCronConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="dumpDatabaseConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+
+         <xs:element minOccurs="0" name="searches" type="dhusCron:searchesCronConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="searchesConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="sendLogs" type="dhusCron:sendLogsCronConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="sendLogsConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="systemCheck" type="dhusCron:systemCheckCronConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="systemCheckConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+      </xs:all>
+   </xs:complexType>
+
+   <xs:complexType name="archiveSynchronizationCronConfiguration">
+      <xs:all />
+      <xs:attribute name="active" type="xs:boolean" default="false" />
+      <xs:attribute name="schedule" type="xs:string" default="0 0 0/5 ? * *" />
+   </xs:complexType>
+
+   <xs:complexType name="cleanDatabaseCronConfiguration">
+      <xs:sequence>
+         <xs:element minOccurs="0" name="tempUsers" type="dhusCron:tempUsersConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="tempUsersConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="statistics" type="dhusCron:statisticsConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="logStatConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+      </xs:sequence>
+      <xs:attribute name="active" type="xs:boolean" default="false" />
+      <xs:attribute name="schedule" type="xs:string" default="0 0 1 ? * *" />
+   </xs:complexType>
+
+   <xs:complexType name="tempUsersConfiguration">
+      <xs:all />
+      <xs:attribute name="keepPeriod" type="xs:int" default="10" />
+   </xs:complexType>
+
+   <xs:complexType name="statisticsConfiguration">
+      <xs:all />
+      <xs:attribute name="keepPeriod" type="xs:int" default="90" />
+   </xs:complexType>
+
+   <xs:complexType name="cleanDatabaseDumpCronConfiguration">
+      <xs:all />
+      <xs:attribute name="active" type="xs:boolean" default="false" />
+      <xs:attribute name="keep" type="xs:int" default="10" />
+      <xs:attribute name="schedule" type="xs:string" default="0 0 4 ? * *" />
+   </xs:complexType>
+
+   <xs:complexType name="dumpDatabaseCronConfiguration">
+      <xs:all />
+      <xs:attribute name="active" type="xs:boolean" default="false" />
+      <xs:attribute name="schedule" type="xs:string" default="0 0 3 ? * *" />
+   </xs:complexType>
+
+   <xs:complexType name="searchesCronConfiguration">
+      <xs:all />
+      <xs:attribute name="active" type="xs:boolean" default="false" />
+      <xs:attribute name="schedule" type="xs:string" default="0 0 5 ? * *" />
+   </xs:complexType>
+
+   <xs:complexType name="sendLogsCronConfiguration">
+      <xs:all />
+      <xs:attribute name="active" type="xs:boolean" default="false" />
+      <xs:attribute name="addresses" type="xs:string" default="dhus@xxx.xx" />
+      <xs:attribute name="schedule" type="xs:string" default="0 55 23 ? * *" />
+   </xs:complexType>
+
+   <xs:complexType name="systemCheckCronConfiguration">
+      <xs:all />
+      <xs:attribute name="active" type="xs:boolean" default="false" />
+      <xs:attribute name="schedule" type="xs:string" default="0 30 23 ? * *" />
+   </xs:complexType>
+
+   <xs:complexType name="cron">
+      <xs:all />
+      <xs:attribute name="active" type="xs:boolean" default="false" />
+      <xs:attribute name="schedule" type="xs:string" default="0 0 22 ? * *" />
+   </xs:complexType>
+
+</xs:schema>

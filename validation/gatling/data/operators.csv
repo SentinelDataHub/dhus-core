@@ -1,0 +1,10 @@
+operator
+Eq
+Ne
+Gt
+Ge
+Lt
+Le
+And
+Or
+Not

@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:metrics="http://www.ryantenney.com/schema/metrics"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="
+           http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+           http://www.ryantenney.com/schema/metrics http://www.ryantenney.com/schema/metrics/metrics.xsd
+           http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd">
+
+    <!-- Monitoring is disabled -->
+    <bean name="DHuSMetrics" class="org.dhus.metrics.DummyRegistry" />
+    <!-- override this bean definition to enable monitoring (monitoring.xml in the classpath) -->
+
+    <!-- Template Provider bean used by the influxdb reporter
+         Every metric that match any of the following regexes will be transformed
+         Referenced matching-groups will be stored in their own column, the name of the column is the name of the matching-group
+         /!\ Warning: Templates are applied AFTER counters and gauges are grouped /!\
+         If you set group-counters to true, the last element of the metric name will be eaten, same thing with group-gauges
+
+         Use the following test code to debug these regexes: https://gist.github.com/jobayle/ae80500b92daf8ede160a7f65e810f94
+    -->
+    <bean name="template_provider" class="eu.metrics.spring.TemplateProviderBean">
+       <constructor-arg>
+          <map key-type="java.lang.String" value-type="java.util.List">
+             <!-- metric `prod_sync.global.gauges.queued_downloads` will be inserted in measurement `prod_sync_total_queued_downloads` -->    <!-- OK -->
+             <entry key="prod_sync_total_queued_downloads">
+                <list>
+                   <!-- Pattern -->
+                   <value>^prod_sync\.global\.gauges$</value>
+                </list>
+             </entry>
+             <!-- metric `prod_sync.sync<syncid>.timer` will be inserted in measurement `prod_sync_timer` -->    <!-- OK -->
+             <entry key="prod_sync_timer">
+                <list>
+                   <!-- Pattern containing a named matching-group: `syncid` -->
+                   <value><![CDATA[^prod_sync\.sync(?<syncid>\d+)\.timer$]]></value>
+                   <!-- Reference the matching-group `syncid` to store the id of the synchroniser in a syncid column -->
+                   <value>syncid</value>
+                </list>
+             </entry>
+                          
+             <!-- ADDED -->
+             <!-- metric `prod_sync.sync<syncid>.counters.<productType>?.
+             	<platformShortName>?.<platformSerialId>?.<metric>` will be inserted in measurement `prod_sync_counters` -->    <!-- OK -->
+             <entry key="prod_sync_counters">
+                <list>
+                   <!-- Pattern containing named matching-groups: optional `productType`, `platformShortName`, `platformSerialId`
+                    -->
+                   <value><![CDATA[^prod_sync\.global\.counters\.?(?<productType>[-a-zA-Z0-9_]*)?\.?(?<platformShortName>[a-zA-Z0-9]*)?\.?(?<platformSerialId>[A-Z])?$]]></value>
+                   <!-- Reference matching-groups `syncid` and `productType` -->
+                   <value>productType</value>
+                   <value>platformShortName</value>
+                   <value>platformSerialId</value>
+                </list>
+             </entry>
+             
+             <entry key="prod_sync_counters_by_sync">
+                <list>
+                   <!-- Pattern containing named matching-groups: optional `productType`, `platformShortName`, `platformSerialId`
+                    -->
+                   <value><![CDATA[^prod_sync\.sync(?<syncid>\d+)\.source(?<sourceid>\d*)\.counters\.?(?<productType>[-a-zA-Z0-9_]*)?\.?(?<platformShortName>[a-zA-Z0-9]*)?\.?(?<platformSerialId>[A-Z])?$]]></value>
+                   <!-- Reference matching-groups `syncid` and `productType` -->
+                   <value>syncid</value>
+                   <value>sourceid</value>
+                   <value>productType</value>
+                   <value>platformShortName</value>
+                   <value>platformSerialId</value>
+                </list>
+             </entry>
+             
+             <entry key="prod_sync_timers_by_sync">
+                <list>
+                   <!-- Pattern containing named matching-groups: optional `productType`, `platformShortName`, `platformSerialId`
+                    -->
+                   <value><![CDATA[^prod_sync\.sync(?<syncid>\d+)\.source(?<sourceid>\d*)\.timers\.?(?<productType>[-a-zA-Z0-9_]*)?\.?(?<platformShortName>[a-zA-Z0-9]*)?\.?(?<platformSerialId>[A-Z])?\.transfertRate$]]></value>
+                   <!-- Reference matching-groups `syncid` and `productType` -->
+                   <value>syncid</value>
+                   <value>sourceid</value>
+                   <value>productType</value>
+                   <value>platformShortName</value>
+                   <value>platformSerialId</value>
+                </list>
+             </entry>
+             
+             <entry key="prod_sync_timeliness_creation_by_sync">
+                <list>
+                   <!-- Pattern containing named matching-groups
+                    -->
+                   <value><![CDATA[^prod_sync\.sync(?<syncid>\d+)\.source(?<sourceid>\d*)\.timeliness\.creation$]]></value>
+                   <!-- Reference matching-groups `syncid` and `sourceid` -->
+                   <value>syncid</value>
+                   <value>sourceid</value>
+                </list>
+             </entry>
+             
+             <entry key="prod_sync_timeliness_ingestion_by_sync">
+                <list>
+                   <!-- Pattern containing named matching-groups
+                    -->
+                   <value><![CDATA[^prod_sync\.sync(?<syncid>\d+)\.source(?<sourceid>\d*)\.timeliness\.ingestion$]]></value>
+                   <!-- Reference matching-groups `syncid` and `sourceid` -->
+                   <value>syncid</value>
+                   <value>sourceid</value>
+                </list>
+             </entry>
+             
+             <!-- metric `prod_sync.global.gauges.queued_downloads` will be inserted in measurement `prod_sync_total_queued_downloads` -->    <!-- OK -->
+             <entry key="prod_sync_queued_downloads">
+                <list>
+                   <!-- Pattern -->
+                   <value><![CDATA[^prod_sync\.sync(?<syncid>\d+)\.gauges$]]></value>
+                   <value>syncid</value>
+                </list>
+             </entry>
+             <!-- END ADDED -->
+             
+             
+             <!-- metric `prod_sync.sync<syncid>.gauges.queued_downloads` will be inserted in measurement `prod_sync_gauges` -->    <!-- OK -->
+             <entry key="prod_sync_gauges">
+                <list>
+                   <value><![CDATA[^prod_sync\.sync(?<syncid>\d+)\.gauges$]]></value>
+                   <value>syncid</value>
+                </list>
+             </entry>
+             <!-- metric `prod_sync.sync<syncid>.timeliness.creation` will be inserted in measurement `prod_sync_timeliness_creation` -->    <!-- OK -->
+             <entry key="prod_sync_timeliness_creation">
+                <list>
+                   <value><![CDATA[^prod_sync\.sync(?<syncid>\d+)\.timeliness.creation$]]></value>
+                   <value>syncid</value>
+                </list>
+             </entry>
+             <!-- metric `prod_sync.sync<syncid>.timeliness.ingestion` will be inserted in measurement `prod_sync_timeliness_ingestion` -->    <!-- OK -->
+             <entry key="prod_sync_timeliness_ingestion">
+                <list>
+                   <value><![CDATA[^prod_sync\.sync(?<syncid>\d+)\.timeliness.ingestion$]]></value>
+                   <value>syncid</value>
+                </list>
+             </entry>
+             
+             <!-- ADDED -->
+             <!-- metric `prod_sync.sync<syncid>.timeliness.publication` will be inserted in measurement `prod_sync_timeliness_ingestion` -->    <!-- OK -->
+             <entry key="prod_sync_timeliness_publication">
+                <list>
+                   <value><![CDATA[^prod_sync\.sync(?<syncid>\d+)\.?(?<productType>[-a-zA-Z0-9_]*)?\.?(?<platformShortName>[a-zA-Z0-9]*)?\.?(?<platformSerialId>[A-Z])?\.timeliness.publication$]]></value>
+                   <value>syncid</value>
+                   <value>productType</value>
+                   <value>platformShortName</value>
+                   <value>platformSerialId</value>
+                </list>
+             </entry>
+             <!-- END ADDED -->
+             <!-- metric `access.<connector>.<context>.timer` will be inserted in measurement `access_timer` -->    <!-- OK -->
+             <entry key="access_timer">
+                <list>
+                   <!--                                                           v v v v v v v lookahead because username is optional       -->
+                   <value><![CDATA[^access\.(?<connector>\d+)\.(?<context>[/\w]+)(\.(?!timer$))?(?<username>[-~a-zA-Z0-9._]*)\.timer$]]></value>
+                   <value>connector</value><value>context</value><value>username</value>
+                </list>
+             </entry>
+             <!-- metric `access.<connector>.<context>.counters` will be inserted in measurement `access_counters` -->    <!-- OK -->
+             <entry key="access_counters">
+                <list>
+                   <value><![CDATA[^access\.(?<connector>\d+)\.(?<context>[/\w]+)(\.(?!counters$))?(?<username>[-~a-zA-Z0-9._]*)\.counters$]]></value>
+                   <value>connector</value><value>context</value><value>username</value>
+                </list>
+             </entry>
+             <!-- metric `ingestion.<itemclass>.timer` will be inserted in measurement `ingestion_timer` -->    <!-- OK -->
+             <entry key="ingestion_timer">
+                <list>
+                   <value><![CDATA[^ingestion\.(?<itemclass>[-a-zA-Z0-9_]+)\.timer$]]></value>
+                   <value>itemclass</value>
+                </list>
+             </entry>
+             <!-- metric `ingestion.<itemclass>.counters` will be inserted in measurement `ingestion_counters` -->    <!-- OK -->
+             <entry key="ingestion_counters">
+                <list>
+                   <value><![CDATA[^ingestion\.(?<itemclass>[-a-zA-Z0-9_]+)\.counters$]]></value>
+                   <value>itemclass</value>
+                </list>
+             </entry>
+             <!-- metric `downloads.<itemclass>?.<username:username>?.meter` will be inserted in measurement `downloads_start_meter` -->    <!-- OK -->
+             <entry key="downloads_start_meter">
+                <list>
+                   <value><![CDATA[^downloads\.start(\.(?<itemclass>[-a-zA-Z0-9_]+))?(\.username:(?<username>[-~a-zA-Z0-9._]+))?\.meter$]]></value>
+                   <value>itemclass</value><value>username</value>
+                </list>
+             </entry>
+             <!-- metric `downloads.<itemclass>?.<username:username>?.<status>.meter` will be inserted in measurement `downloads_end_meter` -->    <!-- OK -->
+             <entry key="downloads_end_meter">
+                <list>
+                   <value><![CDATA[^downloads\.end(\.(?<itemclass>[-a-zA-Z0-9_]+))?(\.username:(?<username>[-~a-zA-Z0-9._]+))?\.(?<status>success|failure)\.meter$]]></value>
+                   <value>itemclass</value><value>username</value><value>status</value>
+                </list>
+             </entry>
+             <!-- metric `downloads.<itemclass>?.<username:username>?.bytes` will be inserted in measurement `downloads_volume_rate` -->    <!-- OK -->
+             <entry key="downloads_volume_rate">
+                <list>
+                   <value><![CDATA[^downloads(\.(?<itemclass>[-a-zA-Z0-9_]+))?(\.username:(?<username>[-~a-zA-Z0-9._]+))?\.bytes$]]></value>
+                   <value>itemclass</value><value>username</value>
+                </list>
+             </entry>
+             <!-- metric `eviction.<evictionName>.<dataStoreName>?(.soft)?(.safe)?.timer` will be inserted in measurement `eviction_timer` -->    <!-- OK -->
+             <entry key="eviction_timer">
+                <list>
+                   <value><![CDATA[^eviction\.(?<evictionname>\w+)(\.(?!(soft\.)?(safe\.)?timer)(?<datastorename>\w+))?(\.(?<issoft>soft))?(\.(?<issafe>safe))?\.timer$]]></value>
+                   <value>evictionname</value><value>datastorename</value><value>issoft</value><value>issafe</value>
+                </list>
+             </entry>
+             <!-- metric `datastore.async.<name>.gets` will be inserted in measurement `async_get_rate` -->    <!-- OK -->
+             <entry key="async_get_rate">
+                <list>
+                   <value><![CDATA[^datastore\.async\.(?<datastorename>\w+)\.gets$]]></value>
+                   <value>datastorename</value>
+                </list>
+             </entry>
+             <!-- metric `datastore.async.<name>.restores` will be inserted in measurement `async_restore_rate` -->    <!-- OK -->
+             <entry key="async_restore_rate">
+                <list>
+                   <value><![CDATA[^datastore\.async\.(?<datastorename>\w+)\.restores$]]></value>
+                   <value>datastorename</value>
+                </list>
+             </entry>
+             <!-- metric `datastore.async.<name>.cache.hits` will be inserted in measurement `async_cache_hits` -->    <!-- OK -->
+             <entry key="async_cache_hits">
+                <list>
+                   <value><![CDATA[^datastore\.async\.(?<datastorename>\w+)\.cache\.hits$]]></value>
+                   <value>datastorename</value>
+                </list>
+             </entry>
+             <!-- metric `datastore.async.<name>.cache` will be inserted in measurement `async_cache_size` -->    <!-- OK -->
+             <entry key="async_cache_size">
+                <list>
+                   <value><![CDATA[^datastore\.async\.(?<datastorename>\w+)\.cache$]]></value>
+                   <value>datastorename</value>
+                </list>
+             </entry>
+             <!-- metric `datastore.async.<name>.queue.size` will be inserted in measurement `async_queue_size` -->    <!-- OK -->
+             <entry key="async_queue_size">
+                <list>
+                   <value><![CDATA[^datastore\.async\.(?<datastorename>\w+)\.queue$]]></value>
+                   <value>datastorename</value>
+                </list>
+             </entry>
+             <!-- metric `datastore.async.<name>.fetches.accepted` will be inserted in measurement `async_accepted_fetches` -->    <!-- OK -->
+             <entry key="async_accepted_fetches">
+                <list>
+                   <value><![CDATA[^datastore\.async\.(?<datastorename>\w+)\.fetches\.accepted$]]></value>
+                   <value>datastorename</value>
+                </list>
+             </entry>
+             <!-- metric `datastore.async.<name>.fetches.refused` will be inserted in measurement `async_refused_fetches` -->    <!-- OK -->
+             <entry key="async_refused_fetches">
+                <list>
+                   <value><![CDATA[^datastore\.async\.(?<datastorename>\w+)\.fetches\.refused$]]></value>
+                   <value>datastorename</value>
+                </list>
+             </entry>
+             <!-- metric `dhus.cache.<cachename>.gauge` will be inserted in measurement `cache` -->    <!-- OK -->
+             <entry key="cache">
+                <list>
+                   <value><![CDATA[^dhus.cache.(?<cachename>\w+)$]]></value>
+                   <value>cachename</value>
+                </list>
+             </entry>
+             <!-- metric `dhus.cache.<cachename>.gets` will be inserted in measurement `cache_gets` -->    <!-- OK -->
+             <entry key="cache_gets">
+                <list>
+                   <value><![CDATA[^dhus.cache.(?<cachename>\w+).gets$]]></value>
+                   <value>cachename</value>
+                </list>
+             </entry>
+             <!-- metric `dhus.cache.<cachename>.puts` will be inserted in measurement `cache_puts` -->    <!-- OK -->
+             <entry key="cache_puts">
+                <list>
+                   <value><![CDATA[^dhus.cache.(?<cachename>\w+).puts$]]></value>
+                   <value>cachename</value>
+                </list>
+             </entry>
+             <!-- metric `repair.<itemclass>` will be inserted in measurement `product_repair` -->    <!-- OK -->
+             <entry key="product_repair">
+                <list>
+                   <value><![CDATA[^repair\.(?<itemclass>[-a-zA-Z0-9_]+)$]]></value>
+                   <value>itemclass</value>
+                </list>
+             </entry>
+          </map>
+       </constructor-arg>
+    </bean>
+</beans>

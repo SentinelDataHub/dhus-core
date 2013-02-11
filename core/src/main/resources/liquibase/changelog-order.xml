@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2019,2020 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<databaseChangeLog
+   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
+
+   <changeSet id="createTableOrders" author="dihia">
+      <createTable tableName="ORDERS">
+         <column name="DATASTORE_NAME" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+         <column name="JOB_ID" type="VARCHAR(100)">
+            <constraints nullable="true" />
+         </column>
+         <!-- product_uuid cannot be a foreign key -->
+         <column name="PRODUCT_UUID" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+         <column name="STATUS" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+         <column name="SUBMISSION_TIME" type="TIMESTAMP">
+            <constraints  nullable="false" />
+         </column>
+         <column name="ESTIMATED_TIME" type="TIMESTAMP">
+            <constraints  nullable="true" />
+         </column>
+      </createTable>
+      <addPrimaryKey tableName="ORDERS" columnNames="DATASTORE_NAME, PRODUCT_UUID" constraintName="PK_ORDERS"/>
+   </changeSet>
+
+   <changeSet id="orderAddOwners" author="john">
+      <createTable tableName="ORDER_OWNERS">
+         <column name="DATASTORE_NAME" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+         <column name="PRODUCT_UUID" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+         <column name="USER_UUID" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+      </createTable>
+      <addForeignKeyConstraint
+            baseTableName="ORDER_OWNERS"
+            baseColumnNames="USER_UUID"
+            constraintName="FK_ORDER_OWNER_USER_UUID"
+            referencedTableName="USERS"
+            referencedColumnNames="UUID"
+            onDelete="CASCADE" />
+      <addForeignKeyConstraint
+            baseTableName="ORDER_OWNERS"
+            baseColumnNames="DATASTORE_NAME,PRODUCT_UUID"
+            constraintName="FK_ORDER_OWNER_ORDER_ID"
+            referencedTableName="ORDERS"
+            referencedColumnNames="DATASTORE_NAME,PRODUCT_UUID"
+            onDelete="CASCADE" />
+   </changeSet>
+
+   <changeSet id="addStatusMessageToOrders" author="dihia">
+      <addColumn tableName="ORDERS">
+         <column name="STATUS_MESSAGE" type="VARCHAR(1024)" />
+      </addColumn>
+   </changeSet>
+</databaseChangeLog>

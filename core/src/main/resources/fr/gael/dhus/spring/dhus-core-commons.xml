@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2013-2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:cxf="http://cxf.apache.org/core"
+       xsi:schemaLocation="
+         http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+         http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+         http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+         http://cxf.apache.org/core http://cxf.apache.org/schemas/core.xsd">
+
+   <context:component-scan base-package="fr.gael.dhus.system" />
+
+   <context:component-scan base-package="fr.gael.dhus.messaging.mail" />
+   <context:component-scan base-package="fr.gael.dhus.service" />
+   <context:component-scan base-package="fr.gael.dhus.search"/>
+
+   <context:component-scan base-package="fr.gael.dhus.server" />
+   <context:component-scan base-package="fr.gael.dhus.olingo" />
+
+   <context:component-scan base-package="fr.gael.dhus.datastore" />
+   <context:component-scan base-package="fr.gael.dhus.database.dao.listeners" />
+
+   <context:component-scan base-package="fr.gael.dhus.system.init" />
+   <context:component-scan base-package="fr.gael.dhus.service" />
+   <context:component-scan base-package="fr.gael.dhus.spring.context" />
+
+   <context:component-scan base-package="org.dhus.scanner" />
+   <context:component-scan base-package="org.dhus.store.datastore" />
+
+   <bean id="exporter" class="org.springframework.jmx.export.MBeanExporter" lazy-init="false">
+      <property name="beans">
+         <map>
+            <entry key="bean:name=taskExecutor" value-ref="taskExecutor"/>
+         </map>
+      </property>
+   </bean>
+
+   <!-- Processing task executors -->
+   <bean id="taskExecutor"
+      class="fr.gael.dhus.datastore.processing.fair.FairThreadPoolTaskExecutor">
+      <property name="corePoolSize"
+                value="#{ configurationManager.getProcessingConfiguration ().getCorePoolSize () }" />
+   </bean>
+
+   <!-- SolrDao -->
+   <bean id="solrDao" class="fr.gael.dhus.search.SolrDao">
+      <constructor-arg ref="configurationManager" />
+   </bean>
+
+   <!-- Spring AOP -->
+   <aop:aspectj-autoproxy />
+   <bean id="cacheAspectjDefinition" class="fr.gael.dhus.spring.cache.CacheAspectDefinition" />
+
+   <!-- KeyStore Manager -->
+   <bean name="keyStoreService" class="fr.gael.dhus.service.KeyStoreService" />
+
+   <!-- Smart Synchronizer -->
+   <bean id="ProductDownloadStreamFactory" class="fr.gael.dhus.util.stream.ProductDownloadStreamFactory" />
+   <bean id="multiSourceInputStreamFactory" class="fr.gael.dhus.util.stream.MultiSourceInputStreamFactory" />
+   <bean id="IngestionPageFactory" class="fr.gael.dhus.sync.smart.IngestionPageFactory" />
+   <bean id="productSynchronizerUtils" class="fr.gael.dhus.sync.ProductSynchronizerUtils" />
+
+</beans>
+

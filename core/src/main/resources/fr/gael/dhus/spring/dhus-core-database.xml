@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2014-2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+         http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+         http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd">
+
+   <bean id="configurationManager" class="fr.gael.dhus.system.config.ConfigurationManager" />
+
+   <bean id="boneCPDataSource" class="com.jolbox.bonecp.BoneCPDataSource">
+      <property name="driverClass" value="#{ configurationManager.getJDBCDriver() }" />
+      <property name="jdbcUrl" value="#{ configurationManager.getJDBCUrl() }" />
+      <property name="username" value="#{ configurationManager.getLogin() }" />
+      <property name="password" value="#{ configurationManager.getPassword() }" />
+
+      <property name="idleConnectionTestPeriodInMinutes" value="#{systemProperties['dhus.bonecp.source.idleConnectionTestPeriodInMinutes'] ?:60}"/>
+      <property name="idleMaxAgeInMinutes" value="#{systemProperties['dhus.bonecp.source.idleMaxAgeInMinutes'] ?:60}"/>
+      <property name="maxConnectionsPerPartition" value="#{systemProperties['dhus.bonecp.source.maxConnectionsPerPartition'] ?:100}"/>
+      <property name="minConnectionsPerPartition" value="#{systemProperties['dhus.bonecp.source.minConnectionsPerPartition'] ?:20}"/>
+      <property name="partitionCount" value="#{systemProperties['dhus.bonecp.source.partitionCount'] ?:4}"/>
+      <property name="acquireIncrement" value="#{systemProperties['dhus.bonecp.source.acquireIncrement'] ?:10}"/>
+      <property name="statementsCacheSize" value="#{systemProperties['dhus.bonecp.source.statementsCacheSize'] ?:100}"/>
+   </bean>
+
+   <!-- Spring bean configuration. Tell Spring to bounce off BoneCP -->
+   <bean id="dataSource"
+      class="org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy">
+      <property name="targetDataSource" ref="boneCPDataSource" />
+   </bean>
+
+   <bean id="liquibase" class="org.dhus.migration.LiquibaseValidation">
+      <property name="dataSource" ref="dataSource" />
+      <property name="embedded" value="#{ configurationManager.getJDBCUrl().startsWith('jdbc:hsqldb:file') }" />
+      <property name="changeLog" value="classpath:liquibase/changelog-master.xml" />
+   </bean>
+
+</beans>

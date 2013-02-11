@@ -1,0 +1,201 @@
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2015,2017,2018 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<!DOCTYPE configuration [
+  <!ENTITY varFolder "/data_1/tmp/dhus/var">
+  <!ENTITY dataFolder "/data_1/tmp/dhus/data">
+]>
+<configuration xmlns="fr.gael.dhus.database.object.config"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xmlns:ds="org.dhus.store.datastore.config"
+               xmlns:cron="fr.gael.dhus.database.object.config.cron"
+               xmlns:msg="fr.gael.dhus.database.object.config.messaging"
+               xmlns:network="fr.gael.dhus.database.object.config.network"
+               xmlns:product="fr.gael.dhus.database.object.config.product"
+               xmlns:search="fr.gael.dhus.database.object.config.search"
+               xmlns:server="fr.gael.dhus.database.object.config.server"
+               xmlns:system="fr.gael.dhus.database.object.config.system"
+               xmlns:scanner="fr.gael.dhus.database.object.config.scanner"
+               xmlns:evict="fr.gael.dhus.database.object.config.eviction">
+   <!-- TODO : link xsd in jar -->
+   <crons>
+      <cron:archiveSynchronization
+         active="false"
+         schedule="0 0 0/5 ? * *"/>
+
+      <cron:cleanDatabase
+         active="true"
+         schedule="0 0 1 ? * *">
+         <cron:tempUsers keepPeriod="10" />
+         <cron:statistics keepPeriod="90" />
+      </cron:cleanDatabase>
+
+      <cron:dumpDatabase
+         active="true"
+         schedule="0 0 3 ? * *" />
+
+      <cron:cleanDatabaseDump
+         active="true"
+         schedule="0 0 4 ? * *"
+         keep="10" />
+
+      <cron:searches
+         active="true"
+         schedule="0 0 5 ? * *" />
+
+      <!-- addresses shall be coma-separated -->
+      <cron:sendLogs
+         active="false"
+         schedule="0 0 0 ? * *"
+         addresses="dhus@gael.fr" />
+
+      <cron:systemCheck
+         active="true"
+         schedule="0 30 23 ? * *"/>
+
+   </crons>
+
+   <messaging>
+      <msg:mail
+         onUserCreate="true"
+         onUserUpdate="true"
+         onUserDelete="true">
+         <msg:server
+            smtp="smtp.gael.fr"
+            port="587"
+            tls="false"
+            username="dhus@gael.fr"
+            password="password">
+            <msg:from name="DHuS Support Team" address="dhus@gael.fr" />
+            <msg:replyTo>dhus@gael.fr</msg:replyTo>
+         </msg:server>
+      </msg:mail>
+   </messaging>
+
+   <network>
+      <network:outbound>
+         <network:channel name="OutboundPriorityChannel" weight="75">
+            <network:classifier>
+               <network:includes>
+                  <network:include>
+                     <network:userEmailPattern>outbound_classifier_include</network:userEmailPattern>
+                  </network:include>
+               </network:includes>
+            </network:classifier>
+            <network:defaultUserQuotas>
+               <network:maxConcurrent>10</network:maxConcurrent>
+               <network:maxCount period="1" periodUnit="DAYS">50</network:maxCount>
+               <network:maxSize>10000000000</network:maxSize> <!-- 10Gb -->
+               <network:maxBandwidth>1000000</network:maxBandwidth> <!-- 10Mb/s -->
+            </network:defaultUserQuotas>
+         </network:channel>
+         <network:channel name="OutboundSelfRegisteredChannel" weight="25">
+            <network:classifier>
+               <network:includes>
+                  <network:include>
+                     <network:userEmailPattern>outbound_classifier_include</network:userEmailPattern>
+                  </network:include>
+               </network:includes>
+            </network:classifier>
+
+            <network:defaultUserQuotas>
+               <network:maxConcurrent>1</network:maxConcurrent>
+               <network:maxCount period="1" periodUnit="DAYS">50</network:maxCount>
+               <network:maxSize>10737418240</network:maxSize> <!-- 10Gb -->
+               <network:maxBandwidth>13107200</network:maxBandwidth> <!-- 100Mb/s -->
+            </network:defaultUserQuotas>
+         </network:channel>
+      </network:outbound>
+      <network:inbound>
+         <network:channel name="InboundPriorityChannel" weight="75">
+            <network:classifier>
+               <network:includes>
+                  <network:include>
+                     <network:userEmailPattern>inbound_classifier_include</network:userEmailPattern>
+                  </network:include>
+               </network:includes>
+            </network:classifier>
+            <network:defaultUserQuotas>
+               <network:maxConcurrent>10</network:maxConcurrent>
+               <network:maxCount period="1" periodUnit="DAYS">50</network:maxCount>
+               <network:maxSize>10000000000</network:maxSize> <!-- 10Gb -->
+               <network:maxBandwidth>1000000</network:maxBandwidth> <!-- 10Mb/s -->
+            </network:defaultUserQuotas>
+         </network:channel>
+         <network:channel name="InboundSelfRegisteredChannel" weight="25">
+            <network:classifier>
+               <network:includes>
+                  <network:include>
+                     <network:userEmailPattern>inbound_classifier_include</network:userEmailPattern>
+                  </network:include>
+               </network:includes>
+            </network:classifier>
+
+            <network:defaultUserQuotas>
+               <network:maxConcurrent>5</network:maxConcurrent>
+               <network:maxCount period="1" periodUnit="DAYS">50</network:maxCount>
+               <network:maxSize>10737418240</network:maxSize> <!-- 10Gb -->
+               <network:maxBandwidth>13107200</network:maxBandwidth> <!-- 100Mb/s -->
+
+            </network:defaultUserQuotas>
+         </network:channel>
+      </network:inbound>
+   </network>
+   <products>
+      <product:download
+         compressionLevel="4"
+         checksumAlgorithms="MD5,SHA-1,SHA-256"/>
+
+      <product:quicklook height="512" width="512" cutting="false" />
+      <product:thumbnail height="64" width="64" cutting="false" />
+   </products>
+   <search>
+      <search:geocoder url="http://nominatim.openstreetmap.org">
+         <search:nominatim boundingBox="false" maxPointNumber="50" />
+         <search:geoname username="username" />
+      </search:geocoder>
+      <search:odata defaultTop="50" />
+      <search:solr
+         path="&varFolder;/solr"
+         core="dhus"
+         schemaPath=""
+         synonymPath="" />
+   </search>
+   <server>
+      <server:external protocol="" host="" path="" />
+   </server>
+   <system>
+      <system:name long="Data Hub Service" short="DHuS" />
+      <system:administrator name="root" password="password" />
+      <system:support name="DHuS Support Team" mail="dhus@gael.fr" registrationMail="dhus@gael.fr" />
+      <system:archive />
+      <system:database JDBCDriver="org.hsqldb.jdbcDriver" hibernateDialect="org.hibernate.dialect.HSQLDialect" dumpPath="&varFolder;/database_dump"
+                       JDBCUrl="jdbc:hsqldb:file:&varFolder;/database/dhus;shutdown=true;hsqldb.write_delay=false;hsqldb.cache_size=1000000;hsqldb.cache_rows=200000;hsqldb.log_size=50;hsqldb.tx=mvcc;hsqldb.default_table_type=cached;hsqldb.nio_max_size=20480;"
+                       login="sa" password="" />
+      <system:processing corePoolSize="4" />
+      <system:tomcat path="&varFolder;/tomcat" />
+      <system:executor enabled="false" batchModeEnabled="false" />
+   </system>
+   <dataStores></dataStores>
+   <scanners></scanners>
+   <synchronizers></synchronizers>
+   <evictions>
+      <evict:eviction name="DefaultEviction" maxEvictedProducts="1000" keepPeriod="10"/>
+   </evictions>
+</configuration>

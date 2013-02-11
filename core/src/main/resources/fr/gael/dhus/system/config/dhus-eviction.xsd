@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2017,2018 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           version="1.0" elementFormDefault="qualified" xmlns:jxb="http://java.sun.com/xml/ns/jaxb"
+           jxb:version="2.1" xmlns:inheritance="http://jaxb2-commons.dev.java.net/basic/inheritance"
+           xmlns:annox="http://annox.dev.java.net" jxb:extensionBindingPrefixes="inheritance annox"
+           xmlns:dhusEviction="fr.gael.dhus.database.object.config.eviction"
+           targetNamespace="fr.gael.dhus.database.object.config.eviction">
+
+   <xs:annotation>
+      <xs:appinfo>
+         <jxb:schemaBindings>
+            <jxb:package name="fr.gael.dhus.database.object.config.eviction" />
+         </jxb:schemaBindings>
+      </xs:appinfo>
+   </xs:annotation>
+
+   <xs:complexType name="evictions">
+      <xs:annotation>
+         <xs:appinfo>
+            <jxb:class name="Evictions" implClass="fr.gael.dhus.database.object.config.eviction.EvictionManager" />
+         </xs:appinfo>
+      </xs:annotation>
+      <xs:sequence>
+         <xs:element name="eviction" type="dhusEviction:evictionConfiguration" minOccurs="0" maxOccurs="unbounded" />
+      </xs:sequence>
+   </xs:complexType>
+
+   <xs:complexType name="evictionConfiguration">
+      <xs:annotation>
+         <xs:appinfo>
+            <jxb:class name="EvictionConfiguration" implClass="fr.gael.dhus.database.object.config.eviction.Eviction" />
+         </xs:appinfo>
+      </xs:annotation>
+      <xs:sequence>
+         <xs:element name="cron" minOccurs="0" maxOccurs="1">
+            <xs:complexType>
+               <xs:attribute name="active" type="xs:boolean" default="false" />
+               <xs:attribute name="schedule" type="xs:string" default="0 0 21 ? * *" />
+            </xs:complexType>
+         </xs:element>
+      </xs:sequence>
+      <xs:attribute name="name" type="xs:string" use="required" />
+      <xs:attribute name="keepPeriod" type="xs:int" default="10" />
+      <xs:attribute name="keepPeriodUnit" type="xs:string" default="DAYS" />
+      <xs:attribute name="maxEvictedProducts" type="xs:int" default="1000" />
+      <xs:attribute name="filter" type="xs:string" />
+      <xs:attribute name="orderBy" type="xs:string" />
+      <xs:attribute name="targetCollection" type="xs:string" />
+      <xs:attribute name="softEviction" type="xs:boolean" default="false" />
+      <xs:attribute name="status" type="dhusEviction:evictionStatusEnum" default="STOPPED" />
+      <xs:attribute name="safeMode" type="xs:boolean" default="false"/>
+      <xs:attribute name="targetDataStore" type="xs:string"/>
+      <xs:attribute name="baseDate" type="dhusEviction:evictionBaseDate" default="modificationDate" />
+   </xs:complexType>
+   
+   <xs:simpleType name="evictionStatusEnum">
+      <xs:restriction base="xs:string">
+         <xs:enumeration value="STARTED" />
+         <xs:enumeration value="STOPPED" />
+         <xs:enumeration value="QUEUED" />
+         <xs:enumeration value="CANCELED" />
+      </xs:restriction>
+   </xs:simpleType>
+   
+   <xs:simpleType name="evictionBaseDate">
+      <xs:restriction base="xs:string">
+         <xs:enumeration value="modificationDate" />
+         <xs:enumeration value="creationDate" />
+      </xs:restriction>
+   </xs:simpleType>
+
+</xs:schema>

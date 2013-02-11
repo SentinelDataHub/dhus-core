@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2013,2014,2015,2017 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           version="1.0" elementFormDefault="qualified" xmlns:jxb="http://java.sun.com/xml/ns/jaxb"
+           jxb:version="2.1" xmlns:inheritance="http://jaxb2-commons.dev.java.net/basic/inheritance"
+           xmlns:annox="http://annox.dev.java.net" jxb:extensionBindingPrefixes="inheritance annox"
+           xmlns:dhusProduct="fr.gael.dhus.database.object.config.product"
+           targetNamespace="fr.gael.dhus.database.object.config.product">
+
+   <xs:annotation>
+      <xs:appinfo>
+         <jxb:schemaBindings>
+            <jxb:package name="fr.gael.dhus.database.object.config.product" />
+         </jxb:schemaBindings>
+      </xs:appinfo>
+   </xs:annotation>
+
+   <xs:complexType name="productConfiguration">
+      <xs:all>
+         <xs:element minOccurs="0" name="download" type="dhusProduct:downloadConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="downloadConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="quicklook" type="dhusProduct:quicklookConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="quicklookConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="thumbnail" type="dhusProduct:thumbnailConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="thumbnailConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+      </xs:all>
+   </xs:complexType>
+
+   <xs:complexType name="downloadConfiguration">
+      <xs:all />
+      <xs:attribute name="compressionLevel" type="xs:int" default="4" />
+      <xs:attribute name="checksumAlgorithms" type="xs:string" default="MD5" />
+   </xs:complexType>
+
+   <xs:complexType name="quicklookConfiguration">
+      <xs:all />
+      <xs:attribute name="cutting" type="xs:boolean" default="false" />
+      <xs:attribute name="height" type="xs:int" default="512" />
+      <xs:attribute name="width" type="xs:int" default="512" />
+   </xs:complexType>
+
+   <xs:complexType name="thumbnailConfiguration">
+      <xs:all />
+      <xs:attribute name="cutting" type="xs:boolean" default="false" />
+      <xs:attribute name="height" type="xs:int" default="64" />
+      <xs:attribute name="width" type="xs:int" default="64" />
+   </xs:complexType>
+
+</xs:schema>

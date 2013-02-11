@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2013-2019 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="fr.gael.dhus.database.object.config.system"
+           version="1.0" elementFormDefault="qualified" xmlns:jxb="http://java.sun.com/xml/ns/jaxb"
+           jxb:version="2.1" xmlns:inheritance="http://jaxb2-commons.dev.java.net/basic/inheritance"
+           xmlns:annox="http://annox.dev.java.net" jxb:extensionBindingPrefixes="inheritance annox"
+           xmlns:dhusSystem="fr.gael.dhus.database.object.config.system"
+           targetNamespace="fr.gael.dhus.database.object.config.system">
+
+   <xs:annotation>
+      <xs:appinfo>
+         <jxb:schemaBindings>
+            <jxb:package name="fr.gael.dhus.database.object.config.system" />
+         </jxb:schemaBindings>
+      </xs:appinfo>
+   </xs:annotation>
+
+   <xs:complexType name="systemConfiguration">
+      <xs:all>
+         <xs:element minOccurs="0" name="gdpr" type="dhusSystem:gdprConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="gdprConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="administrator" type="dhusSystem:administratorConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="administratorConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="archive" type="dhusSystem:archiveConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="archiveConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="database" type="dhusSystem:databaseConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="databaseConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="name" type="dhusSystem:nameConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="nameConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="processing" type="dhusSystem:processingConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="processingConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="support" type="dhusSystem:supportConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="supportConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="tomcat" type="dhusSystem:tomcatConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="tomcatConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="executor" type="dhusSystem:executorConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="executorConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="trashPath" type="dhusSystem:trashPathConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="trashPathConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+         <xs:element minOccurs="0" name="transformation" type="dhusSystem:transformationConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="transformationConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
+      </xs:all>
+   </xs:complexType>
+
+   <xs:complexType name="gdprConfiguration">
+      <xs:all />
+      <xs:attribute name="active" type="xs:boolean" default="false" />
+      <xs:attribute name="SAMLUserId" type="xs:string" default="samlId"/>
+   </xs:complexType>
+
+   <xs:complexType name="administratorConfiguration">
+      <xs:all />
+      <xs:attribute name="name" type="xs:string" default="root" />
+      <xs:attribute name="password" type="xs:string" default="password" />
+   </xs:complexType>
+
+   <xs:complexType name="databaseConfiguration">
+      <xs:all />
+      <xs:attribute name="dumpPath" type="xs:string" />
+      <xs:attribute name="JDBCDriver" type="xs:string" default="org.hsqldb.jdbcDriver" />
+      <xs:attribute name="hibernateDialect" type="xs:string" default="org.hibernate.dialect.HSQLDialect" />
+      <xs:attribute name="JDBCUrl" type="xs:string" default="jdbc:hsqldb:file:./database/hsqldb" />
+      <xs:attribute name="login" type="xs:string" default="sa" />
+      <xs:attribute name="password" type="xs:string" default="" />
+   </xs:complexType>
+
+   <xs:complexType name="nameConfiguration">
+      <xs:all />
+      <xs:attribute name="long" type="xs:string" default="Data Hub Service">
+         <xs:annotation>
+            <xs:appinfo>
+               <jxb:property name="longName" />
+            </xs:appinfo>
+         </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="short" type="xs:string" default="DHuS">
+         <xs:annotation>
+            <xs:appinfo>
+               <jxb:property name="shortName" />
+            </xs:appinfo>
+         </xs:annotation>
+      </xs:attribute>
+   </xs:complexType>
+
+   <xs:complexType name="processingConfiguration">
+      <xs:all />
+      <xs:attribute name="corePoolSize" type="xs:int" default="1" />
+   </xs:complexType>
+
+   <xs:complexType name="supportConfiguration">
+      <xs:all />
+      <xs:attribute name="mail" type="xs:string" default="dhus-support@xxx.xx" />
+      <xs:attribute name="name" type="xs:string" default="DHuS Support Team" />
+      <xs:attribute name="registrationMail" type="xs:string" default="" />
+   </xs:complexType>
+
+   <xs:complexType name="tomcatConfiguration">
+      <xs:all />
+      <xs:attribute name="path" type="xs:string" default="./tomcat" />
+   </xs:complexType>
+
+   <xs:complexType name="trashPathConfiguration">
+      <xs:all />
+      <xs:attribute name="path" type="xs:string" />
+   </xs:complexType>
+
+   <xs:complexType name="archiveConfiguration">
+      <xs:attribute name="errorPath" type="xs:string" />
+   </xs:complexType>
+
+   <xs:complexType name="executorConfiguration">
+      <xs:all />
+      <xs:attribute name="enabled" type="xs:boolean" default="true" />
+      <xs:attribute name="batchModeEnabled" type="xs:boolean" default="false" />
+   </xs:complexType>
+
+   <xs:complexType name="transformationConfiguration">
+      <xs:sequence>
+         <xs:element name="transformerQuotas" type="dhusSystem:transformerQuota" minOccurs="0" maxOccurs="unbounded">
+         </xs:element>
+         <xs:element name="userQuotas" minOccurs="0" maxOccurs="1">
+            <xs:complexType>
+              <xs:all />
+              <xs:attribute name="maxParallelTransformationsPerUser" type="dhusSystem:positiveInt" use="required" />
+            </xs:complexType>
+         </xs:element>
+      </xs:sequence>
+      <xs:attribute name="isMaster" type="xs:boolean" default="false" />
+      <xs:attribute name="interval" type="dhusSystem:positiveInt" default="60000" />
+      <xs:attribute name="targetDataStore" type="xs:string" />
+      <xs:attribute name="ingestCorePoolSize" type="dhusSystem:positiveInt" default="4" />
+   </xs:complexType>
+
+   <xs:complexType name="transformerQuota">
+      <xs:all />
+      <xs:attribute name="transformerName" type="xs:string" use="required" />
+      <xs:attribute name="maxPendingRequests" type="dhusSystem:positiveInt" default="4" />
+      <xs:attribute name="maxRunningRequests" type="dhusSystem:positiveInt" default="4" />
+   </xs:complexType>
+
+   <xs:simpleType name="positiveInt">
+      <xs:restriction base="xs:int">
+         <xs:minExclusive value="0" />
+      </xs:restriction>
+   </xs:simpleType>
+
+</xs:schema>
