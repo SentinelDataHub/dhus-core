@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2016 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           version="1.0" elementFormDefault="qualified"
+           xmlns:jxb="http://java.sun.com/xml/ns/jaxb"
+           xmlns:inheritance="http://jaxb2-commons.dev.java.net/basic/inheritance"
+           jxb:version="2.1"
+           jxb:extensionBindingPrefixes="inheritance"
+           xmlns:dhusDataStore="org.dhus.store.datastore.config"
+           targetNamespace="org.dhus.store.datastore.config">
+
+   <xs:annotation>
+      <xs:appinfo>
+         <jxb:schemaBindings>
+            <jxb:package name="org.dhus.store.datastore.config" />
+         </jxb:schemaBindings>
+      </xs:appinfo>
+   </xs:annotation>
+
+   <xs:complexType name="dataStores">
+      <xs:annotation>
+         <xs:appinfo>
+            <inheritance:extends>fr.gael.dhus.database.object.config.ConfigurationPart</inheritance:extends>
+         </xs:appinfo>
+      </xs:annotation>
+      <xs:sequence>
+         <xs:element name="dataStore" type="dhusDataStore:dataStoreConf" minOccurs="0" maxOccurs="unbounded" />
+      </xs:sequence>
+   </xs:complexType>
+
+    <xs:complexType name="dataStoreConf" abstract="true">
+        <xs:attribute name="name" type="xs:string" use="required" />
+        <xs:attribute name="readOnly" type="xs:boolean" default="false" />
+    </xs:complexType>
+
+   <xs:complexType name="hfsDataStoreConf">
+      <xs:complexContent>
+         <xs:extension base="dhusDataStore:dataStoreConf">
+            <xs:sequence>
+               <xs:element name="path" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="maxFileNo" type="xs:int" minOccurs="1" maxOccurs="1" />
+            </xs:sequence>
+         </xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
+
+   <xs:complexType name="openStackDataStoreConf">
+      <xs:complexContent>
+         <xs:extension base="dhusDataStore:dataStoreConf">
+            <xs:sequence>
+               <xs:element name="provider" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="identity" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="credential" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="url" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="container" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="region" type="xs:string" minOccurs="1" maxOccurs="1" />
+            </xs:sequence>
+         </xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
+</xs:schema>

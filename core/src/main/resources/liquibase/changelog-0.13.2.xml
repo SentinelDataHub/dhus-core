@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2017 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
+
+   <changeSet author="nico" id="createTableDeletedProducts">
+      <createTable tableName="DELETED_PRODUCTS">
+         <column autoIncrement="true" name="ID" type="BIGINT">
+            <constraints primaryKey="true" primaryKeyName="SYS_PK_DP" />
+         </column>
+         <column name="UUID" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+         <column name="CREATED" type="TIMESTAMP">
+            <constraints nullable="false" />
+         </column>
+         <column name="UPDATED" type="TIMESTAMP">
+            <constraints nullable="false" />
+         </column>
+         <column name="IDENTIFIER" type="VARCHAR(255)" />
+         <column name="FOOTPRINT" type="VARCHAR(8192)" />
+         <column name="ORIGIN" type="VARCHAR(2048)" />
+         <column name="DOWNLOAD_SIZE" type="BIGINT" />
+         <column name="SIZE" type="BIGINT" />
+         <column name="ingestionDate" type="TIMESTAMP" />
+         <column name="contentStart" type="TIMESTAMP" />
+         <column name="contentEnd" type="TIMESTAMP" />
+         <column name="ITEM_CLASS" type="varchar(255)" />
+         <column name="deletionDate" type="TIMESTAMP" />
+         <column name="deletionCause" type="varchar(255)" />
+         <column name="checksums" type="BLOB" />
+         <column name="metadataIndexes" type="BLOB" />
+      </createTable>
+
+      <createIndex indexName="SYS_IDX_DP_UUID" tableName="DELETED_PRODUCTS" unique="true">
+         <column name="UUID" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_CREATED" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="CREATED" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_UPDATED" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="UPDATED" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_INGESTIONDATE" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="ingestionDate" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_CONTENTSTART" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="contentStart" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_CONTENTEND" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="contentEnd" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_DELETIONDATE" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="deletionDate" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_DELETIONCAUSE" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="deletionCause" />
+      </createIndex>
+   </changeSet>
+</databaseChangeLog>

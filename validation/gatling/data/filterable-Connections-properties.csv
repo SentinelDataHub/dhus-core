@@ -1,0 +1,10 @@
+property, eqValue, neValue
+Id, '', ''
+Date, datetime'2017-02-13T09:21:42.3', datetime'2017-02-13T09:21:42.3'
+RemoteIp, '127.0.0.1', '127.0.0.1'
+Request, '', ''
+Duration, 7, 7
+ContentLength, 468, 468
+WrittenContentLength, 468, 468
+Status, 'SUCCESS', 'SUCCESS'
+Message, null, null

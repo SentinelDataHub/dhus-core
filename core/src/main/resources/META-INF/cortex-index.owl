@@ -1,0 +1,293 @@
+<?xml version="1.0"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2013,2014,2015 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<!DOCTYPE rdf:RDF [
+  <!ENTITY rdf "http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <!ENTITY rdfs "http://www.w3.org/2000/01/rdf-schema#">
+  <!ENTITY owl "http://www.w3.org/2002/07/owl#">
+  <!ENTITY drb "http://www.gael.fr/drb#">
+  <!ENTITY dhus "http://www.gael.fr/dhus#">
+]>
+
+<rdf:RDF xmlns:owl="&owl;"
+         xmlns:rdf="&rdf;"
+         xmlns:rdfs="&rdfs;"
+         xmlns:drb="&drb;"
+         xmlns:dhus="&dhus;"
+         xml:base="http://www.gael.fr/dhus">
+
+   <owl:Ontology rdf:about="&dhus;">
+      <rdfs:label xml:lang="en">Data Hub Service (DHuS) ontology setup</rdfs:label>
+   </owl:Ontology>
+
+   <!-- Definition of Meta-data Extraction Property -->
+   <owl:Class rdf:about="&dhus;metadataExtractor">
+      <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+      <rdfs:domain rdf:resource="&drb;item"/>
+      <rdfs:comment xml:lang="en">
+         Items metadata extraction methods.
+         metadata extractor contains an XQuery that return a sequence of
+         metadata structure defined as follows:
+           - metadata/@name
+           - metadata/@category
+           - metadata/@type
+           - metadata/@queryable
+      </rdfs:comment>
+      <rdfs:label xml:lang="en">Metadata Extractor</rdfs:label>
+   </owl:Class>
+
+   <owl:Class rdf:about="&dhus;support">
+      <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+      <rdfs:domain rdf:resource="&drb;item"/>
+      <rdfs:comment xml:lang="en">
+         This Class, attached to selected product types classes informs dhus
+         that the product type is activated as supported by dhus.
+      </rdfs:comment>
+      <rdfs:label xml:lang="en">DHuS data support</rdfs:label>
+   </owl:Class>
+
+   <owl:Class rdf:about="&dhus;identifier">
+      <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+      <rdfs:domain rdf:resource="&drb;item"/>
+      <rdfs:comment xml:lang="en">
+         Items identifier string extraction methods.
+      </rdfs:comment>
+      <rdfs:label xml:lang="en">Identifier</rdfs:label>
+   </owl:Class>
+
+   <owl:Class rdf:about="&dhus;html">
+      <rdfs:label xml:lang="en">DHuS html support</rdfs:label>
+      <rdfs:subClassOf rdf:resource="&drb;item"/>
+      <drb:signature rdf:parseType="Resource">
+         <drb:nameMatch>.*\.(?i)html?</drb:nameMatch>
+      </drb:signature>
+      <drb:implementationIdentifier>text</drb:implementationIdentifier>
+   </owl:Class>
+
+   <!--  Added  File scanner support for compressed archives -->
+   <!-- All ZIP compressed products -->
+   <rdf:Description rdf:about="&drb;zip">
+      <dhus:support  rdf:parseType="Literal"/>
+   </rdf:Description>
+
+   <!-- DHuS internal mechanism sets information into all supported product
+        type -->
+   <rdf:Description rdf:about="&drb;item">
+      <dhus:metadataTypes rdf:parseType="Literal">
+         <metadataType
+            id="id"
+            name="ID"
+            contentType="text/plain"
+            category="hidden">
+            <solrField
+               name="id"
+               type="long"
+               indexed="true"
+               stored="true"
+               required="true" />
+         </metadataType>
+
+         <metadataType
+            id="uuid"
+            name="UUID"
+            contentType="text/plain"
+            category="summary">
+            <solrField
+               name="uuid"
+               type="string"
+               indexed="true"
+               stored="true"
+               required="true" />
+         </metadataType>
+
+         <metadataType
+            id="ingestionDate"
+            name="Ingestion Date"
+            contentType="text/date+iso8601"
+            category="product">
+            <solrField
+               name="ingestiondate"
+               type="tdate"
+               indexed="true"
+               stored="true" />
+         </metadataType>
+
+         <metadataType
+            id="name_autocomplete"
+            name="Name Autocomplete"
+            contentType="text/plain"
+            category="hidden">
+            <solrField
+               name="name_autocomplete"
+               type="text_auto"
+               indexed="true"
+               stored="false"
+               multiValued="true" />
+         </metadataType>
+
+         <metadataType
+            id="path"
+            name="Path"
+            contentType="text/plain"
+            category="hidden">
+            <solrField
+               name="path"
+               type="string"
+               indexed="true"
+               stored="true"
+               required="true" />
+         </metadataType>
+
+         <metadataType
+            id="filename"
+            name="Filename"
+            contentType="text/plain"
+            category="summary">
+            <solrField
+               name="filename"
+               type="string"
+               indexed="true"
+               stored="true"
+               required="true" />
+         </metadataType>
+
+         <metadataType
+            id="format"
+            name="Format"
+            contentType="text/plain"
+            category="product">
+            <solrField
+               name="format"
+               type="string"
+               indexed="true"
+               stored="true"
+               required="true" />
+         </metadataType>
+
+         <metadataType
+            id="identifier"
+            name="Identifier"
+            contentType="text/plain"
+            category="summary">
+            <solrField
+               name="identifier"
+               type="string"
+               indexed="true"
+               stored="true"
+               required="true" />
+         </metadataType>
+
+         <metadataType
+            id="contents"
+            name="Contents"
+            contentType="text/plain"
+            category="hidden">
+            <solrField
+               name="contents"
+               type="text_general"
+               indexed="true"
+               stored="true"
+               multiValued="true" />
+         </metadataType>
+
+         <metadataType
+            id="public"
+            name="Public"
+            contentType="text/plain"
+            category="hidden">
+            <solrField
+               name="public"
+               type="boolean"
+               stored="true" />
+         </metadataType>
+
+         <metadataType
+            id="collection"
+            name="Collection"
+            contentType="text/plain"
+            category="hidden">
+            <solrField
+               name="collection"
+               type="text_general"
+               indexed="true"
+               stored="true"
+               multiValued="true" />
+         </metadataType>
+
+         <metadataType
+            id="footprint"
+            name="JTS footprint"
+            contentType="application/jts"
+            category="product">
+            <solrField
+               name="footprint"
+               type="location_rpt"
+               stored="true" />
+         </metadataType>
+
+         <metadataType
+            id="GMLfootprint"
+            name="Footprint"
+            contentType="application/gml+xml"
+            category="product">
+            <solrField
+               name="gmlfootprint"
+               type="string"
+               stored="true" />
+         </metadataType>
+
+         <metadataType
+            id="size"
+            name="Size"
+            contentType="text/plain"
+            category="summary">
+            <solrField
+               name="size"
+               type="string"
+               indexed="true"
+               stored="true" />
+         </metadataType>
+
+         <metadataType
+            id="_version_"
+            name="_Version_"
+            contentType="text/plain"
+            category="hidden">
+            <solrField
+               name="_version_"
+               type="long"
+               indexed="true"
+               stored="true" />
+         </metadataType>
+      </dhus:metadataTypes>
+
+      <dhus:metadataExtractor  rdf:parseType="Literal">
+         <![CDATA[
+         <metadata
+            queryable="ingestionDate"
+            category="product"
+            name="Ingestion Date"
+            type="text/date+iso8601">
+          </metadata>
+         ]]>
+      </dhus:metadataExtractor>
+   </rdf:Description>
+
+</rdf:RDF>

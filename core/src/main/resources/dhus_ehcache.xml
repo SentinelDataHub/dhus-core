@@ -1,0 +1,95 @@
+<ehcache xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="ehcache.xsd"
+         name="dhus_cache">
+
+   <!-- Access Information Cache -->
+   <cache name="user_connections"
+          maxElementsInMemory="100000"
+          eternal="false"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600"
+          memoryStoreEvictionPolicy="LRU">
+      <cacheEventListenerFactory
+            class="fr.gael.dhus.util.LoggingCacheListenerFactory" />
+      <persistence strategy="none"/>
+   </cache>
+
+   <!-- Product Cache -->
+   <cache name="product"
+          eternal="false"
+          maxElementsInMemory="1000"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600">
+      <persistence strategy="none" />
+   </cache>
+   <cache name="product_count"
+          eternal="false"
+          maxElementsInMemory="1000"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600">
+      <persistence strategy="none" />
+   </cache>
+   <cache name="products"
+          eternal="false"
+          maxElementsInMemory="1000"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600">
+      <persistence strategy="none" />
+   </cache>
+   <cache name="product_eviction_date"
+          eternal="false"
+          maxElementsInMemory="1000"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600">
+      <persistence strategy="none" />
+   </cache>
+   <cache name="indexes"
+          eternal="false"
+          maxElementsInMemory="1000"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600">
+      <persistence strategy="none" />
+   </cache>
+
+   <!-- User Cache -->
+   <cache name="user"
+          eternal="false"
+          maxElementsInMemory="1000"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600">
+      <persistence strategy="none" />
+   </cache>
+   <cache name="userByName"
+          eternal="false"
+          maxElementsInMemory="1000"
+          timeToLiveSeconds="3600"
+          timeToIdleSeconds="0">
+      <persistence strategy="none" />
+   </cache>
+
+   <!-- Quotas Cache -->
+   <cache name="network_download_count"
+          eternal="false"
+          maxElementsInMemory="1000"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600">
+      <persistence strategy="none" />
+   </cache>
+   <cache name="network_download_size"
+          eternal="false"
+          maxElementsInMemory="1000"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600">
+      <persistence strategy="none" />
+   </cache>
+
+   <cache name="user_requests"
+          maxElementsInMemory="1000"
+          eternal="false"
+          timeToIdleSeconds="900"
+          timeToLiveSeconds="1800"
+          memoryStoreEvictionPolicy="LRU">
+      <cacheEventListenerFactory class="fr.gael.dhus.util.LoggingCacheListenerFactory" />
+      <persistence strategy="none"/>
+   </cache>
+</ehcache>

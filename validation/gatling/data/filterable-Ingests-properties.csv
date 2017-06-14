@@ -1,0 +1,7 @@
+property, eqValue, neValue
+Id, 0, 0
+Status, 'INGESTED', 'INGESTED'
+year(StatusDate), 2016, 2016
+StatusMessage, '', ''
+Filename, '', ''
+MD5, '', ''

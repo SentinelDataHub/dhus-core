@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+   <modelVersion>4.0.0</modelVersion>
+
+   <groupId>fr.gael.dhus</groupId>
+   <artifactId>dhus-core-suite</artifactId>
+   <version>1.0.1-6-osf</version>
+   <packaging>pom</packaging>
+
+   <name>DHuS - Core Suite</name>
+   <url>http://www.gael.fr/software/dhus</url>
+   <inceptionYear>2017</inceptionYear>
+
+   <modules>
+      <module>core</module>
+   </modules>
+
+   <build>
+      <plugins>
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-deploy-plugin</artifactId>
+            <version>2.8.2</version>
+            <configuration>
+               <skip>true</skip>
+            </configuration>
+         </plugin>
+      </plugins>
+   </build>
+
+</project>
