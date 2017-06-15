@@ -51,6 +51,9 @@ nb-configuration.xml
 .project
 .settings/
 
+#Vi
+*.swp
+
 # Intellij
 .idea/
 *.iml
