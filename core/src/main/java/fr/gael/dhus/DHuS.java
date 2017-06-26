@@ -188,15 +188,12 @@ public class DHuS
       String incoming_path = old_conf.getPath();
       if (!incoming_path.trim().isEmpty())
       {
-         if (ds_service.list().isEmpty())
-         {
-            HfsDataStoreConf ds_incoming = new HfsDataStoreConf();
-            ds_incoming.setName("OldIncomingAdapter");
-            ds_incoming.setReadOnly(false);
-            ds_incoming.setPath(incoming_path);
-            ds_incoming.setMaxFileNo(old_conf.getMaxFileNo());
-            ds_service.add(DataStoreFactory.createDataStore(ds_incoming));
-         }
+         HfsDataStoreConf ds_incoming = new HfsDataStoreConf();
+         ds_incoming.setName("OldIncomingAdapter");
+         ds_incoming.setReadOnly(false);
+         ds_incoming.setPath(incoming_path);
+         ds_incoming.setMaxFileNo(old_conf.getMaxFileNo());
+         ds_service.add(DataStoreFactory.createDataStore(ds_incoming));
          ds_service.add(DataStoreFactory.getOldIncomingDataStore());
       }
 

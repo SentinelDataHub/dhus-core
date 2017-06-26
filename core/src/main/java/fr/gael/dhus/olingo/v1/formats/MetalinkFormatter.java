@@ -23,6 +23,7 @@ import fr.gael.dhus.olingo.v1.ExpectedException;
 import fr.gael.dhus.olingo.v1.Model;
 import fr.gael.dhus.olingo.v1.entity.AbstractEntity;
 import fr.gael.dhus.olingo.v1.entity.Product;
+import fr.gael.dhus.olingo.v1.entityset.UserEntitySet;
 import fr.gael.dhus.util.MetalinkBuilder;
 import java.nio.charset.Charset;
 import java.util.Collection;
@@ -65,11 +66,15 @@ public class MetalinkFormatter
             Product p = Product.class.cast(entity);
 
             String product_entity = "";
-            if (!service_root.contains(Model.PRODUCT.getName()))
+            if (service_root.contains(Model.USER.getName()))
             {
-               product_entity = Model.PRODUCT.getName() + "('" + p.getId() + "')/";
+               product_entity = UserEntitySet.CART;
             }
-            String url = service_root + product_entity + "$value";
+            else if (!service_root.contains(Model.PRODUCT.getName()))
+            {
+               product_entity = Model.PRODUCT.getName();
+            }
+            String url = service_root + product_entity + "('" + p.getId() + "')/" + "$value";
 
             mb.addFile(p.getName() + ".zip")
                   .addUrl(url, null, 0)

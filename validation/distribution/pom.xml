@@ -24,7 +24,7 @@
    <properties>
       <!-- Customize here the components version to be
            embeded into this distribution  -->
-      <dhus.core>0.13.4-4-osf</dhus.core>
+      <dhus.core>1.0.1-8-osf</dhus.core>
       <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
       <openjpeg.version>2.4.0</openjpeg.version>
       <openjpeg.classifier>${os.name}-${os.arch}</openjpeg.classifier>
@@ -53,7 +53,7 @@
       <dependency>
          <groupId>eu.serco.xmf.drb</groupId>
          <artifactId>dhus-addon-sentinel-2</artifactId>
-         <version>1.1.11</version>
+         <version>1.1.10</version>
       </dependency>
       <dependency>
          <groupId>eu.serco.xmf.drb</groupId>
@@ -117,34 +117,28 @@
 
    <repositories>
       <repository>
-        <id>osf-releases</id>
-        <name>Releases Repository</name>
-        <url>
-          https://copernicus.serco.eu/repository/nexus/content/repositories/releases/
-        </url>
-      </repository>
-      <repository>
-         <id>osf-public</id>
-         <name>OSF Public Repository</name>
-         <url>
-            https://copernicus.serco.eu/repository/nexus/content/groups/public
-         </url>
-         <layout>default</layout>
+         <id>external dependencies</id>
+<!-- repository https://copernicus.serco.eu/repository/nexus/content/repositories/releases used to proxy gael's resources requires credentials using origin -->
+         <url>https://repository.gael.fr/nexus/content/groups/public</url>
       </repository>
    </repositories>
 
    <distributionManagement>
       <repository>
          <uniqueVersion>true</uniqueVersion>
-         <id>osf-releases</id>
+         <id>osf-delivery</id>
          <name>OSF Releases Repository</name>
          <url>
-            https://copernicus.serco.eu/repository/nexus/content/repositories/OSF_releases/
-
+            https://copernicus.serco.eu/repository/nexus/content/repositories/OSF_releases
          </url>
          <layout>default</layout>
       </repository>
    </distributionManagement>
+
+</scm>
+
+
+
    <profiles> 
       <profile>
          <id>native-libraries-so</id>

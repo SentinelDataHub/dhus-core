@@ -20,14 +20,21 @@
 package fr.gael.dhus.server.http.webapp.symmetricDS;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.LinkedList;
 import java.util.concurrent.Callable;
 
+import fr.gael.dhus.database.object.DataStoreConfiguration;
+import fr.gael.dhus.database.object.HfsDataStoreConf;
+import fr.gael.dhus.database.object.OpenstackDataStoreConf;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import org.apache.solr.client.solrj.SolrServerException;
 
+import org.dhus.store.datastore.DataStoreFactory;
+import org.dhus.store.datastore.DataStoreService;
 import org.jumpmind.db.model.Table;
 import org.jumpmind.symmetric.io.data.CsvData;
 import org.jumpmind.symmetric.io.data.DataContext;
@@ -65,6 +72,9 @@ public class SolrReplicationExtensionPoint extends DatabaseWriterFilterAdapter
 
    @Autowired
    private CacheManager cacheManager;
+
+   @Autowired
+   private DataStoreService dataStoreService;
 
    @Autowired
    private FairThreadPoolTaskExecutor taskExecutor;
@@ -176,6 +186,44 @@ public class SolrReplicationExtensionPoint extends DatabaseWriterFilterAdapter
          if (!productsIndexationList.contains(id))
          {
             productsIndexationList.add(id);
+         }
+      }
+
+      if (table.getName().equalsIgnoreCase("DATASTORE_CONF")
+            && data.getDataEventType().equals(DataEventType.INSERT))
+      {
+         int typeIndex = table.getColumnIndex("TYPE");
+         String[] raw = data.getParsedData(CsvData.ROW_DATA);
+
+         DataStoreConfiguration configuration;
+         try
+         {
+            if (raw[typeIndex].equalsIgnoreCase("hfs"))
+            {
+               HfsDataStoreConf subConf = new HfsDataStoreConf();
+               subConf.setPath(raw[table.getColumnIndex("PATH")]);
+               subConf.setMaxFileDepth(Integer.valueOf(raw[table.getColumnIndex("MAX_FILE_DEPTH")]));
+               configuration = subConf;
+            }
+            else
+            {
+               OpenstackDataStoreConf subConf = new OpenstackDataStoreConf();
+               subConf.setProvider(raw[table.getColumnIndex("PROVIDER")]);
+               subConf.setUrl(new URL(raw[table.getColumnIndex("URL")]));
+               subConf.setIdentity(raw[table.getColumnIndex("IDENTITY")]);
+               subConf.setCredential(raw[table.getColumnIndex("CREDENTIAL")]);
+               subConf.setRegion(raw[table.getColumnIndex("REGION")]);
+               subConf.setContainer(raw[table.getColumnIndex("CONTAINER")]);
+               configuration = subConf;
+            }
+            configuration.setId(Long.parseLong(raw[table.getColumnIndex("ID")]));
+            configuration.setName(raw[table.getColumnIndex("NAME")]);
+            configuration.setReadOnly(Boolean.valueOf(raw[table.getColumnIndex("READ_ONLY")]));
+            dataStoreService.add(DataStoreFactory.createDataStore(configuration));
+         }
+         catch (MalformedURLException e)
+         {
+            LOGGER.warn("Cannot replicate datastore: {}", raw[table.getColumnIndex("NAME")], e);
          }
       }
    }

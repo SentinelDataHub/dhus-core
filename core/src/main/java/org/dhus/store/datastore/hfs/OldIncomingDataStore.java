@@ -76,6 +76,11 @@ public class OldIncomingDataStore implements DataStore
       }
 
       final String path = product.getDownloadablePath();
+      if (path == null)
+      {
+         throw new ProductNotFoundException();
+      }
+
       return new HfsProduct(new File(path))
       {
          @Override
