@@ -21,6 +21,7 @@ package fr.gael.dhus.olingo.v1.entity;
 
 import fr.gael.dhus.olingo.v1.entityset.ProductEntitySet;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.system.config.ConfigurationManager;
 import fr.gael.drb.DrbFactory;
 import fr.gael.drb.DrbNode;
 import fr.gael.drb.DrbSequence;
@@ -30,6 +31,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -51,6 +53,7 @@ public class QuicklookProduct extends Product
          "image/directory/NumBands" };
 
    private final DataStoreService DATASTORE_SERVICE = ApplicationContextProvider.getBean(DataStoreService.class);
+   private final ConfigurationManager CFG_MGR = ApplicationContextProvider.getBean(ConfigurationManager.class);
    private DataStoreProduct physical;
 
    /**
@@ -203,7 +206,10 @@ public class QuicklookProduct extends Product
       }
       else
       {
-         response.put(ProductEntitySet.LOCAL_PATH, product.getQuicklookPath());
+         String incPath = CFG_MGR.getArchiveConfiguration().getIncomingConfiguration().getPath();
+         String qlPath  = product.getQuicklookPath();
+         String relQlPath = Paths.get(incPath).relativize(Paths.get(qlPath)).toString();
+         response.put(ProductEntitySet.LOCAL_PATH, relQlPath);
       }
       return response;
    }

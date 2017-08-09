@@ -178,8 +178,9 @@
             keepPeriod: the minimal time in days -->
          <eviction maxDiskUsage="80" maxEvictedProducts="1000"
             keepPeriod="10" />
-         <!-- Definition of incoming folder path and the number of maximum subfolders of each stage -->
-         <incoming path="&varFolder;/incoming" maxFileNo="255" />
+         <!-- Definition of incoming folder path and the number of maximum subfolders of each stage
+            errorPath: path where to move products not ingested -->
+         <incoming path="" maxFileNo="10" errorPath="" />
       </archive>
       <!-- Definition of database path and where dumps are stored -->
       <database path="&varFolder;/database/hsqldb" dumpPath="&varFolder;/database_dump"

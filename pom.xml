@@ -6,7 +6,7 @@
 
    <groupId>fr.gael.dhus</groupId>
    <artifactId>dhus-core-suite</artifactId>
-   <version>1.0.1-8-osf</version>
+   <version>1.0</version>
    <packaging>pom</packaging>
 
    <name>DHuS - Core Suite</name>
@@ -29,4 +29,5 @@
          </plugin>
       </plugins>
    </build>
+
 </project>

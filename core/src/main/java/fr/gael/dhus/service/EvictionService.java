@@ -120,7 +120,7 @@ public class EvictionService extends WebService
    public void doEvict()
    {
       computeNextProducts();
-      evictionMgr.doEvict(getEviction().getProducts());
+      evictionMgr.doEvict(new ArrayList<>(getEviction().getProducts()));
    }
 
    /**

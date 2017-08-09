@@ -73,7 +73,6 @@ public class EvictionJob extends AbstractJob
          try
          {
             long start = System.currentTimeMillis ();
-            evictionService.computeNextProducts();
             evictionService.doEvict();
             LOGGER.info("SCHEDULER : Products eviction done - {}ms", (System.currentTimeMillis ()-start));
          }

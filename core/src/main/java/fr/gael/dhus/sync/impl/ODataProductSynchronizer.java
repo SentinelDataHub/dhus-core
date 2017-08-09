@@ -36,6 +36,7 @@ import fr.gael.dhus.service.ProductService;
 import fr.gael.dhus.service.SearchService;
 import fr.gael.dhus.service.metadata.MetadataType;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.sync.SyncException;
 import fr.gael.dhus.sync.Synchronizer;
 import fr.gael.dhus.util.JTSGeometryValidator;
 import fr.gael.dhus.util.http.DownloadableProduct;
@@ -83,6 +84,7 @@ import org.apache.olingo.odata2.api.exception.ODataException;
 
 import org.apache.solr.client.solrj.SolrServerException;
 
+import org.dhus.store.datastore.DataStore;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.DataStoreService;
 import org.dhus.store.datastore.ParallelProductSetter;
@@ -720,6 +722,24 @@ public class ODataProductSynchronizer extends Synchronizer
       }
    }
 
+   /** DownloadTask parameter must be done! */
+   private void cleanupDownloadTask(DownloadTask dltask)
+   {
+      try
+      {
+         DATA_STORE_SERVICE.delete(dltask.product.getUuid());
+         if (dltask.quicklookDownload != null)
+         {
+            DATA_STORE_SERVICE.delete(dltask.product.getQuicklookPath());
+         }
+         if (dltask.quicklookDownload != null)
+         {
+            DATA_STORE_SERVICE.delete(dltask.product.getThumbnailPath());
+         }
+      }
+      catch (DataStoreException suppressed) {}
+   }
+
    /**
     * Handle completed downloads.
     * @return true if there are at least one empty download slot.
@@ -729,7 +749,7 @@ public class ODataProductSynchronizer extends Synchronizer
    {
       int count = 0;
       // Get download results from Futures, and create product entries in DB, Solr
-      Iterator<DownloadTask> itdl = this.RUNNING_DOWNLOADS.iterator();
+      Iterator<DownloadTask> itdl = RUNNING_DOWNLOADS.iterator();
       boolean update_created = true; // Controls whether we are updating LastCreationDate or not
       while (itdl.hasNext())
       {
@@ -757,6 +777,7 @@ public class ODataProductSynchronizer extends Synchronizer
 
             Date last_created = product.getCreated();
             save(product);
+            itdl.remove();
             count++;
             if (update_created)
             {
@@ -771,23 +792,14 @@ public class ODataProductSynchronizer extends Synchronizer
          {
             LOGGER.error("Synchronizer#{} Product {} failed to download", getId(), product.getIdentifier(), ex);
             update_created = false;
-            try
-            {
-               DATA_STORE_SERVICE.delete(dltask.product.getUuid());
-               if (dltask.quicklookDownload != null)
-               {
-                  DATA_STORE_SERVICE.delete(dltask.product.getQuicklookPath());
-               }
-               if (dltask.quicklookDownload != null)
-               {
-                  DATA_STORE_SERVICE.delete(dltask.product.getThumbnailPath());
-               }
-            }
-            catch (DataStoreException suppressed) {}
+            cleanupDownloadTask(dltask);
+            itdl.remove();
          }
-         finally
+         catch (CancellationException ex)
          {
-            // Remove downloadTask from list
+            LOGGER.debug("Synchronizer#{} download of Product {} cancelled", getId(), product.getIdentifier());
+            update_created = false;
+            cleanupDownloadTask(dltask);
             itdl.remove();
          }
       }
@@ -795,14 +807,14 @@ public class ODataProductSynchronizer extends Synchronizer
       {
          LOGGER.info("Synchronizer#{} {} new Products copied", getId(), count);
       }
-      return this.RUNNING_DOWNLOADS.size() < this.pageSize;
+      return RUNNING_DOWNLOADS.size() < this.pageSize;
    }
 
    /** Retrieves and download new products, downloads are parallelized. */
    private int getAndCopyNewProduct() throws InterruptedException
    {
       int res = 0;
-      int count = this.pageSize - this.RUNNING_DOWNLOADS.size();
+      int count = this.pageSize - RUNNING_DOWNLOADS.size();
       int skip = 0;
 
       // Downloads are done asynchronously in another threads
@@ -830,13 +842,13 @@ public class ODataProductSynchronizer extends Synchronizer
 
                // Avoid downloading of the same product several times
                // and run post-filters of the product to download
-               if (this.RUNNING_DOWNLOADS.contains(new DownloadTask(product, null)) ||
+               if (RUNNING_DOWNLOADS.contains(new DownloadTask(product, null)) ||
                      !postFilter(product))
                {
                   continue;
                }
 
-               this.RUNNING_DOWNLOADS.add(storeRemoteProduct(product));
+               RUNNING_DOWNLOADS.add(storeRemoteProduct(product));
                count--;
                res++;
             }
@@ -889,38 +901,63 @@ public class ODataProductSynchronizer extends Synchronizer
             // check product accessibility
             if (!DATA_STORE_SERVICE.canAccess(product_resource_location))
             {
-               // TODO remove it by DataStore CRUD operations via OData API
-               if (remoteIncoming == null)
+               boolean success = false;
+               // If remoteIncoming set, tries to create DS and check it can access product
+               if (remoteIncoming != null)
                {
-                  LOGGER.warn("Inaccessible product: {}/Products('{}')",
-                        client.getServiceRoot(), product_uuid);
-                  continue;
-               }
-               HfsDataStoreConf conf = new HfsDataStoreConf();
-               String dataStoreName = DATASTORE_SYNC_PREFIX_NAME + String.valueOf(getId());
-               conf.setName(dataStoreName);
-               conf.setReadOnly(true);
-               conf.setPath(remoteIncoming);
+                  String dataStoreName = DATASTORE_SYNC_PREFIX_NAME + String.valueOf(getId());
+                  HfsDataStoreConf conf;
+                  conf = new HfsDataStoreConf();
+                  conf.setName(dataStoreName);
+                  conf.setReadOnly(true);
+                  conf.setPath(remoteIncoming);
 
-               if (!DBC_STORE_SERVICE.dataStoreExists(dataStoreName))
-               {
-                  DBC_STORE_SERVICE.create(conf);
+                  if (!DBC_STORE_SERVICE.dataStoreExists(dataStoreName))
+                  {
+                     DBC_STORE_SERVICE.create(conf);
+                     DataStore riDs = DBC_STORE_SERVICE.getDataStoreByName(dataStoreName);
+                     if (riDs.canAccess(product_resource_location))
+                     {
+                        DATA_STORE_SERVICE.add(riDs);
+                        success = true;
+                     }
+                     else
+                     {
+                        DBC_STORE_SERVICE.delete(conf);
+                     }
+                  }
                }
-               DATA_STORE_SERVICE.add(DBC_STORE_SERVICE.getDataStoreByName(dataStoreName));
+
+               if (!success)
+               {
+                  String err = String.format("Product not available in datastores and RemoteIncoming: %s/Products('%s')",
+                        client.getServiceRoot(), product_uuid);
+                  LOGGER.error(err);
+                  throw new SyncException(err);
+               }
+
             }
 
             // adding product
             try
             {
-               DATA_STORE_SERVICE.addProductReference(product_uuid,
-                     new ProductReference(product_resource_location));
+               if (!DATA_STORE_SERVICE.addProductReference(product_uuid, new ProductReference(product_resource_location)))
+               {
+                  String err = String.format("Cannot add product reference for '%s'", product_uuid);
+                  LOGGER.error(err);
+                  throw new DataStoreException(err);
+               }
 
                // Add Quicklook
                if (product.getQuicklookFlag())
                {
                   String uuid = UUID.randomUUID().toString();
-                  DATA_STORE_SERVICE.addProductReference(uuid,
-                        new ProductReference(product.getQuicklookPath()));
+                  if (!DATA_STORE_SERVICE.addProductReference(uuid, new ProductReference(product.getQuicklookPath())))
+                  {
+                     String err = String.format("Cannot add quicklook reference for product '%s'", product_uuid);
+                     LOGGER.error(err);
+                     throw new DataStoreException(err);
+                  }
                   product.setQuicklookPath(uuid);
                }
 
@@ -928,15 +965,19 @@ public class ODataProductSynchronizer extends Synchronizer
                if (product.getThumbnailFlag())
                {
                   String uuid = UUID.randomUUID().toString();
-                  DATA_STORE_SERVICE.addProductReference(uuid,
-                        new ProductReference(product.getThumbnailPath()));
+                  if (!DATA_STORE_SERVICE.addProductReference(uuid, new ProductReference(product.getThumbnailPath())))
+                  {
+                     String err = String.format("Cannot add thumbnail reference for product '%s'", product_uuid);
+                     LOGGER.error(err);
+                     throw new DataStoreException(err);
+                  }
                   product.setThumbnailPath(uuid);
                }
             }
             catch (DataStoreException e)
             {
                LOGGER.error("Cannot synchronise product '{}'", product_uuid, e);
-               continue;
+               throw new SyncException(e);
             }
 
             Date last_created = product.getCreated();
@@ -960,6 +1001,7 @@ public class ODataProductSynchronizer extends Synchronizer
       catch (IOException | ODataException ex)
       {
          LOGGER.error ("OData failure", ex);
+         throw new SyncException(ex);
       }
       finally
       {
@@ -1048,7 +1090,7 @@ public class ODataProductSynchronizer extends Synchronizer
       // Dispose of running downloads
       if (this.copyProduct)
       {
-         for (DownloadTask task: this.RUNNING_DOWNLOADS)
+         for (DownloadTask task: RUNNING_DOWNLOADS)
          {
             try
             {

@@ -304,7 +304,6 @@ public class ProductService extends WebService
     * @param product product to delete.
     * @param destination destination of product backup.
     */
-   @RemoveProduct
    @Transactional
    public Product systemDeleteProduct(Product product, Destination destination,
          boolean storeAsDeleted, String deletionCause)
@@ -364,7 +363,41 @@ public class ProductService extends WebService
          }
       }
 
+      // make product backup if necessary
+      if (!destination.equals(Destination.NONE))
+      {
+         makeProductBackup(product, destination);
+      }
+
       // delete product data
+      LOGGER.debug("Trying to delete product {}", product.getUuid());
+      try
+      {
+         dataStoreService.delete(product.getUuid());
+      }
+      catch (org.dhus.store.datastore.DataStoreException e)
+      {
+         LOGGER.warn("Deletion of {} failed, remove it manually", product.getUuid(), e);
+      }
+
+      // store product if req
+      if (storeAsDeleted)
+      {
+         deletedProductService.storeProduct(product, deletionCause);
+      }
+
+      // remove from database
+      productDao.delete(product);
+      long time = System.currentTimeMillis() - start;
+
+      LOGGER.info("Deletion of product '{}' ({} bytes) successful spent {}ms",
+            product.getIdentifier(), product.getDownloadableSize(), time);
+      return product;
+   }
+
+   // TODO delegate this process to DataStoreManager or DataStores
+   private void makeProductBackup(Product product, Destination destination)
+   {
       org.dhus.Product product_data = null;
       if (dataStoreService.exists(product.getUuid()))
       {
@@ -390,15 +423,23 @@ public class ProductService extends WebService
          switch (destination)
          {
             case ERROR:
-               destination_path = Paths.get(
-                     cfgManager.getArchiveConfiguration().getIncomingConfiguration().getErrorPath(),
-                     product_data.getName());
+               String error_path =
+                     cfgManager.getArchiveConfiguration().getIncomingConfiguration().getErrorPath();
+               if (error_path != null && !error_path.isEmpty())
+               {
+                  destination_path = Paths.get(error_path, product_data.getName());
+               }
                break;
             case TRASH:
-               destination_path = Paths.get(
-                     cfgManager.getArchiveConfiguration().getEvictionConfiguration().getTrashPath(),
-                     product_data.getName());
+               String trash_path =
+                     cfgManager.getArchiveConfiguration().getEvictionConfiguration().getTrashPath();
+               if (trash_path != null && !trash_path.isEmpty())
+               {
+                  destination_path = Paths.get(trash_path, product_data.getName());
+               }
                break;
+            default:
+               return;
          }
       }
       if (destination_path != null)
@@ -412,15 +453,14 @@ public class ProductService extends WebService
                Files.createDirectory(directory);
             }
 
-            if (cfgManager.getFileScannersCronConfiguration().isSourceRemove()
-                  && product_data.hasImpl(File.class))
+            if (product_data.hasImpl(File.class))
             {
-               // move file to the its destination
-               Files.move(product_data.getImpl(File.class).toPath(), destination_path);
+               // copy file to its destination
+               Files.copy(product_data.getImpl(File.class).toPath(), destination_path);
             }
             else
             {
-               // copy file to the its destination
+               // copy file to its destination
                InputStream input = product_data.getImpl(InputStream.class);
                File destination_file = destination_path.toFile();
                if (destination_file.createNewFile())
@@ -435,30 +475,6 @@ public class ProductService extends WebService
                   product.getIdentifier(), destination_path.getParent());
          }
       }
-      LOGGER.debug("Trying to delete product {}", product.getUuid());
-      try
-      {
-         dataStoreService.delete(product.getUuid());
-      }
-      catch (org.dhus.store.datastore.DataStoreException e)
-      {
-         LOGGER.warn("Deletion of {} failed, remove it manually", product.getUuid(), e);
-      }
-
-      // store product if req
-      if (storeAsDeleted)
-      {
-         List<MetadataIndex> indexes = getIndexes(product.getId());
-         deletedProductService.storeProduct(product, indexes, deletionCause);
-      }
-
-      // remove from database
-      productDao.delete(product);
-      long time = System.currentTimeMillis() - start;
-
-      LOGGER.info("Deletion of product '{}' ({} bytes) successful spent {}ms",
-            product.getIdentifier(), product.getDownloadableSize(), time);
-      return product;
    }
 
    @PreAuthorize ("hasRole('ROLE_DATA_MANAGER')")

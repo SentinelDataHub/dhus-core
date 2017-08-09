@@ -21,10 +21,9 @@ package fr.gael.dhus.datastore.eviction;
 
 import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.DeletedProduct;
-import fr.gael.dhus.datastore.exception.DataStoreException;
 import fr.gael.dhus.service.ProductService;
 
-import java.util.Set;
+import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -47,36 +46,15 @@ public class EvictionManager
    public EvictionManager(){}
 
    /**
-    * Evicts <i>products</i> in a new {@link Thread}
+    * Evicts <i>products</i> sequentially.
     *
-    * @param products set of products to evict.
+    * @param products to evict
     */
-   public void doEvict(Set<Product>products)
+   public void doEvict(List<Product> products)
    {
       if (!products.isEmpty())
       {
-         Thread t = new Thread(new DeleteProductTask(products), "doEvictionTread");
-         t.start();
-      }
-      else
-      {
-         LOGGER.info("No product to evict");
-      }
-   }
-
-   private class DeleteProductTask implements Runnable
-   {
-      private final Set<Product> products;
-
-      public DeleteProductTask (Set<Product> products)
-      {
-        this.products = products;
-      }
-
-      @Override
-      public void run()
-      {
-         for (Product product:products)
+         for (Product product: products)
          {
             try
             {
@@ -84,12 +62,16 @@ public class EvictionManager
                LOGGER.info("Evicted {} ({} bytes, {} bytes compressed)",
                      product.getIdentifier(), product.getSize(), product.getDownloadableSize());
             }
-            catch (DataStoreException e)
+            catch (Exception e)
             {
                LOGGER.error("Unable to delete product: [uuid:{} identifier:{}]",
                      product.getUuid(), product.getIdentifier(), e);
             }
          }
+      }
+      else
+      {
+         LOGGER.info("No product to evict");
       }
    }
 

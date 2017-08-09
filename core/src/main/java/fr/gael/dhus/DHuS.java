@@ -188,13 +188,23 @@ public class DHuS
       String incoming_path = old_conf.getPath();
       if (!incoming_path.trim().isEmpty())
       {
-         HfsDataStoreConf ds_incoming = new HfsDataStoreConf();
-         ds_incoming.setName("OldIncomingAdapter");
-         ds_incoming.setReadOnly(false);
-         ds_incoming.setPath(incoming_path);
-         ds_incoming.setMaxFileNo(old_conf.getMaxFileNo());
-         ds_service.add(DataStoreFactory.createDataStore(ds_incoming));
-         ds_service.add(DataStoreFactory.getOldIncomingDataStore());
+         if (ds_service.list().isEmpty())
+         {
+            // Incoming Adapter read/write
+            HfsDataStoreConf ds_incoming = new HfsDataStoreConf();
+            ds_incoming.setName("OldIncomingAdapter");
+            ds_incoming.setReadOnly(false);
+            ds_incoming.setPath(incoming_path);
+            ds_incoming.setMaxFileNo(old_conf.getMaxFileNo());
+            ds_service.add(DataStoreFactory.createDataStore(ds_incoming));
+            // Old incoming read only
+            ds_service.add(DataStoreFactory.getOldIncomingDataStore());
+         }
+         else
+         {
+            // Old incoming is read only if there is at least one other datastore
+            ds_service.add(DataStoreFactory.getOldIncomingDataStore());
+         }
       }
 
       // Registers ContextClosedEvent listeners to properly save states before

@@ -204,6 +204,7 @@ public class HfsDataStore extends AbstractDataStore
          try
          {
             String resource = getResource(id);
+            LOGGER.info("Deleting Product reference {} from {} DataStore", id, getName());
             removeResource(id);
             if (!isReadOnly())
             {
@@ -211,6 +212,7 @@ public class HfsDataStore extends AbstractDataStore
                String path = HfsDataStoreUtils.generatePath(hfs.getPath(), resource);
                LOGGER.debug("Complete Path: {}", path);
                hfs.delete(path);
+               LOGGER.info("Product data {} deleted from {} DataStore", id, getName());
             }
          }
          catch (IOException e)

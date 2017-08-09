@@ -245,6 +245,10 @@ public class OpenStackDataStore extends AbstractDataStore
       return new OpenStackProduct(getOpenStackObject(), location);
    }
 
+   // FIXME isReadOnly is never called in this method because it relies on
+   // openstack's occurrence feature
+   // this approach may lead to incoherent situations and a proper read-only
+   // and data ownership approach should be adopted instead
    @Override
    public void delete(String id) throws DataStoreException
    {
@@ -253,6 +257,7 @@ public class OpenStackDataStore extends AbstractDataStore
          throw new ProductNotFoundException();
       }
 
+      LOGGER.info("Deleting Product reference {}, from {} DataStore", id, getName());
       DrbSwiftObject open_stack = getOpenStackObject ();
       OpenStackLocation object_location = new OpenStackLocation(getResource(id));
       String object_name = object_location.getObjectName();
@@ -272,6 +277,7 @@ public class OpenStackDataStore extends AbstractDataStore
          int occurrence = Integer.parseInt(occurrence_value) - 1;
          if (occurrence == 0)
          {
+            LOGGER.info("Product data {} deleted from {} DataStore", id, getName());
             getOpenStackObject().deleteObject(object_name, this.container, this.region);
          }
          else
@@ -295,6 +301,8 @@ public class OpenStackDataStore extends AbstractDataStore
       }
    }
 
+   // FIXME should not increment product occurrence to respect product
+   // ownership, see comment delete method
    @Override
    protected boolean onAddProductReference(String resource)
    {

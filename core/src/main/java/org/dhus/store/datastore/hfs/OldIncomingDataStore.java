@@ -112,15 +112,18 @@ public class OldIncomingDataStore implements DataStore
          String path = product.getDownloadablePath();
          try
          {
-            if (product.getThumbnailFlag())
+            if (path != null && !path.isEmpty())
             {
-               hfs.delete(product.getThumbnailPath());
+               if (product.getThumbnailFlag())
+               {
+                  hfs.delete(product.getThumbnailPath());
+               }
+               if (product.getQuicklookFlag())
+               {
+                  hfs.delete(product.getQuicklookPath());
+               }
+               hfs.delete(path);
             }
-            if (product.getQuicklookFlag())
-            {
-               hfs.delete(product.getQuicklookPath());
-            }
-            hfs.delete(path);
          }
          catch (IOException e)
          {

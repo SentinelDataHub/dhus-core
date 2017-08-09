@@ -26,9 +26,6 @@ import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.system.config.ConfigurationManager;
 import fr.gael.dhus.system.init.WorkingDirectory;
 import fr.gael.dhus.util.JTSFootprintParser;
-import fr.gael.dhus.util.MultipleDigestInputStream;
-import fr.gael.dhus.util.MultipleDigestOutputStream;
-import fr.gael.dhus.util.UnZip;
 
 import fr.gael.drb.DrbAttribute;
 import fr.gael.drb.DrbFactory;
@@ -45,37 +42,23 @@ import fr.gael.drbx.image.impl.sdi.SdiImageFactory;
 import fr.gael.drbx.image.jai.RenderingFactory;
 
 import java.awt.image.RenderedImage;
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.net.URL;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import javax.activation.MimeType;
 import javax.activation.MimeTypeParseException;
 import javax.imageio.ImageIO;
 import javax.media.jai.RenderedImageList;
 
-import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
-import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
-import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 
 import org.apache.logging.log4j.LogManager;
@@ -85,7 +68,6 @@ import org.dhus.ProductConstants;
 import org.dhus.ProductFactory;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.DataStoreService;
-import org.dhus.store.datastore.hfs.HfsProduct;
 
 import org.geotools.gml2.GMLConfiguration;
 import org.geotools.xml.Configuration;
@@ -107,7 +89,6 @@ public class ProcessingManager
 
    private static final String METADATA_NAMESPACE = "http://www.gael.fr/dhus#";
    private static final String PROPERTY_IDENTIFIER = "identifier";
-   private static final String PROPERTY_INGESTIONDATE = "ingestionDate";
    private static final String PROPERTY_METADATA_EXTRACTOR =
       "metadataExtractor";
    private static final String MIME_PLAIN_TEXT = "plain/text";
@@ -273,18 +254,9 @@ public class ProcessingManager
             product.setFootPrint (null);
          }
       }
-      Date ingestion_date = new Date ();
-      indexes.add (new MetadataIndex ("Ingestion Date",
-         null, "product", PROPERTY_INGESTIONDATE, df.format (ingestion_date)));
-      product.setIngestionDate (ingestion_date);
-      product.setCreated(ingestion_date);
-      LOGGER.info (" - Product indexes and footprint extraction done in " +
-               (System.currentTimeMillis () - start) + "ms.");
+         LOGGER.info(" - Product indexes and footprint extraction done in {}ms.", System.currentTimeMillis() - start);
 
-         product.setUpdated (new Date ());
-
-         LOGGER.info ("* Ingestion done in " +
-               (System.currentTimeMillis () - allStart) + "ms.");
+         LOGGER.info("* Ingestion done in {}ms.", System.currentTimeMillis() - allStart);
 
          return product;
       }

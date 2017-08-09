@@ -19,29 +19,18 @@
  */
 package fr.gael.dhus.database.object;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
-import javax.persistence.Lob;
 import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 /**
  * Deleted Product instance implements an old product entry into the database. This product
@@ -51,7 +40,6 @@ import org.apache.logging.log4j.Logger;
 @Table(name = "DELETED_PRODUCTS")
 public class DeletedProduct implements Serializable
 {
-   private static final Logger LOGGER = LogManager.getLogger();
    /**
     * serial id
     */
@@ -109,13 +97,11 @@ public class DeletedProduct implements Serializable
    @Column(name = "deletionCause")
    private String deletionCause;
 
-   @Lob
-   @Column(name = "checksums")
-   private byte[] blobChecksums;
+   @Column(name = "CHECKSUM_ALGORITHM")
+   private String checksumAlgorithm;
 
-   @Lob
-   @Column(name = "metadataIndexes")
-   private byte[] blobMetadataIndexes;
+   @Column(name = "CHECKSUM_VALUE")
+   private String checksumValue;
 
    /**
     * @return the productId
@@ -300,98 +286,48 @@ public class DeletedProduct implements Serializable
       this.deletionCause = deletionCause;
    }
 
+   public String getChecksumAlgorithm()
+   {
+      return checksumAlgorithm;
+   }
+
+   public void setChecksumAlgorithm(String checksumAlgorithm)
+   {
+      this.checksumAlgorithm = checksumAlgorithm;
+   }
+
+   public String getChecksumValue()
+   {
+      return checksumValue;
+   }
+
+   public void setChecksumValue(String checksumValue)
+   {
+      this.checksumValue = checksumValue;
+   }
+
    public void setChecksums(Map<String, String> checksums) throws IOException
    {
-      this.blobChecksums = serialize(checksums);
+      if (checksums == null || checksums.isEmpty())
+      {
+         checksumAlgorithm = null;
+         checksumValue = null;
+      }
+      else
+      {
+         Map.Entry<String, String> checksum = checksums.entrySet().iterator().next();
+         checksumAlgorithm = checksum.getKey();
+         checksumValue = checksum.getValue();
+      }
    }
 
-   @SuppressWarnings("unchecked")
    public Map<String, String> getChecksums()
    {
-      if (blobChecksums == null)
+      if (checksumAlgorithm == null ||checksumValue == null)
       {
-         return new HashMap<>();
+         return Collections.emptyMap();
       }
-      try
-      {
-         return (Map<String, String>) deserialize(blobChecksums);
-      }
-      catch (ClassNotFoundException | IOException e)
-      {
-         LOGGER.error("There was an error while deserializing Checksums blob");
-         return Collections.EMPTY_MAP;
-      }
-   }
-
-   public void setMetadataIndexes(List<MetadataIndex> metadataIndexes) throws IOException
-   {
-      this.blobMetadataIndexes = serialize(metadataIndexes);
-   }
-
-   @SuppressWarnings("unchecked")
-   public List<MetadataIndex> getMetadataIndexes()
-   {
-      if (blobMetadataIndexes == null)
-      {
-         return new ArrayList<>();
-      }
-      try
-      {
-         return (List<MetadataIndex>) deserialize(blobMetadataIndexes);
-      }
-      catch (ClassNotFoundException | IOException e)
-      {
-         LOGGER.error("There was an error while deserializing MetadataIndexes blob");
-         return Collections.EMPTY_LIST;
-      }
-   }
-
-   private static Object deserialize(byte[] data) throws IOException, ClassNotFoundException
-   {
-      ByteArrayInputStream bis = null;
-      ObjectInputStream ois = null;
-      try
-      {
-         bis = new ByteArrayInputStream(data);
-         ois = new ObjectInputStream(bis);
-         return ois.readObject();
-      }
-      finally
-      {
-         if (bis != null)
-         {
-            bis.close();
-         }
-         if (ois != null)
-         {
-            ois.close();
-         }
-      }
-   }
-
-   private static byte[] serialize(Object object) throws IOException
-   {
-      ByteArrayOutputStream baos = null;
-      ObjectOutputStream oos = null;
-      try
-      {
-         baos = new ByteArrayOutputStream();
-         oos = new ObjectOutputStream(baos);
-         oos.writeObject(object);
-         oos.close();
-         return baos.toByteArray();
-      }
-      finally
-      {
-         if (baos != null)
-         {
-            baos.close();
-         }
-         if (oos != null)
-         {
-            oos.close();
-         }
-      }
+      return Collections.singletonMap(getChecksumAlgorithm(), getChecksumValue ());
    }
 
    @Override

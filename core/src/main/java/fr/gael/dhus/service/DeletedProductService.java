@@ -21,7 +21,6 @@ package fr.gael.dhus.service;
 
 import fr.gael.dhus.database.dao.DeletedProductDao;
 import fr.gael.dhus.database.object.DeletedProduct;
-import fr.gael.dhus.database.object.MetadataIndex;
 import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.datastore.processing.ProcessingUtils;
 import fr.gael.dhus.olingo.v1.visitor.DeletedProductSQLVisitor;
@@ -76,8 +75,16 @@ public class DeletedProductService extends WebService
       return deletedProductDao.countHQLQuery(visitor.getHqlQuery(), visitor.getHqlParameters());
    }
 
-   public void storeProduct(Product product, List<MetadataIndex> indexes, String deletionCause)
+   public void storeProduct(Product product, String deletionCause)
    {
+      DeletedProduct dp = deletedProductDao.getProductByUuid(product.getUuid());
+      if (dp != null)
+      {
+         LOGGER.warn("DeletedProduct with UUID='{}' already exists, updating it", product.getUuid());
+         deletedProductDao.delete(dp);
+         // force to do the delete before create
+         deletedProductDao.getHibernateTemplate().flush();
+      }
       DeletedProduct dproduct = new DeletedProduct();
       dproduct.setId(product.getId());
       dproduct.setUuid(product.getUuid());
@@ -118,14 +125,6 @@ public class DeletedProductService extends WebService
          LOGGER.error("There was an error while saving checksums of deleted product.", e);
       }
 
-      try
-      {
-         dproduct.setMetadataIndexes(indexes);
-      }
-      catch (IOException e)
-      {
-         LOGGER.error("There was an error while saving metadataIndexes of deleted product.", e);
-      }
       deletedProductDao.create(dproduct);
    }
 

@@ -21,6 +21,7 @@
 package fr.gael.dhus.datastore;
 
 import fr.gael.dhus.database.object.Collection;
+import fr.gael.dhus.database.object.MetadataIndex;
 import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.datastore.processing.ProcessingManager;
@@ -32,6 +33,8 @@ import fr.gael.dhus.service.SearchService;
 import fr.gael.dhus.spring.cache.AddProduct;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +56,7 @@ import org.springframework.stereotype.Component;
 public class Ingester
 {
    private static final Logger LOGGER = LogManager.getLogger(Ingester.class);
+   private static final String PROPERTY_INGESTIONDATE = "ingestionDate";
 
    @Autowired
    private ProductService productService;
@@ -116,6 +120,15 @@ public class Ingester
          // cleanup and update product
          product.setPath(null);
          product.setDownloadablePath(null);
+
+         Date ingestion_date = new Date();
+         SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+         product.getIndexes().add(
+               new MetadataIndex("Ingestion Date", null, "product", PROPERTY_INGESTIONDATE, df.format(ingestion_date)));
+         product.setIngestionDate(ingestion_date);
+         product.setCreated(ingestion_date);
+
+         product.setUpdated(ingestion_date);
          product.setProcessed(true);
          productService.update(product);
 

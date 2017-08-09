@@ -118,14 +118,7 @@ public class DeletedProduct extends AbstractEntity
       {
          return null;
       }
-
-      Map<String, String> checksum = deletedProduct.getChecksums();
-      String algorithm = "MD5";
-      if (checksum.get(algorithm) != null)
-      {
-         return algorithm;
-      }
-      return checksum.keySet().iterator().next();
+      return deletedProduct.getChecksumAlgorithm();
    }
 
    public String getChecksumValue()
@@ -134,8 +127,7 @@ public class DeletedProduct extends AbstractEntity
       {
          return null;
       }
-      return deletedProduct.getChecksums()
-            .get(getChecksumAlgorithm());
+      return deletedProduct.getChecksumValue();
    }
 
    public fr.gael.dhus.olingo.v1.entity.Class getItemClass()

@@ -40,6 +40,11 @@ public class ProductFactory
    public static Product generateProduct(final URL url)
    {
       LOGGER.debug("Product path: {}", url);
+      // No Product can be generated for a null url
+      if (url == null)
+      {
+         return null;
+      }
       String protocol = url.getProtocol();
       if (protocol.equals(FILE_PROTOCOL))
       {

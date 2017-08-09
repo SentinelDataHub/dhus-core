@@ -152,7 +152,9 @@
                               ', Satellite: ', $satellite,
                               ', Size: ', $size)"/>
                     </summary>
-     			        <xsl:copy-of select="*[@name != 'contents' and @name != 'id' and @name != 'path' and @name != '_version_' and @name != 'user']"></xsl:copy-of>
+                    <xsl:copy-of select="date" />
+                    <xsl:copy-of select="int[@name != 'id' and @name != '_version_']" />
+                    <xsl:copy-of select="str[@name != 'contents' and @name != 'path' and @name != 'user']" />
                 </entry>
             </xsl:for-each>
         </feed>

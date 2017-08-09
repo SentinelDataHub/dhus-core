@@ -55,4 +55,27 @@
          incrementBy="1"
          tableName="DATASTORE_CONF"/>
    </changeSet>
+
+   <changeSet id="addInsertionDateColumn" author="tdegueurce">
+      <addColumn tableName="KEYSTOREENTRIES">
+         <column name="INSERTIONDATE" type="BIGINT" defaultValue="0">
+            <constraints nullable="false"/>
+         </column>
+      </addColumn>
+   </changeSet>
+
+   <changeSet id="removeDatabaseBLOB" author="julien">
+      <!-- add newly field -->
+      <addColumn tableName="DELETED_PRODUCTS">
+         <column name="CHECKSUM_ALGORITHM" type="VARCHAR(16)" />
+         <column name="CHECKSUM_VALUE" type="VARCHAR(255)" />
+      </addColumn>
+
+      <!-- fill newly fields with associated data -->
+      <customChange class="fr.gael.dhus.database.liquibase.RemoveDeletedProductBlobFields" />
+
+      <!-- remove blob fields -->
+      <dropColumn tableName="DELETED_PRODUCTS" columnName="CHECKSUMS" />
+      <dropColumn tableName="DELETED_PRODUCTS" columnName="METADATAINDEXES" />
+   </changeSet>
 </databaseChangeLog>

@@ -203,7 +203,7 @@ public abstract class AbstractDataStore implements DataStore
       if (obj instanceof AbstractDataStore)
       {
          AbstractDataStore other = (AbstractDataStore) obj;
-         return (other.isReadOnly() == readOnly) && (other.getName().equals(name));
+         return other.getName().equals(name);
       }
       return false;
    }
@@ -211,6 +211,6 @@ public abstract class AbstractDataStore implements DataStore
    @Override
    public int hashCode()
    {
-      return name.hashCode() + Boolean.valueOf(readOnly).hashCode();
+      return name.hashCode();
    }
 }
