@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -105,6 +105,7 @@ public class IngestEntitySet extends AbstractEntitySet<Ingest>
 
       properties.add(new SimpleProperty().setName(STATUS_DATE)
             .setType(EdmSimpleTypeKind.DateTime)
+            .setFacets(new Facets().setPrecision(3))
             .setCustomizableFeedMappings(
                   new CustomizableFeedMappings().setFcTargetPath(EdmTargetPath.SYNDICATION_UPDATED)));
 

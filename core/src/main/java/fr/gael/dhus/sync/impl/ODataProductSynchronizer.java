@@ -51,11 +51,12 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -77,6 +78,7 @@ import org.apache.logging.log4j.Logger;
 
 import org.apache.olingo.odata2.api.edm.EdmLiteralKind;
 import org.apache.olingo.odata2.api.edm.EdmSimpleTypeKind;
+import org.apache.olingo.odata2.api.edm.provider.Facets;
 import org.apache.olingo.odata2.api.ep.entry.ODataEntry;
 import org.apache.olingo.odata2.api.ep.feed.ODataDeltaFeed;
 import org.apache.olingo.odata2.api.ep.feed.ODataFeed;
@@ -133,17 +135,21 @@ public class ODataProductSynchronizer extends Synchronizer
    private static final DataStoreConfService DBC_STORE_SERVICE =
          ApplicationContextProvider.getBean(DataStoreConfService.class);
 
+   /** Global set of all queued downloads, to avoid simultaneous downloads of the same product. */
+   private static final Set<DownloadTask> RUNNING_DOWNLOADS = new HashSet<>();
+
    /** Prefix for all generated datastore by a product synchronizer */
    private static final String DATASTORE_SYNC_PREFIX_NAME = "datastore-sync#";
-
-   /** A set of on-going downloads. */
-   private static final Set<DownloadTask> RUNNING_DOWNLOADS = new LinkedHashSet<>();
 
    /** An {@link ODataClient} configured to query another DHuS OData service. */
    private final ODataClient client;
 
    /** Parallelised product setter (if CopyProducts is set to true). */
    private final ParallelProductSetter productSetter;
+
+   /** A set of queued downloads managed by this synchroniser. An implementation of SortedSet is
+    *  required to avoid skipping failing downloads. */
+   private final Set<DownloadTask> runningDownloads = new TreeSet<>();
 
    /** Credentials: username. */
    private final String serviceUser;
@@ -429,7 +435,7 @@ public class ODataProductSynchronizer extends Synchronizer
       Map<String, String> query_param = new HashMap<>();
 
       String lup_s = EdmSimpleTypeKind.DateTime.getEdmSimpleTypeInstance()
-            .valueToString(lastCreated, EdmLiteralKind.URI, null);
+            .valueToString(lastCreated, EdmLiteralKind.URI, (new Facets().setPrecision(3)));
       // 'GreaterEqual' because of products with the same CreationDate
       String filter = "CreationDate ge " + lup_s;
 
@@ -749,7 +755,7 @@ public class ODataProductSynchronizer extends Synchronizer
    {
       int count = 0;
       // Get download results from Futures, and create product entries in DB, Solr
-      Iterator<DownloadTask> itdl = RUNNING_DOWNLOADS.iterator();
+      Iterator<DownloadTask> itdl = this.runningDownloads.iterator();
       boolean update_created = true; // Controls whether we are updating LastCreationDate or not
       while (itdl.hasNext())
       {
@@ -777,6 +783,7 @@ public class ODataProductSynchronizer extends Synchronizer
 
             Date last_created = product.getCreated();
             save(product);
+            RUNNING_DOWNLOADS.remove(dltask);
             itdl.remove();
             count++;
             if (update_created)
@@ -793,6 +800,7 @@ public class ODataProductSynchronizer extends Synchronizer
             LOGGER.error("Synchronizer#{} Product {} failed to download", getId(), product.getIdentifier(), ex);
             update_created = false;
             cleanupDownloadTask(dltask);
+            RUNNING_DOWNLOADS.remove(dltask);
             itdl.remove();
          }
          catch (CancellationException ex)
@@ -800,6 +808,7 @@ public class ODataProductSynchronizer extends Synchronizer
             LOGGER.debug("Synchronizer#{} download of Product {} cancelled", getId(), product.getIdentifier());
             update_created = false;
             cleanupDownloadTask(dltask);
+            RUNNING_DOWNLOADS.remove(dltask);
             itdl.remove();
          }
       }
@@ -807,14 +816,29 @@ public class ODataProductSynchronizer extends Synchronizer
       {
          LOGGER.info("Synchronizer#{} {} new Products copied", getId(), count);
       }
-      return RUNNING_DOWNLOADS.size() < this.pageSize;
+      return runningDownloads.size() < this.pageSize;
+   }
+
+   /** Returns TRUE if download of given product is already queued. */
+   private boolean isAlreadyQueued(Product product)
+   {
+      // Uses the UUID to identify products
+      return RUNNING_DOWNLOADS.contains(new DownloadTask(product, null));
+   }
+
+   /** Insert given product in the download queue. */
+   private void queue(Product product) throws IOException, InterruptedException
+   {
+      DownloadTask downloadTask = storeRemoteProduct(product);
+      RUNNING_DOWNLOADS.add(downloadTask); // To avoid simultaneaous download of same product
+      this.runningDownloads.add(downloadTask); // For ordered processing
    }
 
    /** Retrieves and download new products, downloads are parallelized. */
    private int getAndCopyNewProduct() throws InterruptedException
    {
       int res = 0;
-      int count = this.pageSize - RUNNING_DOWNLOADS.size();
+      int count = this.pageSize - runningDownloads.size();
       int skip = 0;
 
       // Downloads are done asynchronously in another threads
@@ -842,15 +866,14 @@ public class ODataProductSynchronizer extends Synchronizer
 
                // Avoid downloading of the same product several times
                // and run post-filters of the product to download
-               if (RUNNING_DOWNLOADS.contains(new DownloadTask(product, null)) ||
-                     !postFilter(product))
+               if (isAlreadyQueued(product) || !postFilter(product))
                {
                   continue;
                }
-
-               RUNNING_DOWNLOADS.add(storeRemoteProduct(product));
                count--;
                res++;
+
+               queue(product);
             }
          }
 
@@ -1090,7 +1113,7 @@ public class ODataProductSynchronizer extends Synchronizer
       // Dispose of running downloads
       if (this.copyProduct)
       {
-         for (DownloadTask task: RUNNING_DOWNLOADS)
+         for (DownloadTask task: runningDownloads)
          {
             try
             {
@@ -1152,7 +1175,7 @@ public class ODataProductSynchronizer extends Synchronizer
    }
 
    /** Returned by {@link #storeRemoteProduct(fr.gael.dhus.database.object.Product)}. */
-   private static class DownloadTask
+   private static class DownloadTask implements Comparable<DownloadTask>
    {
       /** Not null */
       public Product product;
@@ -1194,6 +1217,14 @@ public class ODataProductSynchronizer extends Synchronizer
       public int hashCode()
       {
          return UUID.fromString(this.product.getUuid()).hashCode();
+      }
+
+      @Override
+      public int compareTo(DownloadTask o)
+      {
+         // Ordering by creation date is important because it is the pivot between already synced
+         // products and to be synced products. Used to order elements in the `runningDownloads` set.
+         return product.getCreated().compareTo(o.product.getCreated());
       }
    }
 

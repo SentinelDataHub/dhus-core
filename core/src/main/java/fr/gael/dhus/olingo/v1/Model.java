@@ -56,6 +56,7 @@ import org.apache.olingo.odata2.api.edm.provider.EntityContainer;
 import org.apache.olingo.odata2.api.edm.provider.EntityContainerInfo;
 import org.apache.olingo.odata2.api.edm.provider.EntitySet;
 import org.apache.olingo.odata2.api.edm.provider.EntityType;
+import org.apache.olingo.odata2.api.edm.provider.Facets;
 import org.apache.olingo.odata2.api.edm.provider.FunctionImport;
 import org.apache.olingo.odata2.api.edm.provider.Property;
 import org.apache.olingo.odata2.api.edm.provider.Schema;
@@ -158,11 +159,13 @@ public class Model extends EdmProvider
       timeRangeProperties.add(
             new SimpleProperty()
                   .setName(TIME_RANGE_START)
-                  .setType(EdmSimpleTypeKind.DateTime));
+                  .setType(EdmSimpleTypeKind.DateTime)
+                  .setFacets(new Facets().setPrecision(3)));
       timeRangeProperties.add(
             new SimpleProperty()
                   .setName(TIME_RANGE_END)
-                  .setType(EdmSimpleTypeKind.DateTime));
+                  .setType(EdmSimpleTypeKind.DateTime)
+                  .setFacets(new Facets().setPrecision(3)));
       complexTypeList.add(
             new ComplexType()
                   .setName(TIME_RANGE.getName())

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -42,6 +42,7 @@ public class DownloadActionRecordListener extends CopyStreamAdapter
    private String identifier;
    private User user;
    private boolean started=false;
+   private boolean failed = false;
    private long start;
    
    public DownloadActionRecordListener(String uuid,String identifier,User user)
@@ -77,8 +78,9 @@ public class DownloadActionRecordListener extends CopyStreamAdapter
                   "download by user '" + user.getUsername () +
                "' completed in "+ (end-start) + "ms -> " + stream_size);
          }
-         else
+         else if (!failed)
          {
+            failed=true;
             long end = new Date ().getTime ();
             LOGGER.info("Product '" + this.uuid +
                "' ("+ this.identifier + ") " +

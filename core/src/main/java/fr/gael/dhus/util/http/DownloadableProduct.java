@@ -43,6 +43,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import org.dhus.AbstractProduct;
+import org.dhus.ProductConstants;
 
 import org.springframework.security.crypto.codec.Hex;
 
@@ -120,6 +121,7 @@ public class DownloadableProduct extends AbstractProduct
       }
       // Gets the size of the payload, its ETag and its Accept-Ranges
       this.contentLength = Long.parseLong(headrsp.getFirstHeader("Content-Length").getValue());
+      setProperty(ProductConstants.DATA_SIZE, this.contentLength);
       this.contentType = headrsp.getFirstHeader("Content-Type").getValue();
       Header etag = headrsp.getFirstHeader("ETag");
       if (etag != null)

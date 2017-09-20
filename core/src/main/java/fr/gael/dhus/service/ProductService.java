@@ -998,8 +998,11 @@ public class ProductService extends WebService
       Iterator<Product> products = getUnprocessedProducts();
       while (products.hasNext())
       {
-         products.next();
-         products.remove();
+         Product product = products.next();
+         if (product != null)
+         {
+            products.remove();
+         }
       }
 
       LOGGER.debug("Cleanup incomplete processed products in " + (System.currentTimeMillis() - start) + "ms");
@@ -1030,7 +1033,7 @@ public class ProductService extends WebService
     * @return a scrollable list of the products
     */
    @Transactional(readOnly = true)
-   public Iterator<Product> getProductsByIngestionDate(Date max_date, int max_products)
+   public Iterator<Product> getProductsByCreationDate(Date max_date, int max_products)
    {
       DetachedCriteria criteria = DetachedCriteria.forClass(Product.class);
       criteria.add(Restrictions.and(

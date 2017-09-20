@@ -38,7 +38,7 @@
 
    <artifactId>dhus-core</artifactId>
    <groupId>fr.gael.dhus</groupId>
-   <version>1.0.1-12-osf</version>
+   <version>1.0.1-14-osf</version>
    <packaging>jar</packaging>
 
    <name>DHuS - Core</name>
@@ -205,7 +205,7 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-impl-swift</artifactId>
-         <version>1.0.6</version>
+         <version>1.0.7</version>
          <exclusions>
             <exclusion>
                <groupId>fr.gael.drb</groupId>

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -103,15 +103,19 @@ public class ProductEntitySet extends AbstractEntitySet<Product>
 
       properties.add (new SimpleProperty ().setName (CREATION_DATE)
          .setType (EdmSimpleTypeKind.DateTime)
-         .setFacets (new Facets ().setNullable (false)));
+         .setFacets(new Facets().setNullable(false).setPrecision(3)));
       properties.add (new SimpleProperty ()
          .setName (INGESTION_DATE)
          .setType (EdmSimpleTypeKind.DateTime)
+         .setFacets(new Facets().setPrecision(3))
          .setCustomizableFeedMappings (
             new CustomizableFeedMappings ()
                .setFcTargetPath (EdmTargetPath.SYNDICATION_UPDATED)));
-      properties.add (new SimpleProperty ().setName (EVICTION_DATE).setType (
-         EdmSimpleTypeKind.DateTime));
+
+      properties.add(new SimpleProperty().setName(EVICTION_DATE)
+            .setType(EdmSimpleTypeKind.DateTime)
+            .setFacets(new Facets().setPrecision(3)));
+
       properties.add(new ComplexProperty().setName(CONTENT_DATE).setType(Model.TIME_RANGE));
       properties.add(new ComplexProperty().setName(CHECKSUM).setType(Model.CHECKSUM));
       properties.add (new SimpleProperty ().setName (CONTENT_GEOMETRY).setType (

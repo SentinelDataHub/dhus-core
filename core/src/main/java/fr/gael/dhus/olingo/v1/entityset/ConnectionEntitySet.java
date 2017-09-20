@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -92,8 +92,10 @@ public class ConnectionEntitySet extends AbstractEntitySet<Connection>
             new CustomizableFeedMappings ()
                .setFcTargetPath (EdmTargetPath.SYNDICATION_TITLE)));
 
-      properties.add (new SimpleProperty ().setName (DATE).setType (
-         EdmSimpleTypeKind.DateTime));
+      properties.add(new SimpleProperty().setName(DATE)
+            .setType(EdmSimpleTypeKind.DateTime)
+            .setFacets(new Facets().setPrecision(3)));
+
       properties.add (new SimpleProperty ().setName (REMOTEIP).setType (
          EdmSimpleTypeKind.String));
       properties.add (new SimpleProperty ().setName (REQUEST).setType (

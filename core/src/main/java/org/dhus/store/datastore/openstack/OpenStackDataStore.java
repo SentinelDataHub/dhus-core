@@ -41,6 +41,8 @@ import org.dhus.store.datastore.DataStoreConstants;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.ProductAlreadyExist;
 import org.dhus.store.datastore.ProductNotFoundException;
+import org.dhus.store.datastore.ReadOnlyDataStoreException;
+
 import org.jclouds.blobstore.domain.BlobMetadata;
 
 
@@ -115,7 +117,7 @@ public class OpenStackDataStore extends AbstractDataStore
    {
       if (isReadOnly())
       {
-         throw new UnsupportedOperationException("DataStore " + getName() + " is read only");
+         throw new ReadOnlyDataStoreException("DataStore " + getName() + " is read only");
       }
 
       if (exists(id))
@@ -172,6 +174,29 @@ public class OpenStackDataStore extends AbstractDataStore
    }
 
    /**
+    * Retrieves content size of the given product.
+    *
+    * @param product to check
+    * @return content size of the product in byte, or -1 if not found
+    */
+   private long productContentSize(Product product)
+   {
+      Long size = (Long) product.getProperty(ProductConstants.DATA_SIZE);
+
+      if (size != null && size != -1)
+      {
+         return size;
+      }
+
+      if (product.hasImpl(File.class))
+      {
+         return product.getImpl(File.class).length();
+      }
+
+      return -1;
+   }
+
+   /**
     * Inner put performs put action only using stream.
     * If file not supported, product size will not be set into the HTTP content-length header,
     * and the move command will raise exception.
@@ -185,14 +210,9 @@ public class OpenStackDataStore extends AbstractDataStore
     */
    private String put(Product product, boolean move) throws IOException
    {
-      long product_size = -1L;
+      long product_size = productContentSize(product);
       Map<String, String> user_data = new HashMap<>();
       user_data.put(MD_OCCURRENCE, "1");
-
-      if (product.hasImpl(File.class))
-      {
-         product_size = product.getImpl(File.class).length();
-      }
 
       // Case of source file not supported
       if (product.hasImpl(InputStream.class))

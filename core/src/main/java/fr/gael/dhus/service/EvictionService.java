@@ -154,7 +154,7 @@ public class EvictionService extends WebService
       evictProduct.clear();
 
       Date deadline = getKeepPeriod(eviction.getKeepPeriod());
-      Iterator<Product> it = productService.getProductsByIngestionDate(deadline, eviction.getMaxProductNumber());
+      Iterator<Product> it = productService.getProductsByCreationDate(deadline, eviction.getMaxProductNumber());
       while (it.hasNext())
       {
          evictProduct.add(it.next());
@@ -184,7 +184,7 @@ public class EvictionService extends WebService
          return null;
       }
 
-      DateTime dt = new DateTime(product.getIngestionDate());
+      DateTime dt = new DateTime(product.getCreated());
       DateTime res = dt.plusDays(e.getKeepPeriod());
       return res.toDate();
    }

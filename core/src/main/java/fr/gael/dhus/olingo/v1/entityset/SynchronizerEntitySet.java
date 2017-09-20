@@ -104,11 +104,11 @@ public class SynchronizerEntitySet extends AbstractEntitySet<Synchronizer>
 
       properties.add (new SimpleProperty ().setName (CREATION_DATE)
             .setType (EdmSimpleTypeKind.DateTime)
-            .setFacets (new Facets ().setNullable (false)));
+            .setFacets(new Facets().setNullable(false).setPrecision(3)));
 
       properties.add (new SimpleProperty ().setName (MODIFICATION_DATE)
             .setType (EdmSimpleTypeKind.DateTime)
-            .setFacets (new Facets ().setNullable (false)));
+            .setFacets(new Facets().setNullable(false).setPrecision(3)));
 
       properties.add (new SimpleProperty ().setName (SERVICE_URL)
             .setType (EdmSimpleTypeKind.String)
@@ -155,7 +155,8 @@ public class SynchronizerEntitySet extends AbstractEntitySet<Synchronizer>
             .setType (EdmSimpleTypeKind.String));
 
       properties.add (new SimpleProperty ().setName (LAST_CREATION_DATE)
-            .setType (EdmSimpleTypeKind.DateTime));
+            .setType(EdmSimpleTypeKind.DateTime)
+            .setFacets(new Facets().setPrecision(3)));
 
       properties.add (new SimpleProperty ().setName (REQUEST)
             .setType (EdmSimpleTypeKind.String)
@@ -171,7 +172,8 @@ public class SynchronizerEntitySet extends AbstractEntitySet<Synchronizer>
             .setFacets (new Facets ().setNullable (false)));
 
       properties.add (new SimpleProperty ().setName (STATUS_DATE)
-            .setType (EdmSimpleTypeKind.DateTime));
+            .setType(EdmSimpleTypeKind.DateTime)
+            .setFacets(new Facets().setPrecision(3)));
 
       properties.add (new SimpleProperty ().setName (STATUS_MESSAGE)
             .setType (EdmSimpleTypeKind.String));

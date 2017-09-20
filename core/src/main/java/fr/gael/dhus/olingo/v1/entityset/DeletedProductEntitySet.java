@@ -99,7 +99,7 @@ public class DeletedProductEntitySet extends AbstractEntitySet<Product>
 
       properties.add(new SimpleProperty().setName(CREATION_DATE)
             .setType(EdmSimpleTypeKind.DateTime)
-            .setFacets(new Facets().setNullable(false)));
+            .setFacets(new Facets().setNullable(false).setPrecision(3)));
 
       properties.add(new SimpleProperty().setName(FOOTPRINT).setType(EdmSimpleTypeKind.String));
 
@@ -107,10 +107,13 @@ public class DeletedProductEntitySet extends AbstractEntitySet<Product>
 
       properties.add(new SimpleProperty()
             .setName(INGESTION_DATE)
-            .setType(EdmSimpleTypeKind.DateTime));
+            .setType(EdmSimpleTypeKind.DateTime)
+            .setFacets(new Facets().setPrecision(3)));
       properties.add(new ComplexProperty().setName(CONTENT_DATE).setType(Model.TIME_RANGE));
 
-      properties.add(new SimpleProperty().setName(DELETION_DATE).setType(EdmSimpleTypeKind.DateTime)
+      properties.add(new SimpleProperty().setName(DELETION_DATE)
+            .setType(EdmSimpleTypeKind.DateTime)
+            .setFacets(new Facets().setPrecision(3))
             .setCustomizableFeedMappings(
                   new CustomizableFeedMappings()
                         .setFcTargetPath(EdmTargetPath.SYNDICATION_UPDATED)));
