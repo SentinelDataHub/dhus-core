@@ -26,6 +26,7 @@ import java.sql.Blob;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Map;
 
 import liquibase.change.custom.CustomTaskChange;
@@ -43,7 +44,7 @@ import org.apache.logging.log4j.Logger;
 public class RemoveDeletedProductBlobFields implements CustomTaskChange
 {
    private static final Logger LOGGER = LogManager.getLogger();
-   private static final int PAGE_SIZE = 1;
+   private static final int PAGE_SIZE = 10_000;
 
    @Override
    public void execute(Database database) throws CustomChangeException
@@ -64,20 +65,20 @@ public class RemoveDeletedProductBlobFields implements CustomTaskChange
             }
             max = result.getLong(1);
          }
-         LOGGER.debug("{} deleted product(s) to update");
+         LOGGER.info("{} deleted product(s) to update", max);
 
          long index = 0;
          String get_pattern = "SELECT ID, CHECKSUMS FROM DELETED_PRODUCTS LIMIT %d,%d";
          String update_pattern = "UPDATE DELETED_PRODUCTS SET CHECKSUM_ALGORITHM='%s', CHECKSUM_VALUE='%s' WHERE ID=%d";
-         while (index <= max)
+         while (index < max)
          {
             // retrieve data
             sql_count = String.format(get_pattern, index, PAGE_SIZE);
             try (PreparedStatement get_stmt = connection.prepareStatement(sql_count))
             {
                ResultSet get_result = get_stmt.executeQuery();
-
-               if (get_result.next())
+               Statement batchUpdate = connection.createStatement();
+               while (get_result.next())
                {
                   // retrieve data
                   long id = get_result.getLong("ID");
@@ -90,14 +91,14 @@ public class RemoveDeletedProductBlobFields implements CustomTaskChange
                      // fill newly fill
                      Map.Entry<String, String> checksum = checksums.entrySet().iterator().next();
                      String sql_update = String.format(update_pattern, checksum.getKey(), checksum.getValue(), id);
-                     try (PreparedStatement update_stmt = connection.prepareStatement(sql_update))
-                     {
-                        update_stmt.executeUpdate();
-                     }
+                     batchUpdate.addBatch(sql_update);
                   }
+                  index++;
                }
+               batchUpdate.executeBatch();
+               batchUpdate.close();
+               LOGGER.info("RemoveDeletedProductBlobFields:retrieveChecksum: {}/{}", index, max);
             }
-            index = index + PAGE_SIZE;
          }
       }
       catch (DatabaseException | SQLException | IOException | ClassNotFoundException e)

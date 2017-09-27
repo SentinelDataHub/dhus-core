@@ -1224,7 +1224,14 @@ public class ODataProductSynchronizer extends Synchronizer
       {
          // Ordering by creation date is important because it is the pivot between already synced
          // products and to be synced products. Used to order elements in the `runningDownloads` set.
-         return product.getCreated().compareTo(o.product.getCreated());
+         int result = product.getCreated().compareTo(o.product.getCreated());
+
+         // In case of two products have the same creation date.
+         if (result == 0)
+         {
+            result = product.getUuid().compareTo(o.product.getUuid());
+         }
+         return result;
       }
    }
 

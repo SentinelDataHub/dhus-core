@@ -38,7 +38,7 @@
 
    <artifactId>dhus-core</artifactId>
    <groupId>fr.gael.dhus</groupId>
-   <version>1.0.1-14-osf</version>
+   <version>1.0.1-15-osf</version>
    <packaging>jar</packaging>
 
    <name>DHuS - Core</name>
