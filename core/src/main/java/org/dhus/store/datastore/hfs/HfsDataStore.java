@@ -121,6 +121,8 @@ public class HfsDataStore extends AbstractDataStore
          }
          else
          {
+            if(source.getAbsolutePath().startsWith(hfs.getPath()))
+               dest = source;
             if (source.isDirectory())
             {
                FileUtils.copyDirectory(source, dest);

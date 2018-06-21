@@ -150,7 +150,7 @@ public class ProcessingManager
          // Extract images
          start = System.currentTimeMillis ();
          LOGGER.info (" - Product images extraction started");
-         product = extractImages (productNode, product);
+//         product = extractImages (productNode, product);
          LOGGER.info (" - Product images extraction done in " +
                (System.currentTimeMillis () - start) + "ms.");
 
