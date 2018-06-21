@@ -47,10 +47,10 @@ import org.dhus.store.datastore.ReadOnlyDataStoreException;
 public class HfsDataStore extends AbstractDataStore
 {
    private static final Logger LOGGER = LogManager.getLogger();
-   private static final String SUPPORTED_ALGORITHMS = "MD5,SHA-1,SHA-256,SHA-512";
+   protected static final String SUPPORTED_ALGORITHMS = "MD5,SHA-1,SHA-256,SHA-512";
 
    /** The inner implementation of the hierarchical file system. */
-   private HfsManager hfs;
+   protected HfsManager hfs;
 
    public HfsDataStore(String name, HfsManager hfs, boolean readOnly)
    {
@@ -121,8 +121,6 @@ public class HfsDataStore extends AbstractDataStore
          }
          else
          {
-            if(source.getAbsolutePath().startsWith(hfs.getPath()))
-               dest = source;
             if (source.isDirectory())
             {
                FileUtils.copyDirectory(source, dest);
@@ -131,7 +129,7 @@ public class HfsDataStore extends AbstractDataStore
             {
                String[] algorithms = SUPPORTED_ALGORITHMS.split(",");
                try (MultipleDigestOutputStream outputStream =
-                     new MultipleDigestOutputStream(new FileOutputStream(dest), algorithms))
+                            new MultipleDigestOutputStream(new FileOutputStream(dest), algorithms))
                {
                   // store and compute checksum
                   FileUtils.copyFile(source, outputStream);
@@ -156,7 +154,7 @@ public class HfsDataStore extends AbstractDataStore
          try (InputStream source = product.getImpl(InputStream.class))
          {
             try (MultipleDigestOutputStream bos =
-                  new MultipleDigestOutputStream(new FileOutputStream(dest), algorithms))
+                         new MultipleDigestOutputStream(new FileOutputStream(dest), algorithms))
             {
                IOUtils.copy(source, bos);
                extractAndSetChecksum(bos, algorithms, product);
@@ -178,7 +176,7 @@ public class HfsDataStore extends AbstractDataStore
       }
       // Case of data is not a SPI or it does not support both File and InputStream accesses (unlikely)
       throw new IOException("Input product \"" + product.getName() +
-            "\" has no defined implementation for access.");
+              "\" has no defined implementation for access.");
    }
 
    @Override
@@ -248,8 +246,8 @@ public class HfsDataStore extends AbstractDataStore
       return true;
    }
 
-   private void computeAndSetChecksum(File file, Product product)
-         throws IOException
+   protected void computeAndSetChecksum(File file, Product product)
+           throws IOException
    {
       byte[] buffer = new byte[1024 * 4];
       String[] algorithms = SUPPORTED_ALGORITHMS.split(",");
@@ -276,7 +274,7 @@ public class HfsDataStore extends AbstractDataStore
    }
 
    private void extractAndSetChecksum(MultipleDigestInputStream stream,
-         String[] algorithms, Product product)
+                                      String[] algorithms, Product product)
    {
       for (String algorithm: algorithms)
       {
@@ -286,8 +284,8 @@ public class HfsDataStore extends AbstractDataStore
       }
    }
 
-   private void extractAndSetChecksum(MultipleDigestOutputStream stream,
-         String[] algorithms, Product product)
+   protected void extractAndSetChecksum(MultipleDigestOutputStream stream,
+                                      String[] algorithms, Product product)
    {
       for (String algorithm: algorithms)
       {
