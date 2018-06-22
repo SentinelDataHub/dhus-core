@@ -37,6 +37,12 @@ public class ProductFactory
    private static final String FTP_PROTOCOL = "ftp";
    private static final Logger LOGGER = LogManager.getLogger();
 
+   public static Product generateImageProduct(final URL url){
+      Product image = generateProduct(url);
+      image.setProperty(ProductConstants.PRODUCT_TYPE_PROPERTY, ProductConstants.IMAGE_TYPE);
+      return image;
+   }
+
    public static Product generateProduct(final URL url)
    {
       LOGGER.debug("Product path: {}", url);

@@ -26,7 +26,11 @@ public class IdentityHfsDataStore extends HfsDataStore {
         }
 
         try {
-            String path = put(product);
+            String path = null;
+            if(ProductConstants.IMAGE_TYPE.equals(product.getProperty(ProductConstants.PRODUCT_TYPE_PROPERTY)))
+                path = putImage(product);
+            else
+                path = putFullProduct(product);
             putResource(id, path);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -40,7 +44,7 @@ public class IdentityHfsDataStore extends HfsDataStore {
 
     }
 
-    private String put(Product product) throws IOException {
+    private String putFullProduct(Product product) throws IOException {
         // Compute the target
         File source = product.getImpl(File.class);
 
@@ -49,6 +53,30 @@ public class IdentityHfsDataStore extends HfsDataStore {
         product.setProperty(ProductConstants.DATA_SIZE, source.length());
         return HfsDataStoreUtils.generateResource(hfs.getPath(), source.getAbsolutePath());
 
+    }
+
+    private String putImage(Product product) throws IOException{
+        // Compute the target
+        File dest = new File(hfs.getNewIncomingPath(), product.getName());
+
+        // Computes the source
+        if (product.hasImpl(File.class)) {
+            File source = product.getImpl(File.class);
+            String[] algorithms = SUPPORTED_ALGORITHMS.split(",");
+            try (MultipleDigestOutputStream outputStream =
+                         new MultipleDigestOutputStream(new FileOutputStream(dest), algorithms)) {
+                // store and compute checksum
+                FileUtils.copyFile(source, outputStream);
+                extractAndSetChecksum(outputStream, algorithms, product);
+            } catch (NoSuchAlgorithmException e) {
+                // Should be never happen
+                throw new IOException("Invalid supported algorithms !", e);
+            }
+
+        }
+
+        product.setProperty(ProductConstants.DATA_SIZE, dest.length());
+        return HfsDataStoreUtils.generateResource(hfs.getPath(), dest.getAbsolutePath());
     }
 
 

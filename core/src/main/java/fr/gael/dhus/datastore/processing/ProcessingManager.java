@@ -150,7 +150,7 @@ public class ProcessingManager
          // Extract images
          start = System.currentTimeMillis ();
          LOGGER.info (" - Product images extraction started");
-//         product = extractImages (productNode, product);
+         product = extractImages (productNode, product);
          LOGGER.info (" - Product images extraction done in " +
                (System.currentTimeMillis () - start) + "ms.");
 
@@ -420,11 +420,12 @@ public class ProcessingManager
       File quicklook = new File(image_directory, identifier + "-ql.jpg");
       try
       {
+         quicklook.createNewFile();
          if (ImageIO.write(image, "jpg", quicklook))
          {
             String uuid = UUID.randomUUID().toString();
             org.dhus.Product p =
-                  ProductFactory.generateProduct(quicklook.toURI().toURL());
+                  ProductFactory.generateImageProduct(quicklook.toURI().toURL());
             dataStoreService.set(uuid, p);
             product.setQuicklookPath(uuid);
             product.setQuicklookSize(
@@ -466,7 +467,7 @@ public class ProcessingManager
          {
             String uuid = UUID.randomUUID().toString();
             org.dhus.Product p =
-                  ProductFactory.generateProduct(thumbnail.toURI().toURL());
+                  ProductFactory.generateImageProduct(thumbnail.toURI().toURL());
             dataStoreService.set(uuid, p);
             product.setThumbnailPath(uuid);
             product.setThumbnailSize(
