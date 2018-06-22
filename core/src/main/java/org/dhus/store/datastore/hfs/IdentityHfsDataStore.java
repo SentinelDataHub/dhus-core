@@ -33,6 +33,13 @@ public class IdentityHfsDataStore extends HfsDataStore {
         }
     }
 
+    @Override
+    public void move(String id, Product product) throws DataStoreException
+    {
+        throw new DataStoreException(getName() + " datastore does not support move");
+
+    }
+
     private String put(Product product) throws IOException {
         // Compute the target
         File source = product.getImpl(File.class);
