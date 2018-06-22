@@ -26,14 +26,14 @@ public class IdentityHfsDataStore extends HfsDataStore {
         }
 
         try {
-            String path = put(product, false);
+            String path = put(product);
             putResource(id, path);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private String put(Product product, boolean move) throws IOException {
+    private String put(Product product) throws IOException {
         // Compute the target
         File source = product.getImpl(File.class);
 

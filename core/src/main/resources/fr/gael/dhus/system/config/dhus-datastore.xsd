@@ -49,6 +49,7 @@
     <xs:complexType name="dataStoreConf" abstract="true">
         <xs:attribute name="name" type="xs:string" use="required" />
         <xs:attribute name="readOnly" type="xs:boolean" default="false" />
+        <xs:attribute name="keepInInbox" type="xs:boolean" default="false" />
     </xs:complexType>
 
    <xs:complexType name="hfsDataStoreConf">
