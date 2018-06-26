@@ -26,11 +26,7 @@ public class IdentityHfsDataStore extends HfsDataStore {
         }
 
         try {
-            String path = null;
-            if(ProductConstants.IMAGE_TYPE.equals(product.getProperty(ProductConstants.PRODUCT_TYPE_PROPERTY)))
-                path = putImage(product);
-            else
-                path = putFullProduct(product);
+            String path = put(product);
             putResource(id, path);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -42,6 +38,13 @@ public class IdentityHfsDataStore extends HfsDataStore {
     {
         throw new DataStoreException(getName() + " datastore does not support move");
 
+    }
+
+    private String put(Product product) throws IOException {
+        if(ProductConstants.IMAGE_TYPE.equals(product.getProperty(ProductConstants.PRODUCT_TYPE_PROPERTY)))
+            return putImage(product);
+
+        return putFullProduct(product);
     }
 
     private String putFullProduct(Product product) throws IOException {
