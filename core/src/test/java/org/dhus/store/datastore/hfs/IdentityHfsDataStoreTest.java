@@ -1,6 +1,5 @@
 package org.dhus.store.datastore.hfs;
 
-import fr.gael.dhus.olingo.v1.ExpectedException;
 import fr.gael.dhus.util.TestContextLoader;
 
 import java.io.File;
@@ -10,7 +9,6 @@ import java.util.UUID;
 import org.apache.commons.io.FileUtils;
 
 import org.dhus.Product;
-import org.dhus.ProductConstants;
 import org.dhus.store.datastore.DataStoreException;
 
 import org.springframework.test.annotation.DirtiesContext;
@@ -56,7 +54,8 @@ public class IdentityHfsDataStoreTest extends AbstractTransactionalTestNGSpringC
         String id = UUID.randomUUID().toString();
         try
         {
-            File tmp = File.createTempFile("datastore", ".zip");
+            File tmp = new File("datastore.zip");
+            tmp.createNewFile();
             tmp.deleteOnExit();
             final HfsProduct hfsProduct = new HfsProduct(tmp);
 
@@ -64,7 +63,7 @@ public class IdentityHfsDataStoreTest extends AbstractTransactionalTestNGSpringC
             Product product = hfsDataStore.get(id);
             File productImpl = product.getImpl(File.class);
 //          Final product is the same as the original
-            Assert.assertEquals(productImpl.getCanonicalPath(), tmp.getPath());
+            Assert.assertEquals(productImpl.getCanonicalPath(), tmp.getCanonicalPath());
         }
         catch (DataStoreException e)
         {
@@ -85,7 +84,6 @@ public class IdentityHfsDataStoreTest extends AbstractTransactionalTestNGSpringC
             File tmp = File.createTempFile("datastore", ".jpg");
             tmp.deleteOnExit();
             final HfsProduct hfsProduct = new HfsProduct(tmp);
-            hfsProduct.setProperty(ProductConstants.PRODUCT_TYPE_PROPERTY, ProductConstants.IMAGE_TYPE);
             hfsDataStore.set(id, hfsProduct);
             Product product = hfsDataStore.get(id);
 
