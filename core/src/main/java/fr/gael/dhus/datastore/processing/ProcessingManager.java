@@ -90,7 +90,7 @@ public class ProcessingManager
    private static final String METADATA_NAMESPACE = "http://www.gael.fr/dhus#";
    private static final String PROPERTY_IDENTIFIER = "identifier";
    private static final String PROPERTY_METADATA_EXTRACTOR =
-      "metadataExtractor";
+           "metadataExtractor";
    private static final String MIME_PLAIN_TEXT = "plain/text";
    private static final String MIME_APPLICATION_GML = "application/gml+xml";
 
@@ -126,7 +126,7 @@ public class ProcessingManager
          catch (IOException e)
          {
             throw new UnsupportedOperationException (
-                  "Cannot compute item class.", e);
+                    "Cannot compute item class.", e);
          }
 
          // Set the product itemClass
@@ -145,115 +145,115 @@ public class ProcessingManager
             product.setIdentifier(productUrl.getFile());
          }
          LOGGER.info (" - Product information extraction done in " +
-               (System.currentTimeMillis () - start) + "ms.");
+                 (System.currentTimeMillis () - start) + "ms.");
 
          // Extract images
          start = System.currentTimeMillis ();
          LOGGER.info (" - Product images extraction started");
          product = extractImages (productNode, product);
          LOGGER.info (" - Product images extraction done in " +
-               (System.currentTimeMillis () - start) + "ms.");
+                 (System.currentTimeMillis () - start) + "ms.");
 
          // Set the product indexes
          start = System.currentTimeMillis ();
          LOGGER.info (" - Product indexes and footprint extraction started");
          List<MetadataIndex> indexes =
-               extractIndexes (productNode, productClass);
+                 extractIndexes (productNode, productClass);
          SimpleDateFormat df =
-               new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+                 new SimpleDateFormat ("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
          indexes.add (new MetadataIndex ("Identifier",
-               null, "", PROPERTY_IDENTIFIER, product.getIdentifier ()));
+                 null, "", PROPERTY_IDENTIFIER, product.getIdentifier ()));
 
-      if (indexes == null || indexes.isEmpty ())
-      {
-         LOGGER.warn ("No index processed for product " + product.getPath ());
-      }
-      else
-      {
-         product.setIndexes (indexes);
-         boolean jtsValid = false;
-         Iterator<MetadataIndex> iterator = indexes.iterator ();
-         while (iterator.hasNext ())
+         if (indexes == null || indexes.isEmpty ())
          {
-            MetadataIndex index = iterator.next ();
+            LOGGER.warn ("No index processed for product " + product.getPath ());
+         }
+         else
+         {
+            product.setIndexes (indexes);
+            boolean jtsValid = false;
+            Iterator<MetadataIndex> iterator = indexes.iterator ();
+            while (iterator.hasNext ())
+            {
+               MetadataIndex index = iterator.next ();
 
-            // Extracts queryable informations to be stored into database.
-            if (index.getQueryable() != null)
-            {
-               // Begin position ("sensing start" or "validity start")
-               if (index.getQueryable().equalsIgnoreCase ("beginposition"))
+               // Extracts queryable informations to be stored into database.
+               if (index.getQueryable() != null)
                {
-                  try
+                  // Begin position ("sensing start" or "validity start")
+                  if (index.getQueryable().equalsIgnoreCase ("beginposition"))
                   {
-                     product.setContentStart (df.parse (index.getValue ()));
-                  }
-                  catch (ParseException e)
-                  {
-                     LOGGER.warn ("Cannot set correctly product " +
-                        "'content start' from indexes", e);
-                  }
-               }
-               else
-               // End position ("sensing stop" or "validity stop")
-               if (index.getQueryable().equalsIgnoreCase ("endposition"))
-               {
-                  try
-                  {
-                     product.setContentEnd (df.parse (index.getValue ()));
-                  }
-                  catch (ParseException e)
-                  {
-                     LOGGER.warn ("Cannot set correctly product " +
-                        "'content end' from indexes", e);
-                  }
-               }
-            }
-            /**
-             * Extract the footprints according to its types (GML or JTS)
-             */
-            if (index.getType() != null)
-            {
-               if (index.getType().equalsIgnoreCase("application/gml+xml"))
-               {
-                  String gml_footprint = index.getValue ();
-                  if ((gml_footprint != null) &&
-                      checkGMLFootprint (gml_footprint))
-                  {
-                     product.setFootPrint (gml_footprint);
+                     try
+                     {
+                        product.setContentStart (df.parse (index.getValue ()));
+                     }
+                     catch (ParseException e)
+                     {
+                        LOGGER.warn ("Cannot set correctly product " +
+                                "'content start' from indexes", e);
+                     }
                   }
                   else
-                  {
-                     LOGGER.error ("Incorrect on empty footprint for product " +
-                        product.getPath ());
-                  }
+                     // End position ("sensing stop" or "validity stop")
+                     if (index.getQueryable().equalsIgnoreCase ("endposition"))
+                     {
+                        try
+                        {
+                           product.setContentEnd (df.parse (index.getValue ()));
+                        }
+                        catch (ParseException e)
+                        {
+                           LOGGER.warn ("Cannot set correctly product " +
+                                   "'content end' from indexes", e);
+                        }
+                     }
                }
-               // Should not have been application/wkt ?
-               else if (index.getType().equalsIgnoreCase("application/jts"))
+               /**
+                * Extract the footprints according to its types (GML or JTS)
+                */
+               if (index.getType() != null)
                {
-                  String jts_footprint = index.getValue ();
-                  String parsedFootprint = JTSFootprintParser.checkJTSFootprint (jts_footprint);
-                  jtsValid = parsedFootprint != null;
-                  if (jtsValid)
+                  if (index.getType().equalsIgnoreCase("application/gml+xml"))
                   {
-                     index.setValue (parsedFootprint);
+                     String gml_footprint = index.getValue ();
+                     if ((gml_footprint != null) &&
+                             checkGMLFootprint (gml_footprint))
+                     {
+                        product.setFootPrint (gml_footprint);
+                     }
+                     else
+                     {
+                        LOGGER.error ("Incorrect on empty footprint for product " +
+                                product.getPath ());
+                     }
                   }
-                  else
+                  // Should not have been application/wkt ?
+                  else if (index.getType().equalsIgnoreCase("application/jts"))
+                  {
+                     String jts_footprint = index.getValue ();
+                     String parsedFootprint = JTSFootprintParser.checkJTSFootprint (jts_footprint);
+                     jtsValid = parsedFootprint != null;
+                     if (jtsValid)
+                     {
+                        index.setValue (parsedFootprint);
+                     }
+                     else
                      if (jts_footprint != null)
                      {
                         // JTS footprint is wrong; remove the corrupted
                         // footprint.
                         iterator.remove ();
                      }
+                  }
                }
             }
+            if (!jtsValid)
+            {
+               LOGGER.error ("JTS footprint not existing or not valid, " +
+                       "removing GML footprint on " + product.getPath ());
+               product.setFootPrint (null);
+            }
          }
-         if (!jtsValid)
-         {
-            LOGGER.error ("JTS footprint not existing or not valid, " +
-               "removing GML footprint on " + product.getPath ());
-            product.setFootPrint (null);
-         }
-      }
          LOGGER.info(" - Product indexes and footprint extraction done in {}ms.", System.currentTimeMillis() - start);
 
          LOGGER.info("* Ingestion done in {}ms.", System.currentTimeMillis() - allStart);
@@ -297,21 +297,21 @@ public class ProcessingManager
     * Retrieve product identifier using its Drb node and class.
     */
    private String extractIdentifier (DrbNode productNode,
-      DrbCortexItemClass productClass)
+                                     DrbCortexItemClass productClass)
    {
       java.util.Collection<String> properties = null;
 
       // Get all values of the metadata properties attached to the item
       // class or any of its super-classes
       properties =
-         productClass.listPropertyStrings (METADATA_NAMESPACE +
-            PROPERTY_IDENTIFIER, false);
+              productClass.listPropertyStrings (METADATA_NAMESPACE +
+                      PROPERTY_IDENTIFIER, false);
 
       // Return immediately if no property value were found
       if (properties == null)
       {
          LOGGER.warn ("Item \"" + productClass.getLabel () +
-            "\" has no identifier defined.");
+                 "\" has no identifier defined.");
          return null;
       }
 
@@ -345,7 +345,7 @@ public class ProcessingManager
     * product before returning it
     */
    private Product extractImages (DrbNode productNode, Product product)
-         throws ProcessingException
+           throws ProcessingException
    {
       if (ImageIO.getUseCache()) ImageIO.setUseCache(false);
 
@@ -384,20 +384,20 @@ public class ProcessingManager
 
       // Generate Quicklook
       int quicklook_width = cfgManager.getProductConfiguration ()
-            .getQuicklookConfiguration ().getWidth ();
+              .getQuicklookConfiguration ().getWidth ();
       int quicklook_height = cfgManager.getProductConfiguration ()
-            .getQuicklookConfiguration ().getHeight ();
+              .getQuicklookConfiguration ().getHeight ();
 
       // Deprecated code: raise warn.
       boolean quicklook_cutting = cfgManager.getProductConfiguration ()
-                     .getQuicklookConfiguration ().isCutting ();
+              .getQuicklookConfiguration ().isCutting ();
       if (quicklook_cutting)
          LOGGER.warn(
-            "Quicklook \"cutting\" parameter is deprecated, will be ignored.");
+                 "Quicklook \"cutting\" parameter is deprecated, will be ignored.");
 
       LOGGER.info ("Generating Quicklook " +
-         quicklook_width + "x" + quicklook_height + " from " +
-         input_image.getWidth() + "x" + input_image.getHeight ());
+              quicklook_width + "x" + quicklook_height + " from " +
+              input_image.getWidth() + "x" + input_image.getHeight ());
 
       RenderedImage image = null;
       try
@@ -420,16 +420,15 @@ public class ProcessingManager
       File quicklook = new File(image_directory, identifier + "-ql.jpg");
       try
       {
-         quicklook.createNewFile();
          if (ImageIO.write(image, "jpg", quicklook))
          {
             String uuid = UUID.randomUUID().toString();
             org.dhus.Product p =
-                  ProductFactory.generateImageProduct(quicklook.toURI().toURL());
+                    ProductFactory.generateProduct(quicklook.toURI().toURL());
             dataStoreService.set(uuid, p);
             product.setQuicklookPath(uuid);
             product.setQuicklookSize(
-                  (Long) p.getProperty(ProductConstants.DATA_SIZE));
+                    (Long) p.getProperty(ProductConstants.DATA_SIZE));
             quicklook.delete();
          }
       }
@@ -440,13 +439,13 @@ public class ProcessingManager
 
       // Generate Thumbnail
       int thumbnail_width = cfgManager.getProductConfiguration ()
-            .getThumbnailConfiguration ().getWidth ();
+              .getThumbnailConfiguration ().getWidth ();
       int thumbnail_height = cfgManager.getProductConfiguration ()
-            .getThumbnailConfiguration ().getHeight ();
+              .getThumbnailConfiguration ().getHeight ();
 
       LOGGER.info ("Generating Thumbnail " +
-         thumbnail_width + "x" + thumbnail_height + " from " +
-         input_image.getWidth() + "x" + input_image.getHeight () + " image.");
+              thumbnail_width + "x" + thumbnail_height + " from " +
+              input_image.getWidth() + "x" + input_image.getHeight () + " image.");
 
       try
       {
@@ -467,11 +466,11 @@ public class ProcessingManager
          {
             String uuid = UUID.randomUUID().toString();
             org.dhus.Product p =
-                  ProductFactory.generateImageProduct(thumbnail.toURI().toURL());
+                    ProductFactory.generateProduct(thumbnail.toURI().toURL());
             dataStoreService.set(uuid, p);
             product.setThumbnailPath(uuid);
             product.setThumbnailSize(
-                  (Long)p.getProperty(ProductConstants.DATA_SIZE));
+                    (Long)p.getProperty(ProductConstants.DATA_SIZE));
             thumbnail.delete();
          }
       }
@@ -488,21 +487,21 @@ public class ProcessingManager
     * Retrieve product indexes using its Drb node and class.
     */
    private List<MetadataIndex> extractIndexes (DrbNode productNode,
-      DrbCortexItemClass productClass)
+                                               DrbCortexItemClass productClass)
    {
       java.util.Collection<String> properties = null;
 
       // Get all values of the metadata properties attached to the item
       // class or any of its super-classes
       properties =
-         productClass.listPropertyStrings (METADATA_NAMESPACE +
-            PROPERTY_METADATA_EXTRACTOR, false);
+              productClass.listPropertyStrings (METADATA_NAMESPACE +
+                      PROPERTY_METADATA_EXTRACTOR, false);
 
       // Return immediately if no property value were found
       if (properties == null)
       {
          LOGGER.warn ("Item \"" + productClass.getLabel () +
-            "\" has no metadata defined.");
+                 "\" has no metadata defined.");
          return null;
       }
 
@@ -532,7 +531,7 @@ public class ProcessingManager
          catch (Exception e)
          {
             LOGGER.error("Cannot compile metadata extractor " +
-               "(set debug mode to see details)", e);
+                    "(set debug mode to see details)", e);
             if (LOGGER.isDebugEnabled())
             {
                LOGGER.debug(property);
@@ -630,9 +629,9 @@ public class ProcessingManager
                catch (MimeTypeParseException e)
                {
                   LOGGER.warn (
-                     "Wrong metatdata extractor mime type in class \"" +
-                      productClass.getLabel () + "\" for metadata called \"" +
-                      name + "\".", e);
+                          "Wrong metatdata extractor mime type in class \"" +
+                                  productClass.getLabel () + "\" for metadata called \"" +
+                                  name + "\".", e);
                }
                index.setCategory (category);
                index.setValue (value);
@@ -645,11 +644,11 @@ public class ProcessingManager
                if (name != null)
                   field_name = name;
                else
-                  if (queryable != null)
-                     field_name = queryable;
-                  else
-                     if (category != null)
-                        field_name = "of category " + category;
+               if (queryable != null)
+                  field_name = queryable;
+               else
+               if (category != null)
+                  field_name = "of category " + category;
 
                LOGGER.warn ("Nothing extracted for field " + field_name);
             }
@@ -665,7 +664,7 @@ public class ProcessingManager
    long drb_size (File file)
    {
       String variable_name = "product_path";
-      
+
       // Use Drb/XQuery to compute size.
       Query query = new Query(SIZE_QUERY);
       if (query.getEnvironment().containsExternalVariable(variable_name))
@@ -680,20 +679,20 @@ public class ProcessingManager
             {
                // Set it a new value
                var.setValue(new
-                  fr.gael.drb.value.String(file.getAbsolutePath()));
+                       fr.gael.drb.value.String(file.getAbsolutePath()));
             }
          }
       }
       else
-         throw new UnsupportedOperationException ("Cannot set \"" + 
-            variable_name + "\" XQuery parameter.");
-      
+         throw new UnsupportedOperationException ("Cannot set \"" +
+                 variable_name + "\" XQuery parameter.");
+
       DrbSequence sequence = query.evaluate(DrbFactory.openURI("."));
       return ((fr.gael.drb.value.UnsignedLong)sequence.getItem(0).getValue().
-         convertTo(Value.UNSIGNED_LONG_ID)).longValue();
+              convertTo(Value.UNSIGNED_LONG_ID)).longValue();
    }
 
-   
+
    long system_size (File file)
    {
       long size=0;
@@ -710,7 +709,7 @@ public class ProcessingManager
       }
       return size;
    }
-   
+
    long size (File file)
    {
       try
@@ -719,12 +718,12 @@ public class ProcessingManager
       }
       catch (Exception e)
       {
-         LOGGER.warn ("Cannot compute size via Drb API, using system API(" + 
-            e.getMessage() + ").");
+         LOGGER.warn ("Cannot compute size via Drb API, using system API(" +
+                 e.getMessage() + ").");
          return system_size(file);
       }
    }
-   
+
    /**
     * Inner method used to load small ASCII resources that can be stored 
     * into memory. Thios resource shall be store close to this class (same 
@@ -739,13 +738,13 @@ public class ProcessingManager
       try
       {
          InputStream is = closer.register (ProcessingManager.class.
-            getResourceAsStream(resource));
+                 getResourceAsStream(resource));
          contents=IOUtils.toString(is);
       }
       catch (Throwable e)
       {
          throw new UnsupportedOperationException(
-            "Cannot retrieve resource \"" + resource + "\".",e);
+                 "Cannot retrieve resource \"" + resource + "\".",e);
       }
       finally
       {

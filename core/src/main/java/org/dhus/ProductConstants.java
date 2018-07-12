@@ -30,8 +30,6 @@ public interface ProductConstants
    public static final String CHECKSUM_SHA_384 = CHECKSUM_PREFIX + ".SHA-384";
    public static final String CHECKSUM_SHA_512 = CHECKSUM_PREFIX + ".SHA-512";
 
-   public static final String PRODUCT_TYPE_PROPERTY = "PRODUCT_TYPE";
-   public static final String IMAGE_TYPE = "IMAGE";
    // Data
    public static final String DATA_SIZE = "data.size";
 }
