@@ -26,6 +26,7 @@ import org.dhus.store.datastore.config.HfsDataStoreConf;
 import org.dhus.store.datastore.config.OpenStackDataStoreConf;
 import org.dhus.store.datastore.hfs.HfsDataStore;
 import org.dhus.store.datastore.hfs.HfsManager;
+import org.dhus.store.datastore.hfs.IdentityHfsDataStore;
 import org.dhus.store.datastore.hfs.OldIncomingDataStore;
 import org.dhus.store.datastore.openstack.OpenStackDataStore;
 
@@ -35,6 +36,7 @@ final public class DataStoreFactory
    {
       String name = configuration.getName();
       boolean read_only = configuration.isReadOnly();
+      boolean keepInInbox = configuration.isKeepInInbox();
 
       if (configuration instanceof HfsDataStoreConf)
       {
@@ -42,7 +44,10 @@ final public class DataStoreFactory
          String path = conf.getPath();
          int file_no = conf.getMaxFileNo();
 
-         return new HfsDataStore(name, new HfsManager(path, file_no), read_only);
+         if(!keepInInbox)
+            return new HfsDataStore(name, new HfsManager(path, file_no), read_only);
+         else
+            return new IdentityHfsDataStore(name, new HfsManager(path, file_no), read_only);
       }
 
       if (configuration instanceof OpenStackDataStoreConf)
@@ -77,8 +82,12 @@ final public class DataStoreFactory
       {
          fr.gael.dhus.database.object.HfsDataStoreConf conf =
                (fr.gael.dhus.database.object.HfsDataStoreConf) configuration;
-         return new HfsDataStore(conf.getName(), new HfsManager(conf.getPath(),
+         if(!conf.isKeepInInbox())
+            return new HfsDataStore(conf.getName(), new HfsManager(conf.getPath(),
                conf.getMaxFileDepth()), conf.isReadOnly());
+         else
+            return new IdentityHfsDataStore(conf.getName(), new HfsManager(conf.getPath(),
+                    conf.getMaxFileDepth()), conf.isReadOnly());
       }
       else if (configuration instanceof OpenstackDataStoreConf)
       {

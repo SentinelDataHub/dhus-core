@@ -47,6 +47,9 @@ public abstract class DataStoreConfiguration
    @Column(name = "READ_ONLY", columnDefinition = "BOOLEAN", nullable = false)
    private boolean readOnly;
 
+   @Column(name = "KEEP_IN_INBOX", columnDefinition = "BOOLEAN", nullable = false)
+   private boolean keepInInbox;
+
    public Long getId()
    {
       return id;
@@ -75,6 +78,14 @@ public abstract class DataStoreConfiguration
    public void setReadOnly(boolean readOnly)
    {
       this.readOnly = readOnly;
+   }
+
+   public boolean isKeepInInbox() {
+      return keepInInbox;
+   }
+
+   public void setKeepInInbox(boolean keepInInbox) {
+      this.keepInInbox = keepInInbox;
    }
 
    @Override

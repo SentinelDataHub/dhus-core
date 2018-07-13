@@ -58,9 +58,9 @@ public class ProductFactory
             protected Class<?>[] implsTypes()
             {
                return new Class[]
-               {
-                  InputStream.class
-               };
+                       {
+                               InputStream.class
+                       };
             }
 
             @Override
