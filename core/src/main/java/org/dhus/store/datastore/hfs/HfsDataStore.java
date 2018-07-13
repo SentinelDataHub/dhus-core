@@ -120,28 +120,8 @@ public class HfsDataStore extends AbstractDataStore
             }
          }
          else
-         {
-            if (source.isDirectory())
-            {
-               FileUtils.copyDirectory(source, dest);
-            }
-            else
-            {
-               String[] algorithms = SUPPORTED_ALGORITHMS.split(",");
-               try (MultipleDigestOutputStream outputStream =
-                            new MultipleDigestOutputStream(new FileOutputStream(dest), algorithms))
-               {
-                  // store and compute checksum
-                  FileUtils.copyFile(source, outputStream);
-                  extractAndSetChecksum(outputStream, algorithms, product);
-               }
-               catch (NoSuchAlgorithmException e)
-               {
-                  // Should be never happen
-                  throw new IOException("Invalid supported algorithms !", e);
-               }
-            }
-         }
+            copyAndProcessFile(product, source, dest);
+
 
          product.setProperty(ProductConstants.DATA_SIZE, dest.length());
          return HfsDataStoreUtils.generateResource(hfs.getPath(), dest.getAbsolutePath());
@@ -150,21 +130,7 @@ public class HfsDataStore extends AbstractDataStore
       // Case of source file not supported
       if (product.hasImpl(InputStream.class))
       {
-         String[] algorithms = SUPPORTED_ALGORITHMS.split(",");
-         try (InputStream source = product.getImpl(InputStream.class))
-         {
-            try (MultipleDigestOutputStream bos =
-                         new MultipleDigestOutputStream(new FileOutputStream(dest), algorithms))
-            {
-               IOUtils.copy(source, bos);
-               extractAndSetChecksum(bos, algorithms, product);
-            }
-            catch (NoSuchAlgorithmException e)
-            {
-               // Should be never happen
-               throw new IOException("Invalid supported algorithms !", e);
-            }
-         }
+         extractAndProcessStream(product, dest);
 
          // Move is not possible for input streams: at least raise a warning
          if (move)
@@ -177,6 +143,47 @@ public class HfsDataStore extends AbstractDataStore
       // Case of data is not a SPI or it does not support both File and InputStream accesses (unlikely)
       throw new IOException("Input product \"" + product.getName() +
               "\" has no defined implementation for access.");
+   }
+
+   protected void extractAndProcessStream(Product product, File dest) throws IOException {
+      String[] algorithms = SUPPORTED_ALGORITHMS.split(",");
+      try (InputStream source = product.getImpl(InputStream.class))
+      {
+         try (MultipleDigestOutputStream bos =
+                      new MultipleDigestOutputStream(new FileOutputStream(dest), algorithms))
+         {
+            IOUtils.copy(source, bos);
+            extractAndSetChecksum(bos, algorithms, product);
+         }
+         catch (NoSuchAlgorithmException e)
+         {
+            // Should be never happen
+            throw new IOException("Invalid supported algorithms !", e);
+         }
+      }
+   }
+
+   protected void copyAndProcessFile(Product product, File source, File dest) throws IOException {
+      if (source.isDirectory())
+      {
+         FileUtils.copyDirectory(source, dest);
+      }
+      else
+      {
+         String[] algorithms = SUPPORTED_ALGORITHMS.split(",");
+         try (MultipleDigestOutputStream outputStream =
+                      new MultipleDigestOutputStream(new FileOutputStream(dest), algorithms))
+         {
+            // store and compute checksum
+            FileUtils.copyFile(source, outputStream);
+            extractAndSetChecksum(outputStream, algorithms, product);
+         }
+         catch (NoSuchAlgorithmException e)
+         {
+            // Should be never happen
+            throw new IOException("Invalid supported algorithms !", e);
+         }
+      }
    }
 
    @Override
