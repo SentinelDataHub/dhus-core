@@ -1,16 +1,30 @@
+/*
+ * Data Hub Service (DHuS) - For Space data distribution.
+ * Copyright (C) 2015-2018 GAEL Systems
+ *
+ * This file is part of DHuS software sources.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 package fr.gael.dhus.database.dao;
 
 import java.math.BigInteger;
 import java.net.MalformedURLException;
-import java.net.URL;
 import java.sql.SQLException;
 import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.hibernate.HibernateException;
 import org.hibernate.Query;
@@ -26,12 +40,11 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 
 import fr.gael.dhus.database.dao.interfaces.HibernateDao;
-import fr.gael.dhus.database.object.Collection;
 import fr.gael.dhus.database.object.MetadataIndex;
 import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.Product.Download;
 import fr.gael.dhus.database.object.User;
-import fr.gael.dhus.util.CheckIterator;
+import fr.gael.dhus.factory.MetadataFactory;
 import fr.gael.dhus.util.TestContextLoader;
 
 @ContextConfiguration (
@@ -43,9 +56,6 @@ public class TestProductDao extends TestAbstractHibernateDao<Product, Long>
 
    @Autowired
    private ProductDao dao;
-
-   @Autowired
-   private UserDao udao;
 
    @Override
    protected HibernateDao<Product, Long> getHibernateDao ()
@@ -67,25 +77,13 @@ public class TestProductDao extends TestAbstractHibernateDao<Product, Long>
       String indexCategory = "category";
       String indexValue = "test";
 
-      MetadataIndex mi = new MetadataIndex ();
-      mi.setName (indexName);
-      mi.setCategory (indexCategory);
-      mi.setQueryable (null);
-      mi.setValue (indexValue);
+      MetadataIndex mi = MetadataFactory.createMetadataIndex(indexName, null, indexCategory, null, indexValue);
 
       Product product = new Product ();
       product.setIdentifier (identifier);
       product.setLocked (false);
-      product.setProcessed (true);
       product.setIndexes (Arrays.asList (mi));
-      try
-      {
-         product.setPath (new URL ("file:/titi/tata"));
-      }
-      catch (MalformedURLException e)
-      {
-         Assert.fail (e.getMessage (), e);
-      }
+      product.setOnline(true);
 
       Product createdProduct = dao.create (product);
       Assert.assertNotNull (createdProduct);
@@ -157,194 +155,25 @@ public class TestProductDao extends TestAbstractHibernateDao<Product, Long>
   public void delete ()
    {
       cancelListeners (getHibernateDao ());
-      
+
       Long pid = Long.valueOf (6L);
       Product product = dao.read (pid);
       Assert.assertNotNull (product);
-      Set<User> authorizedUsers = product.getAuthorizedUsers ();
-      
+
       List<MetadataIndex> indexes = product.getIndexes ();
       Assert.assertNotNull (indexes);
       Assert.assertFalse (indexes.isEmpty ());
-      Assert.assertFalse (authorizedUsers.isEmpty ());
 
       dao.delete (product);
       getHibernateDao ().getSessionFactory ().getCurrentSession ().flush ();
-      
+
       Assert.assertNull (dao.read (pid));
       Assert.assertEquals (countElements ("METADATA_INDEXES", pid), 0);
       Assert.assertEquals (countElements ("CHECKSUMS", pid), 0);
-
-      for (User user : authorizedUsers)
-      {
-         Assert.assertNotNull (udao.read (user.getUUID ()));
-      }
-   }
-   
-   @Override
-   public void scroll ()
-   {
-      String hql = "WHERE processed IS TRUE";
-      Iterator<Product> it = dao.scroll (hql, -1, -1).iterator ();
-      Assert.assertTrue (CheckIterator.checkElementNumber (it, 4));
    }
 
    @Override
-   public void first ()
-   {
-      String hql = "FROM Product WHERE processed IS FALSE ORDER BY id DESC";
-      Product product = dao.first (hql);
-      Assert.assertNotNull (product);
-      Assert.assertEquals (product.getId ().intValue (), 4);
-   }
-
-   @Test
-   public void exists ()
-   {
-      boolean bool;
-      String path;
-      try
-      {
-         path = "file:/home/lambert/test/prod0";
-         bool = dao.exists (new URL (path));
-         Assert.assertTrue (bool,
-               "product with path '" + path + "' should be" + "exists");
-
-         path = "file:/home/lambert/test/product999";
-         bool = dao.exists (new URL (path));
-         Assert.assertFalse (bool,
-               "product with path '" + path + "' should be npt exists");
-      }
-      catch (MalformedURLException e)
-      {
-         Assert.fail ("Error: malformed URL", e);
-      }
-   }
-
-   @Test
-   public void getAuthorizedProduct ()
-   {
-      String uid;
-      List<Long> expected;
-      List<Long> products;
-
-      uid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0";
-      expected = Arrays.asList (0L, 5L, 6L, 7L);
-      products = dao.getAuthorizedProducts (uid);
-      Assert.assertEquals (products.size (), expected.size ());
-      Assert.assertTrue (products.containsAll (expected));
-   }
-
-   private User emulateUser (String uid, String username)
-   {
-      User user = new User ();
-      user.setUUID (uid);
-      user.setUsername (username);
-      return user;
-   }
-
-   @Test
-   public void getNoCollectionProducts ()
-   {
-      String uid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0";
-      long expectedPid1 = 6;
-      long expectedPid2 = 7;
-
-      List<Product> products =
-            dao.getNoCollectionProducts (emulateUser (uid, "koko"));
-      Assert.assertEquals (products.size (), 2);
-      Assert.assertEquals (products.get (0).getId ().intValue (), expectedPid1);
-      Assert.assertEquals (products.get (1).getId ().intValue (), expectedPid2);
-   }
-   
-   @Test
-   public void count ()
-   {
-      Assert.assertEquals (dao.count(null, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3"), 1);
-   }
-
-   @Test
-   public void getOwerOfProduct ()
-   {
-      User expectedUser = new User ();
-      expectedUser.setUsername ("koko");
-      
-      Product product = dao.read (0L);
-      Assert.assertNotNull (product);
-      
-      User user = dao.getOwnerOfProduct (product);
-      // To be sure that both are equals...
-      expectedUser.setUUID (user.getUUID ());
-
-      Assert.assertNotNull (user);
-      Assert.assertTrue (user.equals (expectedUser), 
-         "User " + user.getUsername () + "#" + user.getUUID() + 
-         " not expected (" + expectedUser.getUsername () + "#" + 
-         expectedUser.getUUID () + ").");
-
-      product = dao.read (6L);
-      user = dao.getOwnerOfProduct (product);
-      Assert.assertNull (user);
-   }
-
-   @Test
-   public void getProductByDownloadableFilename ()
-   {
-      fr.gael.dhus.database.object.Collection validCollection;
-      fr.gael.dhus.database.object.Collection invalidCollection;
-      Product product;
-
-      validCollection = new Collection ();
-      validCollection.setUUID ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3");
-      validCollection.setName ("Japan");
-
-      invalidCollection = new Collection ();
-      invalidCollection.setUUID ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa4");
-      invalidCollection.setName ("China");
-
-      product = dao.getProductByDownloadableFilename("prod0",validCollection);
-      Assert.assertNotNull(product);
-      Assert.assertEquals(product.getId ().intValue(), 0);
-
-      product = dao.getProductByDownloadableFilename("prod6",validCollection);
-      Assert.assertNull(product);
-
-      product = dao.getProductByDownloadableFilename("prod0",invalidCollection);
-      Assert.assertNull (product);
-
-      product = dao.getProductByDownloadableFilename("prod6",null);
-      Assert.assertNotNull(product);
-      Assert.assertEquals(product.getId ().intValue (), 6);
-
-      product = dao.getProductByDownloadableFilename (null, null);
-      Assert.assertNull (product);
-   }
-
-   @Test
-   public void getProductByPath ()
-   {
-      URL valid = null;
-      URL invalid = null;
-      try
-      {
-         valid = new URL ("file:/home/lambert/test/prod5");
-         invalid = new URL ("file:/home/lambert/test/prod512");
-      }
-      catch (MalformedURLException e)
-      {
-         Assert.fail ("Malformed URL !", e);
-      }
-
-      Product product = dao.getProductByPath (valid);
-      Assert.assertNotNull (product);
-      Assert.assertEquals (product.getId ().intValue (), 5);
-
-      product = dao.getProductByPath (invalid);
-      Assert.assertNull (product);
-
-      product = dao.getProductByPath (null);
-      Assert.assertNull (product);
-   }
+   public void first () {}
 
    @Test
    public void getProductByUuid ()
@@ -355,60 +184,39 @@ public class TestProductDao extends TestAbstractHibernateDao<Product, Long>
       user.setUUID ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0");
       user.setUsername ("koko");
 
-      Product product = dao.getProductByUuid (valid);
+      Product product = dao.getProductByUuid(valid);
       Assert.assertNotNull (product);
       Assert.assertEquals (product.getId ().intValue (), 6);
 
-      product = dao.getProductByUuid (invalid);
+      product = dao.getProductByUuid(invalid);
       Assert.assertNull (product);
 
-      product = dao.getProductByUuid (valid);
+      product = dao.getProductByUuid(valid);
       Assert.assertNotNull (product);
       Assert.assertEquals (product.getId ().intValue (), 6);
 
-      product = dao.getProductByUuid (null);
+      product = dao.getProductByUuid(null);
       Assert.assertNull (product);
-   }
-
-   @Test
-   public void isAuthorized ()
-   {
-      Assert.assertTrue (dao.isAuthorized ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0", 0));
-      Assert.assertTrue (dao.isAuthorized ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", 0));
-      Assert.assertTrue (dao.isAuthorized ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2", 0));
-      Assert.assertTrue (dao.isAuthorized ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3", 0));
-      
-      Assert.assertTrue (dao.isAuthorized ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0", 1));
-      Assert.assertTrue (dao.isAuthorized ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2", 1));
-      Assert.assertTrue (dao.isAuthorized ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3", 1));
-      
-      // Unknown user
-      Assert.assertFalse (dao.isAuthorized ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1000", 1));
-      // Unknown product
-      Assert.assertFalse (dao.isAuthorized ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", 1000));
    }
 
    // TODO merge others test
-   
+
    @Test (groups={"non-regression"})
    public void testChecksumUpdate () throws MalformedURLException
    {
       Product product = new Product ();
-      product.setPath (new URL ("file:/product/path"));
-      
+      product.setOnline(true);
+
       Download download = new Product.Download ();
-      download.setPath ("/no/path/file");
-      download.setSize (0L);
       download.setType ("application/octet-stream");
       download.setChecksums (
          Maps.newHashMap (ImmutableMap.of(
-            "MD5", "54ABCDEF98765", 
+            "MD5", "54ABCDEF98765",
             "SHA-1", "9876FEDCBA1234")));
-      
+
       product.setDownload (download);
-      
-      
-      // First create the defined product: 
+
+      // First create the defined product:
       try
       {
          product = dao.create (product);
@@ -417,14 +225,14 @@ public class TestProductDao extends TestAbstractHibernateDao<Product, Long>
       {
          Assert.fail ("Creation of product fails", e);
       }
-      
+
       /**
        * Clear/putAll feature testing
        */
       product.getDownload ().getChecksums ().clear ();
       product.getDownload ().getChecksums ().putAll (
          Maps.newHashMap (ImmutableMap.of(
-            "SHA-256", "4554ABCDEF98765", 
+            "SHA-256", "4554ABCDEF98765",
             "SHA-512", "ABDEFFE9876FEDCBA1234")));
       try
       {
@@ -434,13 +242,13 @@ public class TestProductDao extends TestAbstractHibernateDao<Product, Long>
       {
          Assert.fail ("Modifying checksums with map clear/put fails", e);
       }
-      
+
       /**
        * Set feature testing
        */
       product.getDownload ().setChecksums (
          Maps.newHashMap (ImmutableMap.of(
-            "MD5", "54ABCDEF98765", 
+            "MD5", "54ABCDEF98765",
             "SHA-1", "9876FEDCBA1234")));
       try
       {
@@ -450,13 +258,13 @@ public class TestProductDao extends TestAbstractHibernateDao<Product, Long>
       {
          Assert.fail ("Modifying checksums with \"set\" fails", e);
       }
-      
+
       /**
        * Remove residuals for this test
        */
       cancelListeners (getHibernateDao ());
       dao.delete (product);
-      
+
    }
-   
+
 }

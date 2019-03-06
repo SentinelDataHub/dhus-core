@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2015-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -43,13 +43,13 @@ import org.apache.olingo.odata2.api.edm.provider.SimpleProperty;
 import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.olingo.Security;
+import fr.gael.dhus.olingo.v1.Expander;
 import fr.gael.dhus.olingo.v1.Model;
 import fr.gael.dhus.olingo.v1.entity.Connection;
 import fr.gael.dhus.olingo.v1.entity.AbstractEntity;
 import fr.gael.dhus.olingo.v1.map.impl.ConnectionMap;
 import fr.gael.dhus.server.http.valve.AccessValve;
 import java.util.Map;
-import java.util.UUID;
 import org.apache.olingo.odata2.api.uri.KeyPredicate;
 
 public class ConnectionEntitySet extends AbstractEntitySet<Connection>
@@ -196,7 +196,20 @@ public class ConnectionEntitySet extends AbstractEntitySet<Connection>
    @Override
    public AbstractEntity getEntity(KeyPredicate kp)
    {
-      UUID key = UUID.fromString(kp.getLiteral());
+      String key = kp.getLiteral();
       return (new ConnectionMap()).get(key);
+   }
+
+   @Override
+   public List<String> getExpandableNavLinkNames()
+   {
+      return Collections.singletonList("User");
+   }
+
+   @Override
+   public List<Map<String, Object>> expand(String navlink_name, String self_url,
+         Map<?, AbstractEntity> entities, Map<String, Object> key)
+   {
+      return Expander.expandFeedSingletonKey(navlink_name, self_url, entities, key, ConnectionEntitySet.ID);
    }
 }

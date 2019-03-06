@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -28,6 +28,7 @@ import fr.gael.dhus.olingo.v1.map.SubMap;
 import fr.gael.dhus.olingo.v1.map.SubMapBuilder;
 import fr.gael.dhus.service.CollectionService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.util.functional.IteratorAdapter;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -100,7 +101,7 @@ public final class CollectionProductsMap extends
          {
             return null;
          }
-         return new Product(product);
+         return Product.generateProduct(product);
       }
       catch (Exception e)
       {
@@ -116,7 +117,7 @@ public final class CollectionProductsMap extends
       {
          Iterator<fr.gael.dhus.database.object.Product> it =
                olingoManager.getProducts(collectionUUID, filter, orderBy, skip, top).iterator();
-         return new ODataEntityIterator<>(it, fr.gael.dhus.database.object.Product.class, Product.class);
+         return new IteratorAdapter<>(it, Product::generateProduct);
       }
       catch (Exception e)
       {

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -34,6 +34,8 @@ import javax.persistence.Entity;
 @DiscriminatorValue ("temporary")
 public class TmpUserLockedAccessRestriction extends LockedAccessRestriction
 {
+   private static final long serialVersionUID = 1L;
+
    @Column (name = "CREATION")
    private Date lockDate;
 

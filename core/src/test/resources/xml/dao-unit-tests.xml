@@ -1,24 +1,41 @@
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2014,2015,2017 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
 
 <suite name="Database Suite Test" verbose="1" parallel="false">
 
-	<test name="Entities Test">
-		<classes>
+   <test name="Entities Test">
+      <classes>
 
-        </classes>
-	</test>
+      </classes>
+   </test>
 
-	<test name="Data Access Objects Test" preserve-order="true">
-		<classes>
-			<class name="fr.gael.dhus.database.dao.TestAccessRestrictionDao" />
-			<class name="fr.gael.dhus.database.dao.TestCollectionDao" />
-			<class name="fr.gael.dhus.database.dao.TestEvictionDao" />
-			<class name="fr.gael.dhus.database.dao.TestFileScannerDao" />
-			<class name="fr.gael.dhus.database.dao.TestNetworkUsageDao" />
-			<class name="fr.gael.dhus.database.dao.TestProductCartDao" />
-			<class name="fr.gael.dhus.database.dao.TestProductDao" />
-			<class name="fr.gael.dhus.database.dao.TestSearchDao" />
-			<class name="fr.gael.dhus.database.dao.TestUserDao" />
-		</classes>
-	</test>
+   <test name="Data Access Objects Test" preserve-order="true">
+      <classes>
+         <class name="fr.gael.dhus.database.dao.TestAccessRestrictionDao" />
+         <class name="fr.gael.dhus.database.dao.TestCollectionDao" />
+         <class name="fr.gael.dhus.database.dao.TestNetworkUsageDao" />
+         <class name="fr.gael.dhus.database.dao.TestProductCartDao" />
+         <class name="fr.gael.dhus.database.dao.TestProductDao" />
+         <class name="fr.gael.dhus.database.dao.TestSearchDao" />
+         <class name="fr.gael.dhus.database.dao.TestUserDao" />
+      </classes>
+   </test>
 </suite>

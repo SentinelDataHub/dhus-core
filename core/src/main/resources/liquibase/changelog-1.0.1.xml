@@ -48,7 +48,12 @@
       </createTable>
    </changeSet>
 
-   <changeSet id="persistent-DataStore-autoIncrementId" author="tdegueurce">
+   <changeSet id="persistent-DataStore-autoIncrementId" author="tdegueurce" dbms="hsqldb">
+      <preConditions onFail="MARK_RAN" onFailMessage="change already applied">
+         <sqlCheck expectedResult="0">
+            select count(*) from DATABASECHANGELOG where ID LIKE 'persistent-DataStore-autoIncrementId'
+         </sqlCheck>
+      </preConditions>
       <addAutoIncrement
          columnDataType="BIGINT"
          columnName="ID"
@@ -56,12 +61,33 @@
          tableName="DATASTORE_CONF"/>
    </changeSet>
 
+   <changeSet id="persistent-DataStore-autoIncrementId" author="patrick" dbms="postgresql">
+      <preConditions onFail="MARK_RAN" onFailMessage="change already applied">
+         <sqlCheck expectedResult="0">
+            select count(*) from DATABASECHANGELOG where ID LIKE 'persistent-DataStore-autoIncrementId'
+         </sqlCheck>
+      </preConditions>
+      <sql>
+         CREATE SEQUENCE datastore_id_seq;
+         ALTER TABLE DATASTORE_CONF alter COLUMN id set default nextval('datastore_id_seq');
+      </sql>
+   </changeSet>
+
    <changeSet id="addInsertionDateColumn" author="tdegueurce">
+      <preConditions onFail="MARK_RAN" onFailMessage="change already applied">
+         <sqlCheck expectedResult="0">
+            select count(*) from DATABASECHANGELOG where ID LIKE 'addInsertionDateColumn'
+         </sqlCheck>
+      </preConditions>
       <addColumn tableName="KEYSTOREENTRIES">
          <column name="INSERTIONDATE" type="BIGINT" defaultValue="0">
             <constraints nullable="false"/>
          </column>
       </addColumn>
+   </changeSet>
+
+   <changeSet author="nico" id="removeSymDSTables" dbms="hsqldb">
+      <customChange class="fr.gael.dhus.database.liquibase.RemoveSymDSTables" />
    </changeSet>
 
    <changeSet id="removeDatabaseBLOB" author="julien">

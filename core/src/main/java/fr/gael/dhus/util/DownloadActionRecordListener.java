@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,32 +19,25 @@
  */
 package fr.gael.dhus.util;
 
-import java.util.Date;
+import static org.apache.logging.log4j.util.Unbox.*;
+
+import fr.gael.dhus.database.object.User;
 
 import org.apache.commons.net.io.CopyStreamAdapter;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-
-import fr.gael.dhus.database.object.User;
-
-/**
- * @author pidancier
- *
- */
 public class DownloadActionRecordListener extends CopyStreamAdapter
 {
-   private static final Logger LOGGER = LogManager.getLogger(DownloadActionRecordListener.class);
-   private String uuid;
-   private String identifier;
-   private User user;
-   private boolean started=false;
-   private boolean failed = false;
+   private static final Logger LOGGER = LogManager.getLogger();
+
+   private final String uuid;
+   private final String identifier;
+   private final User user;
+   private boolean started = false;
    private long start;
-   
+
    public DownloadActionRecordListener(String uuid,String identifier,User user)
    {
       this.uuid = uuid;
@@ -53,40 +46,29 @@ public class DownloadActionRecordListener extends CopyStreamAdapter
    }
 
    @Override
-   @Transactional (propagation=Propagation.REQUIRED)
-   public void bytesTransferred (long total_bytes_transferred,
-      int bytes_transferred, long stream_size)
+   public void bytesTransferred(long total_bytes_transferred, int bytes_transferred, long stream_size)
    {
-      if ((total_bytes_transferred==bytes_transferred) && !started)
+      if ((total_bytes_transferred == bytes_transferred) && !started)
       {
-         start = new Date ().getTime ();
-         started=true;
-         LOGGER.info("Product '" + this.uuid +
-            "' ("+ this.identifier + ") "+
-               "download by user '" + user.getUsername () +
-            "' started -> " + stream_size);
+         start = System.currentTimeMillis();
+         started = true;
+         LOGGER.info("Product '{}' ({}) download by user '{}' started -> {}",
+               this.uuid, this.identifier, user.getUsername(), box(stream_size));
          return;
       }
-      
+
       if (bytes_transferred == -1)
       {
-         if (total_bytes_transferred==stream_size)
+         long end = System.currentTimeMillis() - start;
+         if (total_bytes_transferred == stream_size)
          {
-            long end = new Date ().getTime ();
-            LOGGER.info("Product '" + this.uuid +
-               "' ("+ this.identifier + ") " +
-                  "download by user '" + user.getUsername () +
-               "' completed in "+ (end-start) + "ms -> " + stream_size);
+            LOGGER.info("Product '{}' ({}) download by user '{}' completed in {}ms -> {}",
+                  this.uuid, this.identifier, user.getUsername(), box(end), box(stream_size));
          }
-         else if (!failed)
+         else
          {
-            failed=true;
-            long end = new Date ().getTime ();
-            LOGGER.info("Product '" + this.uuid +
-               "' ("+ this.identifier + ") " +
-                  "download by user '" + user.getUsername () +
-               "' failed at " + total_bytes_transferred + "/" + stream_size +
-               " in "+ (end-start) + "ms ");
+            LOGGER.info("Product '{}' ({}) download by user '{}' failed at {}/{} in {}ms",
+                  this.uuid, this.identifier, user.getUsername(), box(total_bytes_transferred), box(stream_size), box(end));
          }
       }
    }

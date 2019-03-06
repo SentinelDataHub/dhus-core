@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2017,2018 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<databaseChangeLog
+   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
+
+   <changeSet author="rtchokonte" id="dropMetadataPrimaryKey">
+      <preConditions onFail="MARK_RAN" onFailMessage="change already apply">
+         <primaryKeyExists tableName="METADATA_INDEXES" />
+      </preConditions>
+      <dropPrimaryKey tableName="METADATA_INDEXES" />
+   </changeSet>
+
+   <changeSet author="nico" id="defrag1" dbms="hsqldb">
+      <sql>CHECKPOINT DEFRAG;</sql>
+   </changeSet>
+
+   <changeSet author="rtchokonte" id="createNewMetadataPrimaryKey">
+      <addPrimaryKey
+         columnNames="PRODUCT_ID, NAME"
+         constraintName="SYS_PK_10229"
+         tableName="METADATA_INDEXES" />
+   </changeSet>
+
+   <changeSet author="nico" id="defrag2" dbms="hsqldb">
+      <sql>CHECKPOINT DEFRAG;</sql>
+   </changeSet>
+
+   <changeSet id="addTagColumn" author="tdegueurce">
+      <addColumn tableName="KEYSTOREENTRIES">
+         <column name="TAG" type="VARCHAR(255)" defaultValue="unaltered">
+            <constraints nullable="false"/>
+         </column>
+      </addColumn>
+
+      <dropPrimaryKey tableName="KEYSTOREENTRIES"/>
+      <addPrimaryKey columnNames="KEYSTORE,ENTRYKEY,TAG" constraintName="SYS_PK_10578" tableName="KEYSTOREENTRIES"/>
+      <createIndex tableName="KEYSTOREENTRIES" indexName="IDX_ENTRYKEY">
+         <column name="ENTRYKEY" />
+      </createIndex>
+      <customChange class="fr.gael.dhus.database.liquibase.MigrateKeyStoreDerivedProducts"/>
+      <dropIndex tableName="KEYSTOREENTRIES" indexName="IDX_ENTRYKEY" />
+   </changeSet>
+
+   <!-- Store quotas -->
+   <changeSet author="john" id="createTableStoreQuotas">
+      <createTable tableName="STORE_QUOTAS">
+         <column name="STORE_NAME" type="VARCHAR(64)" />
+         <column name="QUOTA_NAME" type="VARCHAR(64)" />
+         <column name="USER_UUID"  type="VARCHAR(36)" />
+         <column name="IDENTIFIER" type="VARCHAR(255)" />
+         <column name="DATETIME"   type="TIMESTAMP" />
+      </createTable>
+      <addPrimaryKey tableName="STORE_QUOTAS" constraintName="PK_STORE_QUOTAS" columnNames="STORE_NAME, QUOTA_NAME, USER_UUID, IDENTIFIER" />
+      <addForeignKeyConstraint constraintName="FK_STORE_QUOTA_USER_UUID"
+            baseTableName="STORE_QUOTAS" baseColumnNames="USER_UUID"
+            referencedTableName="USERS" referencedColumnNames="UUID"
+            onDelete="CASCADE" onUpdate="CASCADE" />
+   </changeSet>
+
+   <changeSet author="nico" id="removeAuthorizedUsersTables">
+      <dropTable tableName="COLLECTION_USER_AUTH"/>
+      <dropTable tableName="PRODUCT_USER_AUTH"/>
+   </changeSet>
+
+   <changeSet author="nico" id="removePublicDataUser">
+      <customChange class="fr.gael.dhus.database.liquibase.RemovePublicDataUser" />
+   </changeSet>
+
+   <changeSet author="nico, julien" id="removeUsersFromProduct-part1">
+      <preConditions onFail="MARK_RAN" onFailMessage="no change to apply">
+         <foreignKeyConstraintExists foreignKeyTableName="PRODUCTS" foreignKeyName="FK2DE06158D6F7C3F" />
+      </preConditions>
+      <dropForeignKeyConstraint baseTableName="PRODUCTS" constraintName="FK2DE06158D6F7C3F"/>
+   </changeSet>
+   <changeSet id="removeUsersFromProduct-part2" author="nico, julien">
+      <dropColumn tableName="PRODUCTS" columnName="OWNER_UUID"/>
+      <sql dbms="hsqldb">CHECKPOINT DEFRAG;</sql>
+   </changeSet>
+
+   <changeSet author="nico" id="removeDeletedUser">
+      <customChange class="fr.gael.dhus.database.liquibase.RemoveDeletedUser" />
+      <dropColumn tableName="USERS" columnName="DELETED"/>
+   </changeSet>
+</databaseChangeLog>

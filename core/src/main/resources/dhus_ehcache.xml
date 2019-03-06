@@ -83,6 +83,17 @@
       <persistence strategy="none" />
    </cache>
 
+   <cache name="current_quotas"
+          eternal="false"
+          maxEntriesLocalHeap="10000"
+          maxEntriesLocalDisk="1000"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600"
+          memoryStoreEvictionPolicy="LFU">
+      <cacheEventListenerFactory class="fr.gael.dhus.util.LoggingCacheListenerForQuotas" />
+      <persistence strategy="none" />
+   </cache>
+
    <cache name="user_requests"
           maxElementsInMemory="1000"
           eternal="false"
@@ -92,4 +103,16 @@
       <cacheEventListenerFactory class="fr.gael.dhus.util.LoggingCacheListenerFactory" />
       <persistence strategy="none"/>
    </cache>
+
+   <cache name="security_context"
+          eternal="false"
+          maxEntriesLocalHeap="30000"
+          maxEntriesLocalDisk="3000"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600"
+          memoryStoreEvictionPolicy="LFU">
+      <cacheEventListenerFactory class="fr.gael.dhus.util.LoggingCacheListenerFactory" />
+      <persistence strategy="none" />
+   </cache>
+
 </ehcache>

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2015-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,25 +22,25 @@ package fr.gael.dhus.olingo.v1.entity;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.io.WKTReader;
 
-import fr.gael.dhus.database.object.SynchronizerConf;
+import fr.gael.dhus.database.object.config.synchronizer.ProductSynchronizer;
 import fr.gael.dhus.olingo.v1.ExpectedException;
 import fr.gael.dhus.olingo.v1.ExpectedException.IncompleteDocException;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidTargetException;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidValueException;
 import fr.gael.dhus.olingo.v1.ExpectedException.NoTargetException;
-import fr.gael.dhus.olingo.v1.Navigator;
 import fr.gael.dhus.olingo.v1.Model;
+import fr.gael.dhus.olingo.v1.Navigator;
 import fr.gael.dhus.olingo.v1.entityset.SynchronizerEntitySet;
 import fr.gael.dhus.service.CollectionService;
 import fr.gael.dhus.service.ISynchronizerService;
 import fr.gael.dhus.service.exception.InvokeSynchronizerException;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.sync.SynchronizerStatus;
+import fr.gael.dhus.util.XmlProvider;
 
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +49,7 @@ import java.util.Objects;
 import java.util.StringTokenizer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.xml.datatype.XMLGregorianCalendar;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -64,6 +65,8 @@ import org.apache.olingo.odata2.api.uri.PathSegment;
 import org.apache.olingo.odata2.api.uri.UriInfo;
 import org.apache.olingo.odata2.api.uri.UriParser;
 
+import org.quartz.CronExpression;
+
 /**
  * Synchronizer OData Entity.
  */
@@ -73,7 +76,7 @@ public final class Synchronizer extends AbstractEntity
    private static final Logger LOGGER = LogManager.getLogger(Synchronizer.class);
 
    /** Database Object. */
-   private final SynchronizerConf syncConf;
+   private final ProductSynchronizer syncConf;
 
    /** Synchronizer Service, to create new {@link SynchronizerConf}. */
    private static final ISynchronizerService SYNCHRONIZER_SERVICE =
@@ -91,18 +94,18 @@ public final class Synchronizer extends AbstractEntity
     */
    public Synchronizer (long sync_id)
    {
-      this (SYNCHRONIZER_SERVICE.getSynchronizerConfById (sync_id));
+      this(SYNCHRONIZER_SERVICE.getSynchronizerConfById(sync_id, ProductSynchronizer.class));
    }
 
    /**
     * Creates a new Synchronizer from a database object.
-    * 
-    * @param sync_conf database object.
+    *
+    * @param productSynchronizer database object.
     */
-   public Synchronizer (SynchronizerConf sync_conf)
+   public Synchronizer(ProductSynchronizer productSynchronizer)
    {
-      Objects.requireNonNull (sync_conf);
-      this.syncConf = sync_conf;
+      Objects.requireNonNull(productSynchronizer);
+      this.syncConf = productSynchronizer;
    }
 
    /**
@@ -135,13 +138,42 @@ public final class Synchronizer extends AbstractEntity
       try
       {
          this.syncConf =
-            SYNCHRONIZER_SERVICE.createSynchronizer (label,
-               "ODataProductSynchronizer", schedule);
+               SYNCHRONIZER_SERVICE.createSynchronizer(label, schedule, ProductSynchronizer.class);
+         setDefaults(odata_entry);
          updateFromEntry (odata_entry);
       }
-      catch (ParseException e)
+      catch (ParseException | ReflectiveOperationException e)
       {
          throw new ExpectedException(e.getMessage());
+      }
+   }
+
+   /**
+    * Called by {@link #Synchronizer(ODataEntry)}, sets the default values for null properties
+    * from the create document.
+    *
+    * @param odataEntry create OData document
+    */
+   private void setDefaults(ODataEntry odataEntry)
+   {
+      Map<String, Object> props = odataEntry.getProperties ();
+
+      Boolean copyProduct = (Boolean) props.get(SynchronizerEntitySet.COPY_PRODUCT);
+      if (copyProduct == null)
+      {
+         this.syncConf.setCopyProduct(Boolean.FALSE);
+      }
+
+      Integer page_size = (Integer) props.get(SynchronizerEntitySet.PAGE_SIZE);
+      if (page_size == null)
+      {
+         this.syncConf.setPageSize(30);
+      }
+
+      Boolean skipOnError = (Boolean) props.get(SynchronizerEntitySet.SKIP_ON_ERROR);
+      if (skipOnError == null)
+      {
+         this.syncConf.setSkipOnError(Boolean.TRUE);
       }
    }
 
@@ -152,14 +184,14 @@ public final class Synchronizer extends AbstractEntity
     */
    public Collection getTargetCollection () throws ODataException
    {
-      String target = this.syncConf.getConfig ("target_collection");
+      String target = this.syncConf.getTargetCollection();
       if (target == null)
       {
          return null;
       }
 
       fr.gael.dhus.database.object.Collection c =
-         COLLECTION_SERVICE.getCollection (target);
+         COLLECTION_SERVICE.systemGetCollectionByName (target);
       if (c == null)
       {
          throw new ODataException (
@@ -189,6 +221,7 @@ public final class Synchronizer extends AbstractEntity
       String service_url = (String) props.remove(SynchronizerEntitySet.SERVICE_URL);
       Integer page_size = (Integer) props.remove(SynchronizerEntitySet.PAGE_SIZE);
       Boolean copy_product = (Boolean) props.remove(SynchronizerEntitySet.COPY_PRODUCT);
+      Boolean skipOnError = (Boolean) props.remove(SynchronizerEntitySet.SKIP_ON_ERROR);
 
       // Nullable fields
       boolean has_label = props.containsKey(SynchronizerEntitySet.LABEL);
@@ -219,6 +252,9 @@ public final class Synchronizer extends AbstractEntity
          LOGGER.debug ("Unknown or ReadOnly property: " + pname);
       }
 
+      // To avoid any side effects
+      SYNCHRONIZER_SERVICE.deactivateSynchronizer(this.syncConf.getId());
+
       if (request != null)
       {
          if (request.equals ("start"))
@@ -239,7 +275,8 @@ public final class Synchronizer extends AbstractEntity
       {
          try
          {
-            this.syncConf.setCronExpression (schedule);
+             CronExpression.validateExpression(schedule);
+            this.syncConf.setSchedule(schedule);
          }
          catch (ParseException ex)
          {
@@ -254,67 +291,62 @@ public final class Synchronizer extends AbstractEntity
 
       if (service_url != null && !service_url.isEmpty ())
       {
-         this.syncConf.setConfig ("service_uri", service_url);
+         this.syncConf.setServiceUrl(service_url);
       }
 
       if (has_login)
       {
-         updateNullableProperty("service_username", service_login);
+         this.syncConf.setServiceLogin(service_login);
       }
 
       if (has_password)
       {
-         updateNullableProperty("service_password", service_password);
+         this.syncConf.setServicePassword(service_password);
       }
 
       if (page_size != null)
       {
-         this.syncConf.setConfig ("page_size", page_size.toString ());
+         this.syncConf.setPageSize(page_size);
       }
 
       if (has_incoming)
       {
-         updateNullableProperty("remote_incoming_path", remote_incoming);
+         this.syncConf.setRemoteIncoming(remote_incoming);
       }
 
       if (has_last_date)
       {
-         String date = last_ingestion_date != null ?
-               String.valueOf(last_ingestion_date.getTime().getTime())
-               : null;
-         updateNullableProperty("last_created", date);
+         this.syncConf.setLastCreated(XmlProvider.getCalendar(last_ingestion_date));
       }
 
       if (copy_product != null)
       {
-         this.syncConf.setConfig ("copy_product", copy_product.toString ());
+         this.syncConf.setCopyProduct(copy_product);
       }
 
       if (has_target_col)
       {
-         if (target_collection == null)
-         {
-            this.syncConf.removeConfig("target_collection");
-         }
-         else
-         {
-            this.syncConf.setConfig("target_collection", target_collection.getUUID());
-         }
+         this.syncConf.setTargetCollection(target_collection == null ? null : target_collection.getName());
       }
 
       if (has_filter)
       {
-         updateNullableProperty("filter_param", filter_param);
+         this.syncConf.setFilterParam(filter_param);
       }
 
       if (has_collec)
       {
-         updateNullableProperty("source_collection", source_collection);
+         this.syncConf.setSourceCollection(source_collection);
       }
 
       if (has_geo_filter)
       {
          updateGeoFilter(geo_filter);
+      }
+
+      if (skipOnError != null)
+      {
+         this.syncConf.setSkipOnError(skipOnError);
       }
 
       try
@@ -334,31 +366,28 @@ public final class Synchronizer extends AbstractEntity
       Map<String, Object> res = new HashMap<> ();
       res.put(SynchronizerEntitySet.ID, this.syncConf.getId());
       res.put(SynchronizerEntitySet.LABEL, this.syncConf.getLabel());
-      res.put(SynchronizerEntitySet.SCHEDULE, this.syncConf.getCronExpression());
-      res.put(SynchronizerEntitySet.REQUEST, this.syncConf.getActive() ? "start" : "stop");
+      res.put(SynchronizerEntitySet.SCHEDULE, this.syncConf.getSchedule());
+      res.put(SynchronizerEntitySet.REQUEST, this.syncConf.isActive() ? "start" : "stop");
       res.put(SynchronizerEntitySet.STATUS, ss.status.toString());
       res.put(SynchronizerEntitySet.STATUS_DATE, ss.since);
       res.put(SynchronizerEntitySet.STATUS_MESSAGE, ss.message);
-      res.put(SynchronizerEntitySet.CREATION_DATE, this.syncConf.getCreated());
-      res.put(SynchronizerEntitySet.MODIFICATION_DATE, this.syncConf.getModified());
-      res.put(SynchronizerEntitySet.SERVICE_URL, this.syncConf.getConfig("service_uri"));
-      res.put(SynchronizerEntitySet.SERVICE_LOGIN, this.syncConf.getConfig("service_username"));
-      res.put(SynchronizerEntitySet.SERVICE_PASSWORD,
-            this.syncConf.getConfig("service_password") != null? "***": null);
-      res.put(SynchronizerEntitySet.REMOTE_INCOMING, this.syncConf.getConfig("remote_incoming_path"));
-      String page_size = this.syncConf.getConfig("page_size");
-      res.put(SynchronizerEntitySet.PAGE_SIZE, page_size != null? Integer.decode(page_size): 30);
-      String copy_prod = this.syncConf.getConfig("copy_product");
-      res.put(SynchronizerEntitySet.COPY_PRODUCT,
-            copy_prod != null ? Boolean.valueOf(copy_prod): false);
-      res.put(SynchronizerEntitySet.FILTER_PARAM, this.syncConf.getConfig("filter_param"));
-      res.put(SynchronizerEntitySet.SOURCE_COLLECTION, this.syncConf.getConfig("source_collection"));
+      res.put(SynchronizerEntitySet.CREATION_DATE, this.syncConf.getCreated().toGregorianCalendar());
+      res.put(SynchronizerEntitySet.MODIFICATION_DATE, this.syncConf.getModified().toGregorianCalendar());
+      res.put(SynchronizerEntitySet.SERVICE_URL, this.syncConf.getServiceUrl());
+      res.put(SynchronizerEntitySet.SERVICE_LOGIN, this.syncConf.getServiceLogin());
+      res.put(SynchronizerEntitySet.SERVICE_PASSWORD, this.syncConf.getServicePassword()!= null? "***": null);
+      res.put(SynchronizerEntitySet.REMOTE_INCOMING, this.syncConf.getRemoteIncoming ());
+      res.put(SynchronizerEntitySet.PAGE_SIZE, this.syncConf.getPageSize ());
+      res.put(SynchronizerEntitySet.COPY_PRODUCT, this.syncConf.isCopyProduct());
+      res.put(SynchronizerEntitySet.FILTER_PARAM, this.syncConf.getFilterParam ());
+      res.put(SynchronizerEntitySet.SOURCE_COLLECTION, this.syncConf.getSourceCollection ());
       res.put(SynchronizerEntitySet.GEO_FILTER, getGeoFilter());
+      res.put(SynchronizerEntitySet.SKIP_ON_ERROR, this.syncConf.isSkipOnError());
 
-      String last_created = this.syncConf.getConfig ("last_created");
+      XMLGregorianCalendar last_created = this.syncConf.getLastCreated();
       if (last_created != null)
       {
-         res.put(SynchronizerEntitySet.LAST_CREATION_DATE, new Date (Long.decode (last_created)));
+         res.put(SynchronizerEntitySet.LAST_CREATION_DATE, last_created.toGregorianCalendar());
       }
       return res;
    }
@@ -380,15 +409,15 @@ public final class Synchronizer extends AbstractEntity
       }
       if (prop_name.equals(SynchronizerEntitySet.SCHEDULE))
       {
-         return this.syncConf.getCronExpression ();
+         return this.syncConf.getSchedule();
       }
       if (prop_name.equals(SynchronizerEntitySet.REQUEST))
       {
-         return this.syncConf.getActive () ? "start" : "stop";
+         return this.syncConf.isActive() ? "start" : "stop";
       }
       if (prop_name.equals(SynchronizerEntitySet.STATUS))
       {
-         return ss.status.toString ();
+         return ss.status.toString();
       }
       if (prop_name.equals(SynchronizerEntitySet.STATUS_DATE))
       {
@@ -400,55 +429,56 @@ public final class Synchronizer extends AbstractEntity
       }
       if (prop_name.equals(SynchronizerEntitySet.CREATION_DATE))
       {
-         return this.syncConf.getCreated ();
+         return this.syncConf.getCreated().toGregorianCalendar();
       }
       if (prop_name.equals(SynchronizerEntitySet.MODIFICATION_DATE))
       {
-         return this.syncConf.getModified ();
+         return this.syncConf.getModified().toGregorianCalendar();
       }
       if (prop_name.equals(SynchronizerEntitySet.SERVICE_URL))
       {
-         return this.syncConf.getConfig ("service_uri");
+         return this.syncConf.getServiceUrl();
       }
       if (prop_name.equals(SynchronizerEntitySet.SERVICE_LOGIN))
       {
-         return this.syncConf.getConfig ("service_username");
+         return this.syncConf.getServiceLogin();
       }
       if (prop_name.equals(SynchronizerEntitySet.SERVICE_PASSWORD))
       {
-         return this.syncConf.getConfig ("service_password") != null ? "***"
-            : null;
+         return this.syncConf.getServicePassword() != null ? "***" : null;
       }
       if (prop_name.equals(SynchronizerEntitySet.REMOTE_INCOMING))
       {
-         return this.syncConf.getConfig("remote_incoming_path");
+         return this.syncConf.getRemoteIncoming();
       }
       if (prop_name.equals(SynchronizerEntitySet.PAGE_SIZE))
       {
-         String val = this.syncConf.getConfig("page_size");
-         return val != null ? Integer.decode(val): 30;
+         return this.syncConf.getPageSize();
       }
       if (prop_name.equals(SynchronizerEntitySet.LAST_CREATION_DATE))
       {
-         return new Date (
-            Long.decode (this.syncConf.getConfig ("last_created")));
+         return this.syncConf.getLastCreated().toGregorianCalendar().getTime();
       }
       if (prop_name.equals(SynchronizerEntitySet.COPY_PRODUCT))
       {
-         String val = this.syncConf.getConfig("copy_product");
-         return val != null ? Boolean.parseBoolean(val): false;
+         Boolean val = this.syncConf.isCopyProduct();
+         return val != null ? val : false;
       }
       if (prop_name.equals(SynchronizerEntitySet.FILTER_PARAM))
       {
-         return this.syncConf.getConfig("filter_param");
+         return this.syncConf.getFilterParam();
       }
       if (prop_name.equals(SynchronizerEntitySet.SOURCE_COLLECTION))
       {
-         return this.syncConf.getConfig("source_collection");
+         return this.syncConf.getSourceCollection();
       }
       if (prop_name.equals(SynchronizerEntitySet.GEO_FILTER))
       {
          return getGeoFilter();
+      }
+      if (prop_name.equals(SynchronizerEntitySet.SKIP_ON_ERROR))
+      {
+         return this.syncConf.isSkipOnError();
       }
 
       throw new ODataException ("Unknown property " + prop_name);
@@ -531,23 +561,6 @@ public final class Synchronizer extends AbstractEntity
    }
 
    /**
-    * If `value` is null or empty, remove `key` from the configuration.
-    * @param key of config entry to update.
-    * @param value to set, if null its entry will be removed from the config.
-    */
-   private void updateNullableProperty(final String key, final String value)
-   {
-      if (value == null || value.isEmpty())
-      {
-         this.syncConf.removeConfig(key);
-      }
-      else
-      {
-         this.syncConf.setConfig(key, value);
-      }
-   }
-
-   /**
     * Update the geo filter configuration from user supplied GeoFilter property.
     *
     * @param geo_filter the content of the GeoFilter property
@@ -557,8 +570,8 @@ public final class Synchronizer extends AbstractEntity
    {
       if (geo_filter == null || geo_filter.isEmpty())
       {
-         this.syncConf.removeConfig("geofilter_op");
-         this.syncConf.removeConfig("geofilter_shape");
+         this.syncConf.setGeofilterOp(null);
+         this.syncConf.setGeofilterShape(null);
       }
       else
       {
@@ -578,8 +591,8 @@ public final class Synchronizer extends AbstractEntity
             {
                throw new InvalidValueException(SynchronizerEntitySet.GEO_FILTER, geo_filter);
             }
-            this.syncConf.setConfig("geofilter_op", operator);
-            this.syncConf.setConfig("geofilter_shape", wkt);
+            this.syncConf.setGeofilterOp(operator);
+            this.syncConf.setGeofilterShape(wkt);
          }
          catch (com.vividsolutions.jts.io.ParseException ex)
          {
@@ -595,8 +608,8 @@ public final class Synchronizer extends AbstractEntity
     */
    private String getGeoFilter()
    {
-      String op = this.syncConf.getConfig("geofilter_op");
-      String shape = this.syncConf.getConfig("geofilter_shape");
+      String op = this.syncConf.getGeofilterOp();
+      String shape = this.syncConf.getGeofilterShape();
 
       if (shape != null && !shape.isEmpty()   &&   op != null && !op.isEmpty())
       {

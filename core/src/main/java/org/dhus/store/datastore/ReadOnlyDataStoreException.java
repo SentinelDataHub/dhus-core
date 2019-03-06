@@ -21,6 +21,8 @@ package org.dhus.store.datastore;
 
 public class ReadOnlyDataStoreException extends DataStoreException
 {
+   private static final long serialVersionUID = 1L;
+
    public ReadOnlyDataStoreException()
    {
       super();

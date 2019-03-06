@@ -81,11 +81,10 @@ public class CollectionMap extends AbstractDelegatingMap<String, Collection>
    @Override
    protected Collection serviceGet (String key)
    {
-      User u = Security.getCurrentUser();
       try
       {
          fr.gael.dhus.database.object.Collection c =
-            collectionService.getAuthorizedCollectionByName (key, u);
+            collectionService.getCollectionByName (key);
             if (c != null)
             {
                return new Collection (c);

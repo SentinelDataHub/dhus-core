@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,6 +22,7 @@ package fr.gael.dhus.olingo.v1.visitor;
 import fr.gael.dhus.olingo.v1.FunctionalVisitor;
 import fr.gael.dhus.olingo.v1.entity.Connection;
 import fr.gael.dhus.olingo.v1.entityset.ConnectionEntitySet;
+
 import java.util.Date;
 
 import org.apache.commons.collections4.Transformer;
@@ -30,9 +31,8 @@ import org.apache.olingo.odata2.api.edm.EdmTyped;
 import org.apache.olingo.odata2.api.uri.expression.PropertyExpression;
 
 /**
- * Implements the `visitProperty` method of abstract class 
- * OlingoFunctionalVisitor.
- * Allows us to convert an OlingoExpressionTree to an ExecutableExpressionTree 
+ * Implements the `visitProperty` method of abstract class OlingoFunctionalVisitor.
+ * Allows us to convert an OlingoExpressionTree to an ExecutableExpressionTree
  * using the OlingoFunctionalVisitor.
  */
 public class ConnectionFunctionalVisitor extends FunctionalVisitor
@@ -76,7 +76,7 @@ public class ConnectionFunctionalVisitor extends FunctionalVisitor
             break;
 
          default:
-            throw new UnsupportedOperationException("Unknown property: " + 
+            throw new UnsupportedOperationException("Unknown property: " +
                uri_literal);
       }
 
@@ -89,7 +89,7 @@ public class ConnectionFunctionalVisitor extends FunctionalVisitor
       @Override
       public String transform(Connection u)
       {
-         return u.getUUID().toString();
+         return u.getUUID();
       }
    }
 
@@ -104,7 +104,7 @@ public class ConnectionFunctionalVisitor extends FunctionalVisitor
    }
 
    // Connection to RemoteIp
-   private static class RemoteIpProvider 
+   private static class RemoteIpProvider
       implements Transformer<Connection, String>
    {
       @Override
@@ -135,7 +135,7 @@ public class ConnectionFunctionalVisitor extends FunctionalVisitor
          return u.getDurationMs();
       }
    }
-   
+
    // Connection to Status
    private static class StatusProvider
       implements Transformer<Connection, String>
@@ -156,7 +156,7 @@ public class ConnectionFunctionalVisitor extends FunctionalVisitor
          return u.getConnectionStatusMessage();
       }
    }
-   
+
    // Connection to Content length
    private static class ContentLengthProvider
       implements Transformer<Connection, Long>
@@ -167,7 +167,7 @@ public class ConnectionFunctionalVisitor extends FunctionalVisitor
          return u.getContentLength();
       }
    }
-   
+
    // Connection to Content length
    private static class WrittenContentLengthProvider
       implements Transformer<Connection, Long>

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2016,2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -26,8 +26,12 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
-import fr.gael.dhus.service.NetworkUsageService;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import fr.gael.dhus.database.object.User;
+import fr.gael.dhus.service.NetworkUsageService;
+import fr.gael.dhus.service.UserService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 
 class ChannelQueue extends AbstractChannel
@@ -43,6 +47,9 @@ class ChannelQueue extends AbstractChannel
     * Channel classifier
     */
    private ChannelClassifier classifier = null;
+
+   /** Log. */
+   private static final Logger LOGGER = LogManager.getLogger();
 
    /**
     * Build a default channel queue.
@@ -79,14 +86,37 @@ class ChannelQueue extends AbstractChannel
       // Add channel to the sub-channels
       this.subChannels.add(channel);
 
+      if (channel instanceof ChannelFlow)
+      {
+         User user = ((ChannelFlow) channel).getParameters().getUser();
+         if (user != null)
+         {
+            UserService userService = ApplicationContextProvider.getBean(UserService.class);
+            userService.addDownloadForUser(user);
+         }
+      }
+
       // Register this channel as parent of the added one
       channel.setParent(this);
 
    } // End addChannel(Channel)
 
-   public boolean removeChannel(Channel channel)
+   public synchronized boolean removeChannel(Channel channel)
    {
-      return this.subChannels.remove(channel);
+      boolean ret = this.subChannels.remove(channel);
+      if (ret)
+      {
+         if (channel instanceof ChannelFlow)
+         {
+            User user = ((ChannelFlow) channel).getParameters().getUser();
+            if (user != null)
+            {
+               UserService userService = ApplicationContextProvider.getBean(UserService.class);
+               userService.removeDownloadForUser(user);
+            }
+         }
+      }
+      return ret;
    }
 
    ChannelClassifier getClassifier()
@@ -163,7 +193,9 @@ class ChannelQueue extends AbstractChannel
           (quotas.getMaxConcurrent() != null))
       {
          int max_concurrent = quotas.getMaxConcurrent();
-         int connection_count = this.countUserChannels(parameters.getUser());
+         UserService userService = ApplicationContextProvider.getBean(UserService.class);
+         int connection_count = userService.getCurrentDownloadsForUser(parameters.getUser());
+         parameters.getUser().getCurrentQuotas().setCurrentDownloads(connection_count);
 
          if (connection_count >= max_concurrent)
          {
@@ -334,7 +366,7 @@ class ChannelQueue extends AbstractChannel
                }
                catch (InterruptedException e)
                {
-                  e.printStackTrace();
+                  LOGGER.error("Error during transmission", e);
                }
             }
 
@@ -342,17 +374,9 @@ class ChannelQueue extends AbstractChannel
             {
                acquire(permits);
             }
-            catch (IllegalArgumentException e)
+            catch (IllegalArgumentException | RegulationException | InterruptedException e)
             {
-               e.printStackTrace();
-            }
-            catch (RegulationException e)
-            {
-               e.printStackTrace();
-            }
-            catch (InterruptedException e)
-            {
-               e.printStackTrace();
+               LOGGER.error("Error during transmission", e);
             }
 
             for (Channel channel : non_empty_queues)

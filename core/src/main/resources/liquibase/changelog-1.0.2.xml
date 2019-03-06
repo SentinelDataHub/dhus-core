@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2017 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
+
+   <changeSet id="eventManagement" author="patrick">
+      <createTable tableName="EVENT">
+         <column name="ID" type="BIGINT" autoIncrement="true">
+            <constraints primaryKey="true" primaryKeyName="PK_EVENT" />
+         </column>
+         <column name="CATEGORY" type="VARCHAR(64)">
+            <constraints nullable="false" />
+         </column>
+         <column name="SUBCATEGORY" type="VARCHAR(128)" />
+         <column name="TITLE" type="VARCHAR(255)">
+            <constraints nullable="false" />
+         </column>
+         <column name="DESCRIPTION" type="VARCHAR(1024)">
+            <constraints nullable="false" />
+         </column>
+         <column name="START_DATE" type="TIMESTAMP">
+            <constraints nullable="false" />
+         </column>
+         <column name="STOP_DATE" type="TIMESTAMP" />
+         <column name="PUBLICATION_DATE" type="TIMESTAMP" />
+         <column name="ICON" type="VARCHAR(1024)" />
+         <column name="LOCAL_EVENT" type="BOOLEAN">
+            <constraints nullable="false" />
+         </column>
+         <column name="PUBLIC_EVENT" type="BOOLEAN">
+            <constraints nullable="false" />
+         </column>
+         <column name="ORIGINATOR" type="VARCHAR(128)" />
+         <column name="HUB_TAG" type="VARCHAR(255)" />
+         <column name="MISSION_TAG" type="VARCHAR(255)" />
+         <column name="INSTRUMENT_TAG" type="VARCHAR(255)" />
+         <column name="EXTERNAL_URL" type="VARCHAR(1024)" />
+      </createTable>
+   </changeSet>
+
+   <changeSet id="hibernate_sequence_creation" author="patrick" dbms="postgresql">
+      <sql>
+          CREATE SEQUENCE hibernate_sequence;
+      </sql>
+   </changeSet>
+
+   <changeSet id="persistent-DataStore-gmp" author="tdegueurce">
+      <addColumn tableName="DATASTORE_CONF">
+         <column name="PRIORITY" type="INT"></column>
+
+         <column name="GMP_REPO_LOCATION" type="VARCHAR(512)"></column>
+         <column name="GMP_HFS_LOCATION" type="VARCHAR(512)"></column>
+         <column name="GMP_MAX_QUEUED_REQUEST" type="INT"></column>
+         <column name="GMP_DATABASE_URL" type="VARCHAR(512)"></column>
+         <column name="GMP_USER" type="VARCHAR(64)"></column>
+         <column name="GMP_PASSWORD" type="VARCHAR(64)"></column>
+      </addColumn>
+   </changeSet>
+
+   <changeSet id="writeBackConfiguration" author="john">
+      <preConditions onFail="MARK_RAN" onFailMessage="configuration already removed, cannot write it back">
+         <sqlCheck expectedResult="0">
+            select count(*) from DATABASECHANGELOG where ID LIKE 'remove-configuration'
+         </sqlCheck>
+      </preConditions>
+      <customChange class="fr.gael.dhus.database.liquibase.WriteBackConfiguration" />
+   </changeSet>
+
+   <changeSet id="remove-filescanners" author="nvalette">
+      <dropTable tableName="FILE_SCANNER_PREFERENCES"/>
+      <dropTable tableName="FILESCANNER_COLLECTIONS"/>
+      <dropTable tableName="FILE_SCANNER"/>
+   </changeSet>
+
+   <changeSet id="remove-synchronizers" author="nvalette">
+      <dropTable tableName="SYNCHRONIZERS_CONFIG"/>
+      <dropTable tableName="SYNCHRONIZERS"/>
+   </changeSet>
+
+   <changeSet id="remove-dataStores" author="nvalette">
+      <dropTable tableName="DATASTORE_CONF" />
+   </changeSet>
+
+   <changeSet id="remove-eviction" author="john">
+      <dropTable tableName="PRODUCT_TO_EVICT" />
+      <dropTable tableName="EVICTION" />
+   </changeSet>
+
+   <changeSet id="remove-configuration" author="john">
+      <dropTable tableName="CONFIGURATION" />
+   </changeSet>
+</databaseChangeLog>

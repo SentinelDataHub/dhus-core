@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2013,2014,2015,2016 GAEL Systems
+   Copyright (C) 2013-2018 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -45,6 +45,14 @@
    <context:component-scan base-package="fr.gael.dhus.service" />
    <context:component-scan base-package="fr.gael.dhus.spring.context" />
 
+   <bean id="exporter" class="org.springframework.jmx.export.MBeanExporter" lazy-init="false">
+      <property name="beans">
+         <map>
+            <entry key="bean:name=taskExecutor" value-ref="taskExecutor"/>
+         </map>
+      </property>
+   </bean>
+
    <!-- Processing task executors -->
    <bean id="taskExecutor"
       class="fr.gael.dhus.datastore.processing.fair.FairThreadPoolTaskExecutor">
@@ -52,18 +60,9 @@
                 value="#{ configurationManager.getProcessingConfiguration ().getCorePoolSize () }" />
    </bean>
 
-   <bean id="ftpServer" class="fr.gael.dhus.server.ftp.DHuSFtpServerBean">
-		<property name="port"
-			value="#{ configurationManager.getFtpServerConfiguration ().getPort () }" />
-      <property name="ftps"
-			value="#{ configurationManager.getFtpServerConfiguration ().isFtps () }" />
-      <property name="passivePort"
-                value="#{ configurationManager.getFtpServerConfiguration ().getPassivePort () }" />
-   </bean>
-
    <!-- SolrDao -->
    <bean id="solrDao" class="fr.gael.dhus.search.SolrDao">
-      <constructor-arg name="geocoder_conf" value="#{ configurationManager.getGeocoderConfiguration() }" />
+      <constructor-arg ref="configurationManager" />
    </bean>
 
    <!-- Apache CXF configuration -->
@@ -84,5 +83,12 @@
 
    <!-- KeyStore Manager -->
    <bean name="keyStoreService" class="fr.gael.dhus.service.KeyStoreService" />
+
+   <!-- Smart Synchronizer -->
+   <bean id="ProductDownloadStreamFactory" class="fr.gael.dhus.util.stream.ProductDownloadStreamFactory" />
+   <bean id="multiSourceInputStreamFactory" class="fr.gael.dhus.util.stream.MultiSourceInputStreamFactory" />
+   <bean id="IngestionPageFactory" class="fr.gael.dhus.sync.smart.IngestionPageFactory" />
+   <bean id="productSynchronizerUtils" class="fr.gael.dhus.sync.ProductSynchronizerUtils" />
+
 </beans>
 

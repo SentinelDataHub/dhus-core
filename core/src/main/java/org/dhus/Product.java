@@ -32,12 +32,14 @@ public interface Product extends HasImpl
     * Returns the name of this product.
     * @return name
     */
+   // TODO define the "name" of a product or remove the method
    public String getName();
 
    /**
     * Sets the name of this product.
     * @param name
     */
+   // TODO define the "name" of a product or remove the method
    public void setName(String name);
 
    /**

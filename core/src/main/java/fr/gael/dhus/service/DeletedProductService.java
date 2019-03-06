@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,7 +22,6 @@ package fr.gael.dhus.service;
 import fr.gael.dhus.database.dao.DeletedProductDao;
 import fr.gael.dhus.database.object.DeletedProduct;
 import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.datastore.processing.ProcessingUtils;
 import fr.gael.dhus.olingo.v1.visitor.DeletedProductSQLVisitor;
 
 import java.io.IOException;
@@ -93,27 +92,10 @@ public class DeletedProductService extends WebService
       dproduct.setIdentifier(product.getIdentifier());
       dproduct.setFootPrint(product.getFootPrint());
       dproduct.setOrigin(product.getOrigin());
-      dproduct.setDownloadSize(product.getDownloadableSize());
       dproduct.setSize(product.getSize());
       dproduct.setIngestionDate(product.getIngestionDate());
       dproduct.setContentStart(product.getContentStart());
       dproduct.setContentEnd(product.getContentEnd());
-
-      // Case of ingestion performed before DHuS 0.4.4
-      String clazz = product.getItemClass();
-      if (clazz == null)
-      {
-         try
-         {
-            clazz = ProcessingUtils.getItemClassUri(ProcessingUtils.getClassFromProduct(product));
-         }
-         catch (IOException e)
-         {
-            LOGGER.warn("Cannot find item class for product '" + product.getIdentifier() + "'.", e);
-         }
-      }
-      dproduct.setItemClass(clazz);
-
       dproduct.setDeletionDate(new Date());
       dproduct.setDeletionCause(deletionCause);
       try

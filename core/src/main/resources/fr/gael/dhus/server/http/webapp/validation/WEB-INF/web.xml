@@ -22,6 +22,8 @@
          xmlns="http://java.sun.com/xml/ns/j2ee" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd">
 
+   <distributable/>
+
    <!-- Spring Context -->
    <context-param>
       <param-name>contextConfigLocation</param-name>
@@ -63,4 +65,13 @@
       <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
       <listener-class>org.springframework.security.web.session.HttpSessionEventPublisher</listener-class>
    </listener>
+
+   <!-- Force JSESSIONID cookie path to be / -->
+   <session-config>
+      <cookie-config>
+        <name>JSESSIONID</name>
+        <path>/</path>
+      </cookie-config>
+   </session-config>
+
 </web-app>

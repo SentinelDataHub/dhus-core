@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -25,9 +25,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.RejectedExecutionHandler;
+import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import org.springframework.core.task.AsyncListenableTaskExecutor;
 import org.springframework.core.task.TaskRejectedException;
@@ -57,7 +61,8 @@ public class FairThreadPoolTaskExecutor extends ExecutorConfigurationSupport
    implements AsyncListenableTaskExecutor, SchedulingTaskExecutor
 {
    private static final long serialVersionUID = -3679186020281566377L;
-   
+   private static final Logger LOGGER = LogManager.getLogger();
+
    private final Object poolSizeMonitor = new Object ();
    private ThreadPoolExecutor threadPoolExecutor;
    private int corePoolSize = 1;
@@ -67,11 +72,14 @@ public class FairThreadPoolTaskExecutor extends ExecutorConfigurationSupport
     * Set the ThreadPoolExecutor's core pool size. Default is 1.
     * <p>
     * <b>This setting can be modified at runtime, for example through JMX.</b>
+    *
+    * @param corePoolSize the ThreadPoolExecutor's core pool size
     */
    public void setCorePoolSize (int corePoolSize)
    {
       synchronized (this.poolSizeMonitor)
       {
+         LOGGER.info("Core Pool Size changed from {} to {}", this.corePoolSize, corePoolSize);
          this.corePoolSize = corePoolSize;
          if (this.threadPoolExecutor != null)
          {
@@ -103,11 +111,32 @@ public class FairThreadPoolTaskExecutor extends ExecutorConfigurationSupport
    protected ExecutorService initializeExecutor (ThreadFactory threadFactory,
       RejectedExecutionHandler rejectedExecutionHandler)
    {
-      FairQueue<Runnable> queue = new FairQueue<Runnable> ();
-      ThreadPoolExecutor executor =
-         new ThreadPoolExecutor (this.corePoolSize, this.corePoolSize,
-            keepAliveSeconds, TimeUnit.SECONDS, queue, threadFactory,
-            rejectedExecutionHandler);
+      FairQueue<Runnable> queue = new FairQueue<>();
+      ThreadPoolExecutor executor = new ThreadPoolExecutor(this.corePoolSize, this.corePoolSize,
+            keepAliveSeconds, TimeUnit.SECONDS, queue, threadFactory, rejectedExecutionHandler)
+      {
+         @Override
+         protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable)
+         {
+            if (FairQueueEntry.class.isAssignableFrom(callable.getClass()))
+            {
+               Object listKey = FairQueueEntry.class.cast(callable).getListKey();
+               return new FairFutureTask<>(callable, listKey);
+            }
+            return super.newTaskFor(callable);
+         }
+
+         @Override
+         protected <T> RunnableFuture<T> newTaskFor(Runnable runnable, T value)
+         {
+            if (FairQueueEntry.class.isAssignableFrom(runnable.getClass()))
+            {
+               Object listKey = FairQueueEntry.class.cast(runnable).getListKey();
+               return new FairFutureTask<>(runnable, value, listKey);
+            }
+            return super.newTaskFor(runnable, value);
+         }
+      };
 
       this.threadPoolExecutor = executor;
       return executor;

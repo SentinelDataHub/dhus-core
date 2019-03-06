@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,568 +19,735 @@
  */
 package fr.gael.dhus.system.config;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-
-import javax.persistence.Transient;
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Unmarshaller;
-import javax.xml.bind.ValidationEvent;
-import javax.xml.bind.ValidationEventHandler;
-import javax.xml.transform.stream.StreamSource;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.dhus.store.datastore.config.DataStoreConf;
-import org.springframework.beans.factory.InitializingBean;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Service;
-
-import fr.gael.dhus.database.dao.CollectionDao;
-import fr.gael.dhus.database.dao.ConfigurationDao;
-import fr.gael.dhus.database.dao.EvictionDao;
-import fr.gael.dhus.database.dao.UserDao;
-import fr.gael.dhus.database.object.Eviction;
-import fr.gael.dhus.database.object.Role;
-import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.database.object.config.Configuration;
 import fr.gael.dhus.database.object.config.cron.ArchiveSynchronizationCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.CleanDatabaseCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.CleanDatabaseDumpCronConfiguration;
+import fr.gael.dhus.database.object.config.cron.CronConfiguration;
 import fr.gael.dhus.database.object.config.cron.DumpDatabaseCronConfiguration;
-import fr.gael.dhus.database.object.config.cron.EvictionCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.FileScannersCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.SearchesCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.SendLogsCronConfiguration;
+import fr.gael.dhus.database.object.config.cron.StatisticsConfiguration;
 import fr.gael.dhus.database.object.config.cron.SystemCheckCronConfiguration;
-import fr.gael.dhus.database.object.config.gui.GuiConfiguration;
+import fr.gael.dhus.database.object.config.cron.TempUsersConfiguration;
+import fr.gael.dhus.database.object.config.eviction.EvictionConfiguration;
+import fr.gael.dhus.database.object.config.eviction.EvictionManager;
+import fr.gael.dhus.database.object.config.eviction.EvictionStatusEnum;
 import fr.gael.dhus.database.object.config.messaging.MailConfiguration;
+import fr.gael.dhus.database.object.config.messaging.MailFromConfiguration;
+import fr.gael.dhus.database.object.config.messaging.MailServerConfiguration;
+import fr.gael.dhus.database.object.config.messaging.MessagingConfiguration;
 import fr.gael.dhus.database.object.config.messaging.jms.JmsConfiguration;
 import fr.gael.dhus.database.object.config.network.NetworkConfiguration;
 import fr.gael.dhus.database.object.config.product.DownloadConfiguration;
 import fr.gael.dhus.database.object.config.product.ProductConfiguration;
+import fr.gael.dhus.database.object.config.product.QuicklookConfiguration;
+import fr.gael.dhus.database.object.config.product.ThumbnailConfiguration;
+import fr.gael.dhus.database.object.config.scanner.ScannerManager;
 import fr.gael.dhus.database.object.config.search.GeocoderConfiguration;
 import fr.gael.dhus.database.object.config.search.GeonameConfiguration;
 import fr.gael.dhus.database.object.config.search.NominatimConfiguration;
 import fr.gael.dhus.database.object.config.search.OdataConfiguration;
+import fr.gael.dhus.database.object.config.search.SearchConfiguration;
+import fr.gael.dhus.database.object.config.search.SolrCloudConfiguration;
 import fr.gael.dhus.database.object.config.search.SolrConfiguration;
-import fr.gael.dhus.database.object.config.server.FtpServerConfiguration;
+import fr.gael.dhus.database.object.config.search.SolrStandaloneConfiguration;
+import fr.gael.dhus.database.object.config.server.AbstractServerConfiguration;
+import fr.gael.dhus.database.object.config.server.ExternalServerConfiguration;
 import fr.gael.dhus.database.object.config.server.ServerConfiguration;
+import fr.gael.dhus.database.object.config.source.SourceManagerImpl;
+import fr.gael.dhus.database.object.config.synchronizer.SynchronizerManager;
 import fr.gael.dhus.database.object.config.system.AdministratorConfiguration;
 import fr.gael.dhus.database.object.config.system.ArchiveConfiguration;
 import fr.gael.dhus.database.object.config.system.DatabaseConfiguration;
-import fr.gael.dhus.database.object.config.system.EvictionConfiguration;
 import fr.gael.dhus.database.object.config.system.ExecutorConfiguration;
 import fr.gael.dhus.database.object.config.system.NameConfiguration;
 import fr.gael.dhus.database.object.config.system.ProcessingConfiguration;
 import fr.gael.dhus.database.object.config.system.SupportConfiguration;
+import fr.gael.dhus.database.object.config.system.SystemConfiguration;
 import fr.gael.dhus.database.object.config.system.TomcatConfiguration;
-import fr.gael.dhus.datastore.eviction.EvictionStrategy;
-import fr.gael.dhus.messaging.jms.Message;
-import fr.gael.dhus.messaging.jms.Message.MessageType;
-import fr.gael.dhus.server.ScalabilityManager;
+import fr.gael.dhus.database.object.config.system.TrashPathConfiguration;
+import fr.gael.dhus.search.SolrType;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.reflect.Field;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Objects;
+
+import javax.xml.XMLConstants;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.bind.Unmarshaller;
+import javax.xml.bind.ValidationEvent;
+import javax.xml.bind.ValidationEventHandler;
+import javax.xml.transform.stream.StreamSource;
+import javax.xml.validation.Schema;
+import javax.xml.validation.SchemaFactory;
+
+import fr.gael.dhus.sync.smart.SourceManager;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import org.dhus.store.datastore.config.DataStoreConf;
+import org.dhus.store.datastore.config.DataStoreManager;
+import org.springframework.stereotype.Service;
+
+import org.xml.sax.SAXException;
 
 @Service
-public class ConfigurationManager implements InitializingBean
+public class ConfigurationManager
 {
-   @Autowired
-   private ConfigurationDao configurationDao;
-   
-   @Autowired
-   private EvictionDao evictionDao;
-   
-   @Autowired
-   private UserDao userDao;
-   
-   @Autowired
-   private ConfigurationLoader configLoader;
-   
-   @Autowired
-   private ScalabilityManager scalabilityManager;
+   private final ConfigurationLoader loader;
 
    /**
-    * Configuration containing only non stored fields.
-    * See {@link Transient} fields of {@link Configuration} Object and its 
-    * children.
+    * Creates the configuration manager bean and immediately loads the conf from XML files.
+    *
+    * @throws ConfigurationException could not load the conf
     */
-   private Configuration notStoredPartOfConfiguration;
-
-   @Override
-   public void afterPropertiesSet() throws Exception
+   public ConfigurationManager() throws ConfigurationException
    {
-      // Need to load configuration every time to load non persistent fields
-      Configuration loadedConf = configLoader.getLoadedConfiguration ();
-      notStoredPartOfConfiguration = configLoader.
-         getNotStoredPartOfConfiguration ();
-      Configuration storedConf = configurationDao.getCurrentConfiguration ();
+      this.loader = new ConfigurationLoader();
+      postLoad(loader.getConf());
+      loader.save();
+   }
 
-      // detect if no configuration is already stored or if a partial one is 
-      // stored (typically stored by liquibase migration script, so this 
-      // configuration is missing some fields)
-      if (storedConf != null)
+   /**
+    * Adds missing required elements (default values defined in the XSDs will be used).
+    * <p>
+    * Sets defaults that must be computed at runtime.
+    *
+    * @param conf to fix, must not be null
+    */
+   public static void postLoad(Configuration conf)
+   {
+      Objects.requireNonNull(conf);
+
+      /// Sets all required elements
+
+      // Crons
+      setNewInstanceIfNull("cronConfiguration", conf, CronConfiguration.class);
+      CronConfiguration crons = conf.getCronConfiguration();
+      setNewInstanceIfNull("archiveSynchronizationConfiguration", crons, ArchiveSynchronizationCronConfiguration.class);
+      setNewInstanceIfNull("cleanDatabaseConfiguration", crons, CleanDatabaseCronConfiguration.class);
+      setNewInstanceIfNull("cleanDatabaseDumpConfiguration", crons, CleanDatabaseDumpCronConfiguration.class);
+      setNewInstanceIfNull("dumpDatabaseConfiguration", crons, DumpDatabaseCronConfiguration.class);
+      setNewInstanceIfNull("fileScannersConfiguration", crons, FileScannersCronConfiguration.class);
+      setNewInstanceIfNull("searchesConfiguration", crons, SearchesCronConfiguration.class);
+      setNewInstanceIfNull("sendLogsConfiguration", crons, SendLogsCronConfiguration.class);
+      setNewInstanceIfNull("systemCheckConfiguration", crons, SystemCheckCronConfiguration.class);
+
+      // CleanDatabase
+      CleanDatabaseCronConfiguration cleanDB = crons.getCleanDatabaseConfiguration();
+      setNewInstanceIfNull("tempUsersConfiguration", cleanDB, TempUsersConfiguration.class);
+      setNewInstanceIfNull("logStatConfiguration", cleanDB, StatisticsConfiguration.class);
+
+      // DataStores
+      setNewInstanceIfNull("dataStores", conf, DataStoreManager.class);
+
+      // Evictions
+      setNewInstanceIfNull("evictions", conf, EvictionManager.class);
+
+      // Messaging
+      setNewInstanceIfNull("messagingConfiguration", conf, MessagingConfiguration.class);
+
+      // Messaging->Mail
+      setNewInstanceIfNull("mailConfiguration", conf.getMessagingConfiguration(), MailConfiguration.class);
+      MailConfiguration mail = conf.getMessagingConfiguration().getMailConfiguration();
+      setNewInstanceIfNull("serverConfiguration", mail, MailServerConfiguration.class);
+      MailServerConfiguration mailSrv = mail.getServerConfiguration();
+      setNewInstanceIfNull("mailFromConfiguration", mailSrv, MailFromConfiguration.class);
+
+      // Network
+      setNewInstanceIfNull("networkConfiguration", conf, NetworkConfiguration.class);
+
+      // Product
+      setNewInstanceIfNull("productConfiguration", conf, ProductConfiguration.class);
+      ProductConfiguration prod = conf.getProductConfiguration();
+      setNewInstanceIfNull("downloadConfiguration", prod, DownloadConfiguration.class);
+      setNewInstanceIfNull("quicklookConfiguration", prod, QuicklookConfiguration.class);
+      setNewInstanceIfNull("thumbnailConfiguration", prod, ThumbnailConfiguration.class);
+
+      // Scanners
+      setNewInstanceIfNull("scanners", conf, ScannerManager.class);
+
+      // Search
+      setNewInstanceIfNull("searchConfiguration", conf, SearchConfiguration.class);
+      SearchConfiguration search = conf.getSearchConfiguration();
+      setNewInstanceIfNull("geocoderConfiguration", search, GeocoderConfiguration.class);
+      setNewInstanceIfNull("odataConfiguration", search, OdataConfiguration.class);
+
+      // Search->Solr (default conf if none exist)
+      if (search.getSolrConfiguration() == null
+       && search.getSolrStandalone() == null
+       && search.getSolrCloud() == null)
       {
-         loadedConf = storedConf.completeWith (loadedConf);
-         configurationDao.update(loadedConf);
-      }
-            
-      if (storedConf == null)
-      {
-         configurationDao.create(loadedConf);        
+         search.setSolrConfiguration(new SolrConfiguration());
       }
 
-      if (!scalabilityManager.isActive () || scalabilityManager.isMaster ())
+      // Search->Geocoder
+      GeocoderConfiguration geocoder = search.getGeocoderConfiguration();
+      setNewInstanceIfNull("nominatimConfiguration", geocoder, NominatimConfiguration.class);
+      setNewInstanceIfNull("geonameConfiguration", geocoder, GeonameConfiguration.class);
+
+      // Server
+      setNewInstanceIfNull("serverConfiguration", conf, ServerConfiguration.class);
+      AbstractServerConfiguration server = conf.getServerConfiguration();
+      setNewInstanceIfNull("externalServerConfiguration", server, ExternalServerConfiguration.class);
+
+      // Sources
+      setNewInstanceIfNull("sources", conf, SourceManagerImpl.class);
+
+      // Synchronizers
+      setNewInstanceIfNull("synchronizers", conf, SynchronizerManager.class);
+
+      // System
+      setNewInstanceIfNull("systemConfiguration", conf, SystemConfiguration.class);
+      SystemConfiguration sys = conf.getSystemConfiguration();
+      setNewInstanceIfNull("administratorConfiguration", sys, AdministratorConfiguration.class);
+      setNewInstanceIfNull("archiveConfiguration", sys, ArchiveConfiguration.class);
+      setNewInstanceIfNull("databaseConfiguration", sys, DatabaseConfiguration.class);
+      setNewInstanceIfNull("nameConfiguration", sys, NameConfiguration.class);
+      setNewInstanceIfNull("processingConfiguration", sys, ProcessingConfiguration.class);
+      setNewInstanceIfNull("supportConfiguration", sys, SupportConfiguration.class);
+      setNewInstanceIfNull("tomcatConfiguration", sys, TomcatConfiguration.class);
+      setNewInstanceIfNull("executorConfiguration", sys, ExecutorConfiguration.class);
+      setNewInstanceIfNull("trashPathConfiguration", sys, TrashPathConfiguration.class);
+
+      /// Sets runtime default values
+
+      // Tomcat's `path` attribute must be absolute
+      TomcatConfiguration tomcat = conf.getSystemConfiguration().getTomcatConfiguration();
+      if (tomcat.getPath().startsWith("."))
       {
-         AdministratorConfiguration cfg = loadedConf.getSystemConfiguration ()
-               .getAdministratorConfiguration ();
-         User rootUser = userDao.getByName (cfg.getName ());
-         if (rootUser != null)
-         {
-            // If root User exists, update his roles by security
-            ArrayList<Role> roles = new ArrayList<Role> ();
-            for (Role role : Role.values ())
-               roles.add (role);
-            rootUser.setRoles (roles);
-            userDao.update (rootUser);
-         }
-         else
-         {
-            // Create it
-            rootUser = new User ();
-            rootUser.setUsername (cfg.getName ());
-            rootUser.setPassword (cfg.getPassword ());
-            rootUser.setCreated (new Date ());
-            ArrayList<Role> roles = new ArrayList<Role> ();
-            for (Role role : Role.values ())
-               roles.add (role);
-            rootUser.setRoles (roles);
-            rootUser.setDomain ("Other");
-            rootUser.setSubDomain ("System");
-            rootUser.setUsage ("Other");
-            rootUser.setSubUsage ("System");
-            userDao.create (rootUser);
-         }
+         tomcat.setPath(Paths.get(tomcat.getPath()).toAbsolutePath().toString());
       }
-         
-      // Store the default eviction settings
-      if (evictionDao.getEviction () == null)
+
+      // Set the status of all evictions to STOPPED
+      List<EvictionConfiguration> evictions = conf.getEvictions().getEviction();
+      evictions.forEach((evictionConf) -> evictionConf.setStatus(EvictionStatusEnum.STOPPED));
+
+      // Set support mail as registration mail if it is empty or null
+      SupportConfiguration supportConf = conf.getSystemConfiguration().getSupportConfiguration();
+      String regmail = supportConf.getRegistrationMail();
+
+      if (regmail == null || regmail.isEmpty())
       {
-         EvictionConfiguration evictionConf = loadedConf.
-            getSystemConfiguration ().getArchiveConfiguration ().
-            getEvictionConfiguration ();
-         Eviction eviction = new Eviction ();
-         eviction.setMaxDiskUsage (evictionConf.getMaxDiskUsage ());
-         eviction.setKeepPeriod (evictionConf.getKeepPeriod ());
-         eviction.setStrategy (EvictionStrategy.NONE);
-         eviction.setMaxProductNumber (evictionConf.getMaxEvictedProducts ());
-         evictionDao.create (eviction);
+         supportConf.setRegistrationMail(supportConf.getMail());
       }
    }
-   
-   public void reloadConfiguration()
-   {
-      Configuration loadedConf = configLoader.getLoadedConfiguration ();
-      // not reloading not stored part of configuration
-      Configuration storedConf = configurationDao.getCurrentConfiguration ();
 
-      // Delete stored configuration when reloading it
-      configurationDao.delete (storedConf);      
-      configurationDao.create(loadedConf);               
+   // Sets if non null a protected field in a class generated by XJC
+   private static void setNewInstanceIfNull(String fieldName, Object toSet, Class<?> toInstanciate)
+   {
+      Class<?> toSetClass = toSet.getClass();
+      try
+      {
+         Field field;
+         try
+         {
+            field = toSetClass.getDeclaredField(fieldName);
+         }
+         catch (NoSuchFieldException ex)
+         {
+            toSetClass = toSetClass.getSuperclass();
+            if (toSetClass == null)
+            {
+               throw ex;
+            }
+            field = toSetClass.getDeclaredField(fieldName);
+         }
+         field.setAccessible(true); // field accessibility was: protected
+         if (field.get(toSet) == null)
+         {
+            field.set(toSet, toInstanciate.newInstance());
+         }
+      }
+      catch (NoSuchFieldException | InstantiationException ex)
+      {
+         throw new RuntimeException(ex); // Programming issue
+      }
+      catch (IllegalArgumentException | IllegalAccessException ex)
+      {
+         // Ignored
+      }
    }
-   
+
+   /**
+    * Reload from XML.
+    *
+    * @throws ConfigurationException Could not reload
+    */
+   synchronized public void reloadConfiguration() throws ConfigurationException
+   {
+      loader.reload();
+      postLoad(loader.getConf());
+      loader.save();
+   }
+
+   /**
+    * Returns a mutable configuration instance, valid until {@link #reloadConfiguration()} is
+    * called.
+    *
+    * @return the currently loaded configuration
+    */
+   public Configuration getConfiguration()
+   {
+      return loader.getConf();
+   }
+
+   /**
+    * Saves the current configuration back into its XML file.
+    *
+    * @throws ConfigurationException could not save to XML file
+    */
+   synchronized public void saveConfiguration() throws ConfigurationException
+   {
+      loader.save();
+   }
+
    // Crons configurations
-   public ArchiveSynchronizationCronConfiguration 
-      getArchiveSynchronizationCronConfiguration ()
+   public ArchiveSynchronizationCronConfiguration getArchiveSynchronizationCronConfiguration()
    {
-      return notStoredPartOfConfiguration.getCronConfiguration ().
-         getArchiveSynchronizationConfiguration ();
-   }
-   
-   public CleanDatabaseCronConfiguration getCleanDatabaseCronConfiguration ()
-   {
-      return notStoredPartOfConfiguration.getCronConfiguration ().
-         getCleanDatabaseConfiguration ();
+      return loader.getConf().getCronConfiguration().getArchiveSynchronizationConfiguration();
    }
 
-   public DumpDatabaseCronConfiguration getDumpDatabaseCronConfiguration ()
+   public CleanDatabaseCronConfiguration getCleanDatabaseCronConfiguration()
    {
-      return notStoredPartOfConfiguration.getCronConfiguration ().
-         getDumpDatabaseConfiguration ();     
+      return loader.getConf().getCronConfiguration().getCleanDatabaseConfiguration();
    }
 
-   public CleanDatabaseDumpCronConfiguration 
-      getCleanDatabaseDumpCronConfiguration()
+   public DumpDatabaseCronConfiguration getDumpDatabaseCronConfiguration()
    {
-      return notStoredPartOfConfiguration.getCronConfiguration ().
-         getCleanDatabaseDumpConfiguration ();      
+      return loader.getConf().getCronConfiguration().getDumpDatabaseConfiguration();
    }
 
-   public EvictionCronConfiguration getEvictionCronConfiguration ()
+   public CleanDatabaseDumpCronConfiguration getCleanDatabaseDumpCronConfiguration()
    {
-      return notStoredPartOfConfiguration.getCronConfiguration ().
-         getEvictionConfiguration ();      
+      return loader.getConf().getCronConfiguration().getCleanDatabaseDumpConfiguration();
    }
 
-   public FileScannersCronConfiguration getFileScannersCronConfiguration ()
+   public FileScannersCronConfiguration getFileScannersCronConfiguration()
    {
-      return notStoredPartOfConfiguration.getCronConfiguration ().
-         getFileScannersConfiguration ();
+      return loader.getConf().getCronConfiguration().getFileScannersConfiguration();
    }
 
-   public SearchesCronConfiguration getSearchesCronConfiguration ()
+   public SearchesCronConfiguration getSearchesCronConfiguration()
    {
-      return notStoredPartOfConfiguration.getCronConfiguration ().
-         getSearchesConfiguration ();
+      return loader.getConf().getCronConfiguration().getSearchesConfiguration();
    }
 
-   public SendLogsCronConfiguration getSendLogsCronConfiguration ()
+   public SendLogsCronConfiguration getSendLogsCronConfiguration()
    {
-      return notStoredPartOfConfiguration.getCronConfiguration ().
-         getSendLogsConfiguration ();
-   }
-   
-   public SystemCheckCronConfiguration getSystemCheckCronConfiguration ()
-   {
-      return notStoredPartOfConfiguration.getCronConfiguration ().
-         getSystemCheckConfiguration ();
+      return loader.getConf().getCronConfiguration().getSendLogsConfiguration();
    }
 
-   // GUI configurations
-   public GuiConfiguration getGuiConfiguration ()
+   public SystemCheckCronConfiguration getSystemCheckCronConfiguration()
    {
-      return notStoredPartOfConfiguration.getGuiConfiguration ();
+      return loader.getConf().getCronConfiguration().getSystemCheckConfiguration();
    }
-   
+
    // Messaging configurations
-   public JmsConfiguration getJmsConfiguration ()
+   public JmsConfiguration getJmsConfiguration()
    {
-      return notStoredPartOfConfiguration.getMessagingConfiguration ().
-         getJmsConfiguration ();
-   }
-   
-   public MailConfiguration getMailConfiguration ()
-   {
-      return configurationDao.getCurrentConfiguration ().
-         getMessagingConfiguration ().getMailConfiguration ();
-   }
-   
-   // Network configuration
-   public NetworkConfiguration getNetworkConfiguration ()
-   {
-      return notStoredPartOfConfiguration.getNetworkConfiguration ();
+      return loader.getConf().getMessagingConfiguration().getJmsConfiguration();
    }
 
-   // Products configuration  
-   public boolean isDataPublic()
+   public MailConfiguration getMailConfiguration()
    {
-      return notStoredPartOfConfiguration.getProductConfiguration ().
-         isPublicData ();
+      return loader.getConf().getMessagingConfiguration().getMailConfiguration();
    }
-   
-   public DownloadConfiguration getDownloadConfiguration ()
+
+   // Network configuration
+   public NetworkConfiguration getNetworkConfiguration()
    {
-      return notStoredPartOfConfiguration.
-         getProductConfiguration ().getDownloadConfiguration ();
+      return loader.getConf().getNetworkConfiguration();
    }
-   
-   public ProductConfiguration getProductConfiguration ()
+
+   public DownloadConfiguration getDownloadConfiguration()
    {
-      return notStoredPartOfConfiguration.
-         getProductConfiguration ();
+      return loader.getConf().getProductConfiguration().getDownloadConfiguration();
+   }
+
+   public ProductConfiguration getProductConfiguration()
+   {
+      return loader.getConf().getProductConfiguration();
    }
 
    // Search configurations
+   public SolrType getSolrType()
+   {
+      if (getSolrConfiguration() != null)
+      {
+         return SolrType.EMBED;
+      }
+      if (getSolrStandaloneConfiguration() != null)
+      {
+         return SolrType.STANDALONE;
+      }
+      if (getSolrCloudConfiguration() != null)
+      {
+         return SolrType.CLOUD;
+      }
+      return SolrType.NONE;
+   }
+
    public SolrConfiguration getSolrConfiguration ()
    {
-      return notStoredPartOfConfiguration.getSearchConfiguration ().
-         getSolrConfiguration ();
+      return loader.getConf().getSearchConfiguration().getSolrConfiguration();
    }
-   
-   public OdataConfiguration getOdataConfiguration ()
+
+   public SolrStandaloneConfiguration getSolrStandaloneConfiguration()
    {
-      return notStoredPartOfConfiguration.
-         getSearchConfiguration ().getOdataConfiguration ();
+      return loader.getConf().getSearchConfiguration().getSolrStandalone();
    }
-   
-   public GeonameConfiguration getGeonameConfiguration ()
+
+   public SolrCloudConfiguration getSolrCloudConfiguration()
    {
-      return notStoredPartOfConfiguration.
-         getSearchConfiguration ().getGeocoderConfiguration ().
-         getGeonameConfiguration ();
+      return loader.getConf().getSearchConfiguration().getSolrCloud();
    }
-   
-   public GeocoderConfiguration getGeocoderConfiguration ()
+
+   public OdataConfiguration getOdataConfiguration()
    {
-      return notStoredPartOfConfiguration.
-         getSearchConfiguration ().getGeocoderConfiguration ();
+      return loader.getConf().getSearchConfiguration().getOdataConfiguration();
    }
-   
-   public NominatimConfiguration getNominatimConfiguration ()
+
+   public GeonameConfiguration getGeonameConfiguration()
    {
-      return notStoredPartOfConfiguration.
-         getSearchConfiguration ().getGeocoderConfiguration ().
-         getNominatimConfiguration ();
+      return loader.getConf()
+            .getSearchConfiguration().getGeocoderConfiguration().getGeonameConfiguration();
    }
-   
+
+   public GeocoderConfiguration getGeocoderConfiguration()
+   {
+      return loader.getConf().getSearchConfiguration().getGeocoderConfiguration();
+   }
+
+   public NominatimConfiguration getNominatimConfiguration()
+   {
+      return loader.getConf()
+            .getSearchConfiguration().getGeocoderConfiguration().getNominatimConfiguration();
+   }
+
    // Server configurations
-   public ServerConfiguration getServerConfiguration ()
+   public ServerConfiguration getServerConfiguration()
    {
-      return (ServerConfiguration) notStoredPartOfConfiguration.
-         getServerConfiguration ();
+      return (ServerConfiguration) loader.getConf().getServerConfiguration();
    }
-   
-   public FtpServerConfiguration getFtpServerConfiguration ()
-   {
-      return notStoredPartOfConfiguration.getServerConfiguration ().
-         getFtpServerConfiguration ();
-   }
-   
+
    // System configurations
-   public ArchiveConfiguration getArchiveConfiguration ()
+   public ArchiveConfiguration getArchiveConfiguration()
    {
-      return notStoredPartOfConfiguration.getSystemConfiguration ().
-         getArchiveConfiguration ();
+      return loader.getConf().getSystemConfiguration().getArchiveConfiguration();
    }
 
    public TomcatConfiguration getTomcatConfiguration()
    {
-      return notStoredPartOfConfiguration.getSystemConfiguration ().
-         getTomcatConfiguration ();
+      return loader.getConf().getSystemConfiguration().getTomcatConfiguration();
    }
 
-   public SupportConfiguration getSupportConfiguration ()
+   public SupportConfiguration getSupportConfiguration()
    {
-      return configurationDao.getCurrentConfiguration ().
-         getSystemConfiguration ().getSupportConfiguration ();
+      return loader.getConf().getSystemConfiguration().getSupportConfiguration();
    }
 
-   public AdministratorConfiguration getAdministratorConfiguration ()
+   public AdministratorConfiguration getAdministratorConfiguration()
    {
-      return notStoredPartOfConfiguration.getSystemConfiguration ().
-         getAdministratorConfiguration ();
+      return loader.getConf().getSystemConfiguration().getAdministratorConfiguration();
    }
 
-   public NameConfiguration getNameConfiguration ()
+   public NameConfiguration getNameConfiguration()
    {
-      return notStoredPartOfConfiguration.
-         getSystemConfiguration ().getNameConfiguration ();
+      return loader.getConf().getSystemConfiguration().getNameConfiguration();
    }
 
-   public ProcessingConfiguration getProcessingConfiguration ()
+   public ProcessingConfiguration getProcessingConfiguration()
    {
-      return notStoredPartOfConfiguration.getSystemConfiguration ().
-         getProcessingConfiguration ();
-   }
-
-   public DatabaseConfiguration getDatabaseConfiguration ()
-   {
-      return notStoredPartOfConfiguration.getSystemConfiguration ().
-         getDatabaseConfiguration ();
-   }
-
-   public ExecutorConfiguration getExecutorConfiguration ()
-   {
-      return notStoredPartOfConfiguration.getSystemConfiguration ().
-         getExecutorConfiguration ();
+      return loader.getConf().getSystemConfiguration().getProcessingConfiguration();
    }
 
    public List<DataStoreConf> getDataStoresConf()
    {
-      return notStoredPartOfConfiguration.getDataStores().getDataStore();
+      return loader.getConf().getDataStores().getDataStore();
+   }
+
+   public DatabaseConfiguration getDatabaseConfiguration()
+   {
+      return loader.getConf().getSystemConfiguration().getDatabaseConfiguration();
+   }
+
+   public ExecutorConfiguration getExecutorConfiguration()
+   {
+      return loader.getConf().getSystemConfiguration().getExecutorConfiguration();
    }
 
    public String getWorkingDirectoryPath()
    {
-      return notStoredPartOfConfiguration.getWorkingDirectory();
+      return loader.getConf().getWorkingDirectory();
    }
 
-   @Component ("configurationLoader")
-   static class ConfigurationLoader implements InitializingBean
+   // Used in dhus-core-database.xml
+   public String getJDBCDriver()
    {
-      private static final Logger LOGGER = LogManager.getLogger(ConfigurationLoader.class);
+      return loader.getConf().getSystemConfiguration().getDatabaseConfiguration().getJDBCDriver();
+   }
+
+   // Used in dhus-core-database.xml
+   public String getJDBCUrl()
+   {
+      return loader.getConf().getSystemConfiguration().getDatabaseConfiguration().getJDBCUrl();
+   }
+
+   // Used in dhus-core-database.xml
+   public String getLogin()
+   {
+      return loader.getConf().getSystemConfiguration().getDatabaseConfiguration().getLogin();
+   }
+
+   // Used in dhus-core-database.xml
+   public String getPassword()
+   {
+      return loader.getConf().getSystemConfiguration().getDatabaseConfiguration().getPassword();
+   }
+
+   // Used in dhus-core-database.xml
+   public String getHibernateDialect()
+   {
+      return loader.getConf().getSystemConfiguration().getDatabaseConfiguration().getHibernateDialect();
+   }
+
+   public DataStoreManager getDataStoreManager()
+   {
+      return (DataStoreManager) loader.getConf().getDataStores();
+   }
+
+   public ScannerManager getScannerManager()
+   {
+      return (ScannerManager) loader.getConf().getScanners();
+   }
+
+   public SourceManager getSourceManager()
+   {
+      return (SourceManager) loader.getConf().getSources();
+   }
+
+   public SynchronizerManager getSynchronizerManager()
+   {
+      return (SynchronizerManager) loader.getConf().getSynchronizers();
+   }
+
+   public EvictionManager getEvictionManager()
+   {
+      return (EvictionManager) loader.getConf().getEvictions();
+   }
+
+   public String getTrashPath()
+   {
+      TrashPathConfiguration trashPathConfiguration = loader.getConf().getSystemConfiguration().getTrashPathConfiguration();
+      return (trashPathConfiguration == null) ? null : trashPathConfiguration.getPath();
+   }
+
+   public String getErrorPath()
+   {
+      ArchiveConfiguration archiveConf = loader.getConf().getSystemConfiguration().getArchiveConfiguration();
+      if (archiveConf != null)
+      {
+         return archiveConf.getErrorPath();
+      }
+      return null;
+   }
+
+   /**
+    * Loads, Reloads, Writes the configuration from/to XML files using JAXB.
+    * The XML schema for this XML configuration is a resource located in fr.gael.dhus.system.config.
+    */
+   static class ConfigurationLoader
+   {
+      private static final Logger LOGGER = LogManager.getLogger();
+
+      private Configuration loadedConfiguration;
 
       /**
-       * Configuration containing only non stored fields.
-       * See {@link Transient} fields of {@link Configuration} Object and 
-       * its children.
+       * Creates a new Configuration loader that immediately loads configuration from config files.
+       *
+       * @throws ConfigurationException Could not load configuration
        */
-      private Configuration notStoredPartOfConfiguration;
-      
-      private Configuration loadedConfiguration;
-      
-      @Override
-      public void afterPropertiesSet() throws Exception
+      public ConfigurationLoader() throws ConfigurationException
       {
-         Configuration loadedConfig  = null;
-         Configuration internalConfiguration = null;
-         try
-         {
-            loadedConfig = loadConfiguation (ClassLoader.
-               getSystemResource ("dhus.xml"));
-         }
-         catch (Exception e)
-         {
-            throw new ConfigurationException("User configuration error.", e);
-         }
-         
-         try
-         {
-            internalConfiguration = loadConfiguation (
-               ClassLoader.getSystemResource ("internal_dhus.xml"));
-         }
-         catch (Exception e)
-         {
-            throw new ConfigurationException("Internal configuration error.",e);
-         }
-
-         loadedConfiguration = loadedConfig.completeWith (
-            internalConfiguration);
-
-         notStoredPartOfConfiguration = loadedConfiguration.getNotStoredPart ();
-
-         // Set support mail as registration mail if it is empty or null
-         SupportConfiguration supportConf = loadedConfiguration.
-                  getSystemConfiguration ().getSupportConfiguration ();
-         
-         if (supportConf.getRegistrationMail () == null || 
-                  supportConf.getRegistrationMail().isEmpty ())
-         {
-            supportConf.setRegistrationMail (supportConf.getMail ());
-         }
-                  
-         // Temp fix waiting full configurability in GUI
-         notStoredPartOfConfiguration.setCronConfiguration (
-            loadedConfiguration.getCronConfiguration ());
-         notStoredPartOfConfiguration.setProductConfiguration (
-            loadedConfiguration.getProductConfiguration ());
-         notStoredPartOfConfiguration.setSearchConfiguration (
-            loadedConfiguration.getSearchConfiguration ());
-         notStoredPartOfConfiguration.getSystemConfiguration ()
-               .setNameConfiguration (
-                     loadedConfiguration.getSystemConfiguration ()
-                           .getNameConfiguration ());
-         notStoredPartOfConfiguration.setDataStores(loadedConfiguration.getDataStores());
+         loadedConfiguration = load();
       }
-      
+
+      /**
+       * Reloads the configuration.
+       *
+       * @throws ConfigurationException could not reload configuration
+       */
+      public void reload() throws ConfigurationException
+      {
+         loadedConfiguration = load();
+      }
+
+      /**
+       * Saves the loaded (potentially modified) loaded configuration into the configuration file.
+       * <p>Writes to the dhus.xml in the classpath, or to the dhus.xml in the working directory.
+       *
+       * @throws ConfigurationException in case of error
+       */
+      public void save() throws ConfigurationException
+      {
+         // Search for "dhus.xml" in classpath
+         URL configLocation = ClassLoader.getSystemResource("dhus.xml");
+         if (configLocation == null)
+         {
+            // If not found, uses "dhus.xml" in the CWD
+            try
+            {
+               configLocation = Paths.get("dhus.xml").toUri().toURL();
+            }
+            catch (IOException ex)
+            {
+               throw new ConfigurationException(ex);
+            }
+         }
+         try
+         {
+            saveConfiguration(loadedConfiguration, configLocation);
+         }
+         catch (JAXBException | IOException | URISyntaxException ex)
+         {
+            throw new ConfigurationException("Could not save configuration", ex);
+         }
+      }
+
+      /**
+       * Load config from dhus.xml.
+       * dhus.xml can be in the classpath, or in CWD.
+       *
+       * @return loaded configuration
+       * @throws ConfigurationException Could not load or merge config files
+       */
+      private static Configuration load() throws ConfigurationException
+      {
+         Configuration configuration = null;
+
+         try
+         {
+            // Search for "dhus.xml" in classpath
+            URL configLocation = ClassLoader.getSystemResource("dhus.xml");
+            if (configLocation != null)
+            {
+               configuration = loadConfiguation(configLocation);
+            }
+            else
+            {
+               Path cwdConf = Paths.get("dhus.xml");
+               if (Files.exists(cwdConf) && Files.isReadable(cwdConf))
+               {
+                  configLocation = cwdConf.toUri().toURL();
+                  configuration = loadConfiguation(configLocation);
+               }
+               else
+               {
+                  configuration = new Configuration();
+               }
+            }
+         }
+         catch (IOException | JAXBException | SAXException ex)
+         {
+            throw new ConfigurationException("User configuration error", ex);
+         }
+
+         return configuration;
+      }
+
       /**
        * Load the passed configuration URL into {@link Configuration} class.
-       * @param configuration the configuration to parsed.
-       * @return the fulfilled configuration data set.
-       * @throws JAXBException when input is wrong.
-       * @throws IOException when input cannot be accessed.
+       *
+       * @param configuration the configuration to parsed
+       * @return the fulfilled configuration data set
+       * @throws JAXBException when input is wrong
+       * @throws IOException   when input cannot be accessed
+       * @throws SAXException  XML cannot be parsed
        */
-      Configuration loadConfiguation (URL configuration)
-            throws JAXBException, IOException
+      static Configuration loadConfiguation(URL configuration)
+            throws JAXBException, IOException, SAXException
       {
-         JAXBContext context = JAXBContext.newInstance (
-            "fr.gael.dhus.database.object.config");
-         Unmarshaller unmarshaller = context.createUnmarshaller ();
-         
-         LOGGER.info("Loading configuration from " +
-            configuration.toExternalForm ());
-         
-         /* Validation fails ! */
-         boolean schemaCheck = !("false".equalsIgnoreCase (
-            System.getProperty ("checkUserConfiguration")));
-         
-         if (schemaCheck)
-         {
-            unmarshaller.setEventHandler (new ValidationEventHandler()
+         JAXBContext context = JAXBContext.newInstance("fr.gael.dhus.database.object.config");
+         Unmarshaller unmarshaller = context.createUnmarshaller();
+
+         SchemaFactory schemaFactory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
+         URL url = ConfigurationManager.class.getClassLoader().getResource("fr/gael/dhus/system/config/dhus-configuration.xsd");
+         Schema schema = schemaFactory.newSchema(url);
+         unmarshaller.setSchema(schema);
+
+         LOGGER.info("Loading configuration from {}", configuration.toExternalForm());
+
+            unmarshaller.setEventHandler(new ValidationEventHandler()
             {
                @Override
-               public boolean handleEvent (ValidationEvent event)
+               public boolean handleEvent(ValidationEvent event)
                {
-                  switch (event.getSeverity ())
+                  switch (event.getSeverity())
                   {
                      case ValidationEvent.WARNING:
                      case ValidationEvent.ERROR:
                      case ValidationEvent.FATAL_ERROR:
-                        LOGGER.error(new Message (MessageType.SYSTEM,
-                           "Configuration parsing failure at line " +
-                           event.getLocator ().getLineNumber () + ", column " +
-                           event.getLocator ().getColumnNumber () + ": " +
-                           event.getMessage ()));
+                        LOGGER.error("Configuration parsing failure at line {}, column {}: {}",
+                              event.getLocator().getLineNumber(),
+                              event.getLocator().getColumnNumber(),
+                              event.getMessage());
                         break;
                      default:
-                        LOGGER.warn("Invalid configuration validation event!");
+                        LOGGER.error("Invalid configuration validation event!");
                         break;
                   }
                   return false;
                }
             });
-         }
-
-         InputStream configStream = configuration.openConnection ().
-            getInputStream ();
 
          Configuration loadedConfig = null;
-         try
+
+         try (InputStream stream = configuration.openConnection().getInputStream())
          {
-            loadedConfig =
-               unmarshaller.unmarshal (new StreamSource (configStream),
-                  Configuration.class).getValue ();
+            loadedConfig = unmarshaller.unmarshal(new StreamSource(stream), Configuration.class).getValue();
          }
-         finally
-         {
-            configStream.close ();
-         }
-         
          return loadedConfig;
       }
-      
-      // Used in dhus-core-database.xml 
-      public String getDatabasePath()
-      {
-         return notStoredPartOfConfiguration.getSystemConfiguration ().
-            getDatabaseConfiguration ().getPath ();
-      }
-      
-      // Used in dhus-core-database.xml 
-      public String getDatabaseSettings()
-      {
-         return notStoredPartOfConfiguration.getSystemConfiguration ().
-            getDatabaseConfiguration ().getSettings ();
-      }
 
-      // Use in dhus-core-database.xml
-      public String getDatabaseEncryption ()
+      static void saveConfiguration(Configuration toSave, URL location)
+            throws JAXBException, IOException, URISyntaxException
       {
-         DatabaseConfiguration db_conf = notStoredPartOfConfiguration
-               .getSystemConfiguration ().getDatabaseConfiguration ();
-         String encryption_type = db_conf.getCryptType ();
-         String encryption_key = db_conf.getCryptKey ();
+         JAXBContext context = JAXBContext.newInstance("fr.gael.dhus.database.object.config");
+         Marshaller marshaller = context.createMarshaller();
+         marshaller.setProperty("jaxb.formatted.output", Boolean.TRUE);
 
-         if (encryption_key == null || encryption_key.trim ().isEmpty () ||
-               encryption_type == null || encryption_type.trim ().isEmpty ())
+         File config = new File(location.toURI());
+         try (OutputStream stream = new FileOutputStream(config))
          {
-            return "";
+            marshaller.marshal(toSave, stream);
+            stream.flush();
+            stream.close();
          }
-
-         StringBuilder sb = new StringBuilder ();
-         sb.append ("crypt_type=").append (encryption_type).append (';')
-               .append ("crypt_key=").append (encryption_key);
-
-         return sb.toString ();
       }
 
-      public List<DataStoreConf> getDataStoreConf()
-      {
-         return notStoredPartOfConfiguration.getDataStores().getDataStore();
-      }
-
-      public Configuration getLoadedConfiguration ()
+      /**
+       * gets the currently loaded configuration.
+       *
+       * @return Loaded configuration
+       */
+      public Configuration getConf()
       {
          return loadedConfiguration;
-      }
-      
-      public Configuration getNotStoredPartOfConfiguration ()
-      {
-         return notStoredPartOfConfiguration;
       }
    }
 }

@@ -179,7 +179,7 @@ public class GenerateUserUUIDs implements CustomTaskChange
       }
       catch (Exception e)
       {
-         e.printStackTrace ();
+         LOGGER.error("Exception occured while generating User UUIDs", e);
       }
    }
 }

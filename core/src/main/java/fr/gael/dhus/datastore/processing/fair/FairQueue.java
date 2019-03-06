@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -56,13 +56,10 @@ public class FairQueue<E> implements BlockingQueue<E>
    private Object lastUsedKey = null;
 
    /** Lock held by take, poll, etc */
-   private final ReentrantLock takeLock = new ReentrantLock ();
+   private final ReentrantLock lock = new ReentrantLock ();
 
    /** Wait queue for waiting takes */
-   private final Condition notEmpty = takeLock.newCondition ();
-
-   /** Lock held by put, offer, etc */
-   private final ReentrantLock putLock = new ReentrantLock ();
+   private final Condition notEmpty = lock.newCondition ();
 
    public FairQueue ()
    {
@@ -91,21 +88,22 @@ public class FairQueue<E> implements BlockingQueue<E>
       }
 
       int c = -1;
-      final ReentrantLock putLock = this.putLock;
+      final ReentrantLock lock = this.lock;
       final AtomicInteger count = this.count;
-      putLock.lockInterruptibly ();
+      lock.lockInterruptibly ();
       try
       {
          store (e);
          c = count.getAndIncrement ();
+
+         if (c == 0)
+         {
+            notEmpty.signal ();
+         }
       }
       finally
       {
-         putLock.unlock ();
-      }
-      if (c == 0)
-      {
-         signalNotEmpty ();
+         lock.unlock ();
       }
    }
 
@@ -123,21 +121,21 @@ public class FairQueue<E> implements BlockingQueue<E>
       // Note: convention in all put/take/etc is to preset local var
       // holding count negative to indicate failure unless set.
       int c = -1;
-      final ReentrantLock putLock = this.putLock;
-      putLock.lock ();
+      final ReentrantLock lock = this.lock;
+      lock.lock ();
       try
       {
          store (e);
          c = count.getAndIncrement ();
+
+         if (c == 0)
+         {
+            notEmpty.signal ();
+         }
       }
       finally
       {
-         putLock.unlock ();
-      }
-
-      if (c == 0)
-      {
-         signalNotEmpty ();
+         lock.unlock ();
       }
       return c >= 0;
    }
@@ -155,8 +153,8 @@ public class FairQueue<E> implements BlockingQueue<E>
       E x;
       int c = -1;
       final AtomicInteger count = this.count;
-      final ReentrantLock takeLock = this.takeLock;
-      takeLock.lockInterruptibly ();
+      final ReentrantLock lock = this.lock;
+      lock.lockInterruptibly ();
       try
       {
          while (count.get () == 0)
@@ -172,7 +170,7 @@ public class FairQueue<E> implements BlockingQueue<E>
       }
       finally
       {
-         takeLock.unlock ();
+         lock.unlock ();
       }
       return x;
    }
@@ -184,15 +182,15 @@ public class FairQueue<E> implements BlockingQueue<E>
       {
          return null;
       }
-      final ReentrantLock takeLock = this.takeLock;
-      takeLock.lock ();
+      final ReentrantLock lock = this.lock;
+      lock.lock ();
       try
       {
          return getNext (false);
       }
       finally
       {
-         takeLock.unlock ();
+         lock.unlock ();
       }
    }
 
@@ -206,8 +204,8 @@ public class FairQueue<E> implements BlockingQueue<E>
       }
       E x = null;
       int c = -1;
-      final ReentrantLock takeLock = this.takeLock;
-      takeLock.lock ();
+      final ReentrantLock lock = this.lock;
+      lock.lock ();
       try
       {
          if (count.get () > 0)
@@ -222,7 +220,7 @@ public class FairQueue<E> implements BlockingQueue<E>
       }
       finally
       {
-         takeLock.unlock ();
+         lock.unlock ();
       }
       return x;
    }
@@ -234,8 +232,8 @@ public class FairQueue<E> implements BlockingQueue<E>
       int c = -1;
       long nanos = unit.toNanos (timeout);
       final AtomicInteger count = this.count;
-      final ReentrantLock takeLock = this.takeLock;
-      takeLock.lockInterruptibly ();
+      final ReentrantLock lock = this.lock;
+      lock.lockInterruptibly ();
       try
       {
          while (count.get () == 0)
@@ -255,7 +253,7 @@ public class FairQueue<E> implements BlockingQueue<E>
       }
       finally
       {
-         takeLock.unlock ();
+         lock.unlock ();
       }
       return x;
    }
@@ -277,8 +275,8 @@ public class FairQueue<E> implements BlockingQueue<E>
       {
          throw new IllegalArgumentException ();
       }
-      final ReentrantLock takeLock = this.takeLock;
-      takeLock.lock ();
+      final ReentrantLock lock = this.lock;
+      lock.lock ();
       try
       {
          int n = Math.min (maxElements, count.get ());
@@ -295,7 +293,7 @@ public class FairQueue<E> implements BlockingQueue<E>
       }
       finally
       {
-         takeLock.unlock ();
+         lock.unlock ();
       }
    }
 
@@ -318,7 +316,8 @@ public class FairQueue<E> implements BlockingQueue<E>
       {
          return false;
       }
-      fullyLock ();
+      final ReentrantLock lock = this.lock;
+      lock.lock ();
       try
       {
          for (Object key : keys)
@@ -332,7 +331,7 @@ public class FairQueue<E> implements BlockingQueue<E>
       }
       finally
       {
-         fullyUnlock ();
+         lock.unlock ();
       }
    }
 
@@ -356,7 +355,7 @@ public class FairQueue<E> implements BlockingQueue<E>
 
    private E getNext (boolean remove)
    {
-      // Always called after using a takeLock.lock
+      // Always called after using a lock.lock
       LinkedList<E> list = null;
       boolean found = false;
       Object listKey = null;
@@ -389,6 +388,11 @@ public class FairQueue<E> implements BlockingQueue<E>
          }
       }
 
+      if (list == null)
+      {
+         return null;
+      }
+
       E e = remove ? list.poll () : list.peek ();
       if (list.isEmpty ())
       {
@@ -419,6 +423,11 @@ public class FairQueue<E> implements BlockingQueue<E>
          FairQueueEntry ee = (FairQueueEntry) e;
          key = ee.getListKey ();
       }
+      // In case of the FaireQueueEntry was initialized with a null key
+      if (key == null)
+      {
+         key = "unknown";
+      }
 
       LinkedList<E> list = storage.get (key);
       if (list == null)
@@ -426,45 +435,8 @@ public class FairQueue<E> implements BlockingQueue<E>
          list = new LinkedList<E> ();
          keys.add (key);
       }
-
       list.add (e);
       storage.put (key, list);
-   }
-
-   /**
-    * Signals a waiting take. Called only from put/offer (which do not otherwise
-    * ordinarily lock takeLock.)
-    */
-   private void signalNotEmpty ()
-   {
-      final ReentrantLock takeLock = this.takeLock;
-      takeLock.lock ();
-      try
-      {
-         notEmpty.signal ();
-      }
-      finally
-      {
-         takeLock.unlock ();
-      }
-   }
-
-   /**
-    * Lock to prevent both puts and takes.
-    */
-   private void fullyLock ()
-   {
-      putLock.lock ();
-      takeLock.lock ();
-   }
-
-   /**
-    * Unlock to allow both puts and takes.
-    */
-   private void fullyUnlock ()
-   {
-      takeLock.unlock ();
-      putLock.unlock ();
    }
 
    @Override

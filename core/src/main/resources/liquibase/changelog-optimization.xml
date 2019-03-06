@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2018 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<databaseChangeLog
+   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
+
+   <changeSet id="removeUnusedIndex" author="julien">
+      <dropIndex tableName="CHECKSUMS" indexName="SYS_IDX_10578" />
+      <dropIndex tableName="NETWORK_USAGE" indexName="IDX_NETWORK_USAGE_ID" />
+      <dropIndex tableName="USERS" indexName="INDEX_USERS_UUID" />
+   </changeSet>
+
+   <changeSet id="removeUnusedIndexScihub" author="julien">
+      <preConditions onFail="MARK_RAN" onFailMessage="Change already applied" >
+         <indexExists tableName="METADATA_INDEXES" indexName="SYS_IDX_10422" />
+      </preConditions>
+      <dropIndex tableName="METADATA_INDEXES" indexName="SYS_IDX_10422" />
+   </changeSet>
+
+   <changeSet id="afterRemoveUnusedIndex" author="julien" dbms="hsqldb">
+      <sql dbms="hsqldb">CHECKPOINT DEFRAG;</sql>
+   </changeSet>
+
+   <changeSet id="metadata-rework-part1-pre-migration" author="patrick, julien">
+      <preConditions onFail="MARK_RAN" onFailMessage="already done">
+         <not>
+            <tableExists tableName="METADATA_DEFINITION" />
+         </not>
+      </preConditions>
+      <createTable tableName="METADATA_DEFINITION">
+         <column name="ID" type="INTEGER" autoIncrement="true">
+            <constraints primaryKey="true" />
+         </column>
+         <column name="NAME" type="VARCHAR(255)" />
+         <column name="TYPE" type="VARCHAR(255)" />
+         <column name="CATEGORY" type="VARCHAR(255)" />
+         <column name="QUERYABLE" type="VARCHAR(255)" />
+      </createTable>
+
+      <sql dbms="hsqldb">SET FILES LOG FALSE;</sql>
+      <sql dbms="hsqldb">CHECKPOINT;</sql>
+      <customChange class="fr.gael.dhus.database.liquibase.MetadataReworkPopulateMetadataDefinition" />
+      <sql dbms="hsqldb">SET FILES LOG TRUE;</sql>
+      <sql dbms="hsqldb">CHECKPOINT DEFRAG;</sql>
+   </changeSet>
+
+   <changeSet id="metadata-rework-part2" author="patrick, julien">
+      <preConditions onFail="MARK_RAN" onFailMessage="already done">
+         <not>
+            <columnExists tableName="METADATA_INDEXES" columnName="METADATA_DEFINITION_ID" />
+         </not>
+      </preConditions>
+      <!-- Migrate metadata -->
+      <sql dbms="hsqldb">SET FILES LOG FALSE;</sql>
+      <sql dbms="hsqldb">CHECKPOINT;</sql>
+      <createTable tableName="METADATA_INDEXES_TMP">
+         <column name="PRODUCT_ID" type="BIGINT">
+            <constraints nullable="false"/>
+         </column>
+         <column name="METADATA_DEFINITION_ID" type="INTEGER">
+            <constraints nullable="false"/>
+         </column>
+         <column name="VALUE" type="VARCHAR(32768)">
+            <constraints nullable="false"/>
+         </column>
+      </createTable>
+      <addPrimaryKey tableName="METADATA_INDEXES_TMP"
+                     columnNames="PRODUCT_ID, METADATA_DEFINITION_ID"
+                     constraintName="PK_METADATA_INDEXES" />
+      <addForeignKeyConstraint baseTableName="METADATA_INDEXES_TMP"
+                               baseColumnNames="METADATA_DEFINITION_ID"
+                               constraintName="FK_METADATA_INDEXES_METADATA_DEFINITON_ID"
+                               referencedTableName="METADATA_DEFINITION"
+                               referencedColumnNames="ID" />
+
+      <customChange class="fr.gael.dhus.database.liquibase.MetadataReworkMigration" />
+
+      <dropTable tableName="METADATA_INDEXES" />
+      <renameTable oldTableName="METADATA_INDEXES_TMP" newTableName="METADATA_INDEXES" />
+
+      <sql dbms="hsqldb">SET FILES LOG TRUE;</sql>
+      <sql dbms="hsqldb">CHECKPOINT DEFRAG;</sql>
+   </changeSet>
+
+   <changeSet id="rename-foreignKey" author="julien">
+      <preConditions onFail="MARK_RAN" onFailMessage="already done">
+         <foreignKeyConstraintExists foreignKeyName="FK_METADATA_INDEXES_METADATA_DEFINITON_ID" />
+      </preConditions>
+
+      <dropForeignKeyConstraint baseTableName="METADATA_INDEXES"
+                                constraintName="FK_METADATA_INDEXES_METADATA_DEFINITON_ID" />
+
+      <addForeignKeyConstraint baseTableName="METADATA_INDEXES"
+                               baseColumnNames="METADATA_DEFINITION_ID"
+                               constraintName="FK_METADATA_INDEXES_METADATA_DEFINITION_ID"
+                               referencedTableName="METADATA_DEFINITION"
+                               referencedColumnNames="ID" />
+   </changeSet>
+
+   <changeSet id="add-missing-metadata-foreignKey" author="julien">
+      <preConditions onFail="MARK_RAN" onFailMessage="already done">
+         <and>
+            <not>
+               <foreignKeyConstraintExists
+                     foreignKeyTableName="METADATA_INDEXES"
+                     foreignKeyName="FK8EF847D062210BBD" />
+            </not>
+            <not>
+               <foreignKeyConstraintExists
+                     foreignKeyTableName="METADATA_INDEXES"
+                     foreignKeyName="FK_METADATA_INDEXES_PRODUCTS_ID" />
+            </not>
+         </and>
+      </preConditions>
+
+      <addForeignKeyConstraint baseTableName="METADATA_INDEXES"
+                               baseColumnNames="PRODUCT_ID"
+                               constraintName="FK_METADATA_INDEXES_PRODUCTS_ID"
+                               referencedTableName="PRODUCTS"
+                               referencedColumnNames="ID" />
+   </changeSet>
+</databaseChangeLog>

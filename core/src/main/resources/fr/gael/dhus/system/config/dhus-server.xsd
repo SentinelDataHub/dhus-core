@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2013,2014,2015 GAEL Systems
+   Copyright (C) 2013,2014,2015,2017,2018 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -33,10 +33,9 @@
       </xs:appinfo>
    </xs:annotation>
 
-   <xs:complexType abstract="true" name="abstractServerConfiguration">
+   <xs:complexType name="abstractServerConfiguration">
       <xs:annotation>
          <xs:appinfo>
-            <inheritance:extends>fr.gael.dhus.database.object.config.ConfigurationPart</inheritance:extends>
             <jxb:class name="AbstractServerConfiguration" implClass="fr.gael.dhus.database.object.config.server.ServerConfiguration" />
          </xs:appinfo>
       </xs:annotation>
@@ -54,40 +53,25 @@
                </xs:appinfo>
             </xs:annotation>
          </xs:element>
-         <xs:element minOccurs="0" name="ftp" type="dhusServer:ftpServerConfiguration">
-            <xs:annotation>
-               <xs:appinfo>
-                  <jxb:property name="ftpServerConfiguration" />
-               </xs:appinfo>
-            </xs:annotation>
+         <xs:element minOccurs="0" name="ftp">
+            <xs:complexType>
+               <xs:anyAttribute processContents="skip" />
+            </xs:complexType>
          </xs:element>
       </xs:all>
    </xs:complexType>
 
-   <xs:complexType abstract="true" name="abstractExternalServerConfiguration">
+   <xs:complexType name="abstractExternalServerConfiguration">
       <xs:annotation>
          <xs:appinfo>
-            <inheritance:extends>fr.gael.dhus.database.object.config.ConfigurationPart</inheritance:extends>
             <jxb:class name="AbstractExternalServerConfiguration" implClass="fr.gael.dhus.database.object.config.server.ExternalServerConfiguration" />
          </xs:appinfo>
       </xs:annotation>
       <xs:all />
       <xs:attribute name="host" type="xs:string" />
       <xs:attribute name="path" type="xs:string" />
-      <xs:attribute name="port" type="xs:int" />
+      <xs:attribute name="port" type="xs:int" default="-1" />
       <xs:attribute name="protocol" type="xs:string" />
-   </xs:complexType>
-
-   <xs:complexType name="ftpServerConfiguration">
-      <xs:annotation>
-         <xs:appinfo>
-            <inheritance:extends>fr.gael.dhus.database.object.config.ConfigurationPart</inheritance:extends>
-         </xs:appinfo>
-      </xs:annotation>
-      <xs:all />
-      <xs:attribute name="ftps" type="xs:boolean" />
-      <xs:attribute name="port" type="xs:int" />
-      <xs:attribute name="passivePort" type="xs:string" />
    </xs:complexType>
 
 </xs:schema>

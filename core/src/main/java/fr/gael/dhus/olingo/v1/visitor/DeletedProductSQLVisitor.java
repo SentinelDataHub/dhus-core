@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -73,7 +73,7 @@ public class DeletedProductSQLVisitor extends SQLVisitor
          }
          case DeletedProductEntitySet.SIZE:
          {
-            member = new Member("downloadSize");
+            member = new Member("size");
             break;
          }
          case DeletedProductEntitySet.INGESTION_DATE:

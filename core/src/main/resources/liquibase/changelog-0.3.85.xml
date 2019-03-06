@@ -31,15 +31,22 @@
          </column>
       </addColumn>
    </changeSet>
-   
-   <changeSet author="fred" id="ProductsUUIDGenerate" >
+
+   <changeSet author="fred" id="ProductsUUIDGenerate" dbms="hsqldb">
       <update tableName="PRODUCTS" >
          <column name="UUID" valueComputed="UUID()" />
          <where>UUID like 'X'</where>
       </update>
    </changeSet>
-   
-   <changeSet author="fred" id="optimisationBlobsAccess">
+
+   <changeSet author="fred" id="ProductsUUIDGenerate" dbms="postgresql">
+      <update tableName="PRODUCTS" >
+         <column name="UUID" valueComputed="uuid_generate_v4()" />
+         <where>UUID like 'X'</where>
+      </update>
+   </changeSet>
+
+   <changeSet author="fred" id="optimisationBlobsAccess" dbms="hsqldb">
       <sql>
         SET TABLE SYSTEM_LOBS.BLOCKS TYPE CACHED;
         SET TABLE SYSTEM_LOBS.LOBS TYPE CACHED;

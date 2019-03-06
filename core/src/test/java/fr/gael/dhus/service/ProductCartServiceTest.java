@@ -1,7 +1,6 @@
 package fr.gael.dhus.service;
 
 import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -74,7 +73,7 @@ public class ProductCartServiceTest extends AbstractTestNGSpringContextTests
       u = userDao.create(u);
       
       Product p = new Product();
-      p.setPath(new URL("file:///tmp/product##1"));
+      p.setOnline(true);
       p = productDao.create(p);
       
       try

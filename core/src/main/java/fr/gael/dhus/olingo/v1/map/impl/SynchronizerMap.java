@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,11 +19,12 @@
  */
 package fr.gael.dhus.olingo.v1.map.impl;
 
-import fr.gael.dhus.database.object.SynchronizerConf;
+import fr.gael.dhus.database.object.config.synchronizer.ProductSynchronizer;
 import fr.gael.dhus.olingo.v1.entity.Synchronizer;
 import fr.gael.dhus.olingo.v1.map.AbstractDelegatingMap;
 import fr.gael.dhus.service.ISynchronizerService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+
 import java.util.Iterator;
 
 /**
@@ -40,7 +41,7 @@ public class SynchronizerMap extends AbstractDelegatingMap<Long, Synchronizer>
    @Override
    protected Synchronizer serviceGet (Long key)
    {
-      SynchronizerConf sc = SYNC_SERVICE.getSynchronizerConfById(key);
+      ProductSynchronizer sc = SYNC_SERVICE.getSynchronizerConfById(key, ProductSynchronizer.class);
       if (sc == null)
       {
          return null;
@@ -51,8 +52,8 @@ public class SynchronizerMap extends AbstractDelegatingMap<Long, Synchronizer>
    @Override
    protected Iterator<Synchronizer> serviceIterator ()
    {
-      final Iterator<SynchronizerConf> it =
-            SYNC_SERVICE.getSynchronizerConfs("ODataProductSynchronizer");
+      final Iterator<ProductSynchronizer> it =
+            SYNC_SERVICE.getSynchronizerConfs(ProductSynchronizer.class);
       return new Iterator<Synchronizer> ()
       {
          @Override

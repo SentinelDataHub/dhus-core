@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013-2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -58,7 +58,7 @@ public class SecurityService extends WebService
          SecurityContextHolder.getContext ().getAuthentication ();
       if (auth == null)
       {
-         LOGGER.error("No auth in security context");
+         LOGGER.warn("No auth in security context");
          return null;
       }
       Object principal = auth.getPrincipal ();

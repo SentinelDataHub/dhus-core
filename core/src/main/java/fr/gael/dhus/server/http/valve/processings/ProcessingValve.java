@@ -21,6 +21,7 @@ package fr.gael.dhus.server.http.valve.processings;
 
 import com.sun.management.ThreadMXBean;
 
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.spring.context.SecurityContextProvider;
 import fr.gael.dhus.spring.security.CookieKey;
 import fr.gael.dhus.spring.security.authentication.ProxyWebAuthenticationDetails;
@@ -69,6 +70,8 @@ import org.springframework.security.crypto.codec.Base64;
 public class ProcessingValve extends ValveBase
 {
    private static final Logger LOGGER = LogManager.getLogger();
+   private static final SecurityContextProvider SEC_CTX_PROVIDER =
+         ApplicationContextProvider.getBean(SecurityContextProvider.class);
 
    public static final String DEFAULT_PATTERN = ".*(rows|\\$top)=0*[1-9]\\d{2,}.*";
 
@@ -399,7 +402,7 @@ public class ProcessingValve extends ValveBase
          String integrity = integrityCookie.getValue();
          if (integrity != null && !integrity.isEmpty())
          {
-            ctx = SecurityContextProvider.getSecurityContext(integrity);
+            ctx = SEC_CTX_PROVIDER.getSecurityContext(integrity);
          }
       }
       if ((ctx != null) && (ctx.getAuthentication() != null))

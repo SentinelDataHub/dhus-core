@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,6 +20,7 @@
 package fr.gael.dhus.olingo.v1.entity;
 
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidTargetException;
+import fr.gael.dhus.olingo.v1.Expander;
 import fr.gael.dhus.olingo.v1.Model;
 import fr.gael.dhus.olingo.v1.entityset.ConnectionEntitySet;
 import fr.gael.dhus.olingo.v1.map.impl.UserMap;
@@ -27,10 +28,11 @@ import fr.gael.dhus.server.http.valve.AccessInformation;
 import fr.gael.dhus.server.http.valve.AccessInformation.FailureConnectionStatus;
 import fr.gael.dhus.server.http.valve.AccessInformation.Status;
 
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import org.apache.olingo.odata2.api.exception.ODataException;
 import org.apache.olingo.odata2.api.uri.NavigationSegment;
@@ -41,20 +43,20 @@ import org.apache.olingo.odata2.api.uri.NavigationSegment;
 public class Connection extends AbstractEntity
 {
    protected final AccessInformation accessInformation;
-   protected final UUID uuid;
+   protected final String uuid;
 
-   public Connection (UUID uuid, AccessInformation accessInformation)
+   public Connection(String uuid, AccessInformation accessInformation)
    {
       this.accessInformation = accessInformation;
       this.uuid = uuid;
    }
 
-   public String getUsername ()
+   public String getUsername()
    {
-      return accessInformation.getUsername ();
+      return accessInformation.getUsername();
    }
 
-   public UUID getUUID()
+   public String getUUID()
    {
       return uuid;
    }
@@ -78,75 +80,95 @@ public class Connection extends AbstractEntity
    {
       return accessInformation.getDurationMs();
    }
-   
+
    public String getConnectionStatus()
    {
-      return accessInformation.getConnectionStatus()==null ? "UNKNOWN" :
-         accessInformation.getConnectionStatus().getStatus().name();
+      return accessInformation.getConnectionStatus() == null ?
+            "UNKNOWN" : accessInformation.getConnectionStatus().getStatus().name();
    }
+
    public String getConnectionStatusMessage()
    {
-      if ((accessInformation.getConnectionStatus()!=null) &&
-          (accessInformation.getConnectionStatus().getStatus()==Status.FAILURE))
+      if ((accessInformation.getConnectionStatus() != null)
+       && (accessInformation.getConnectionStatus().getStatus() == Status.FAILURE))
       {
-         FailureConnectionStatus status = (FailureConnectionStatus)
-            accessInformation.getConnectionStatus();
-         if (status.getException()!=null)
+         FailureConnectionStatus status = (FailureConnectionStatus) accessInformation.getConnectionStatus();
+         if (status.getException() != null)
+         {
             return status.getException().getMessage();
+         }
       }
       return null;
    }
-   
-   public long getContentLength ()
+
+   public long getContentLength()
    {
       return accessInformation.getReponseSize();
    }
-   
-   public long getWrittenContentLength ()
+
+   public long getWrittenContentLength()
    {
       return accessInformation.getWrittenResponseSize();
    }
 
-
    @Override
    public Map<String, Object> toEntityResponse(String root_url)
    {
-      Map<String, Object>res = new HashMap<>();
-      res.put(ConnectionEntitySet.ID,       uuid.toString());
-      res.put(ConnectionEntitySet.DATE,     getStartDate());
+      Map<String, Object> res = new HashMap<>();
+      res.put(ConnectionEntitySet.ID, uuid);
+      res.put(ConnectionEntitySet.DATE, getStartDate());
       res.put(ConnectionEntitySet.REMOTEIP, getRemoteAddress());
-      res.put(ConnectionEntitySet.REQUEST,  getRequest());
+      res.put(ConnectionEntitySet.REQUEST, getRequest());
       res.put(ConnectionEntitySet.DURATION, getDurationMs());
       res.put(ConnectionEntitySet.CONTENT_LENGTH, getContentLength());
       res.put(ConnectionEntitySet.WRITTEN_CONTENT_LENGTH,
-           getWrittenContentLength());
+            getWrittenContentLength());
       res.put(ConnectionEntitySet.STATUS, getConnectionStatus());
       res.put(ConnectionEntitySet.STATUS_MESSAGE, getConnectionStatusMessage());
       return res;
    }
 
    @Override
-   public Object getProperty (String prop_name) throws ODataException
+   public Object getProperty(String prop_name) throws ODataException
    {
-      if (prop_name.equals (ConnectionEntitySet.ID)) return uuid;
-      if (prop_name.equals (ConnectionEntitySet.DATE))
-         return getStartDate ();
-      if (prop_name.equals (ConnectionEntitySet.REMOTEIP))
-         return getRemoteAddress ();
-      if (prop_name.equals (ConnectionEntitySet.REQUEST))
-         return getRequest ();
-      if (prop_name.equals (ConnectionEntitySet.DURATION))
-         return getDurationMs ();
-      if (prop_name.equals (ConnectionEntitySet.CONTENT_LENGTH))
+      if (prop_name.equals(ConnectionEntitySet.ID))
+      {
+         return uuid;
+      }
+      if (prop_name.equals(ConnectionEntitySet.DATE))
+      {
+         return getStartDate();
+      }
+      if (prop_name.equals(ConnectionEntitySet.REMOTEIP))
+      {
+         return getRemoteAddress();
+      }
+      if (prop_name.equals(ConnectionEntitySet.REQUEST))
+      {
+         return getRequest();
+      }
+      if (prop_name.equals(ConnectionEntitySet.DURATION))
+      {
+         return getDurationMs();
+      }
+      if (prop_name.equals(ConnectionEntitySet.CONTENT_LENGTH))
+      {
          return getContentLength();
-      if (prop_name.equals (ConnectionEntitySet.WRITTEN_CONTENT_LENGTH))
+      }
+      if (prop_name.equals(ConnectionEntitySet.WRITTEN_CONTENT_LENGTH))
+      {
          return getWrittenContentLength();
-      if (prop_name.equals (ConnectionEntitySet.STATUS))
-         return getConnectionStatus ();
-      if (prop_name.equals (ConnectionEntitySet.STATUS_MESSAGE))
-         return getConnectionStatusMessage ();
+      }
+      if (prop_name.equals(ConnectionEntitySet.STATUS))
+      {
+         return getConnectionStatus();
+      }
+      if (prop_name.equals(ConnectionEntitySet.STATUS_MESSAGE))
+      {
+         return getConnectionStatusMessage();
+      }
 
-      throw new ODataException ("Property '" + prop_name + "' not found.");
+      throw new ODataException("Property '" + prop_name + "' not found");
    }
 
    @Override
@@ -164,6 +186,22 @@ public class Connection extends AbstractEntity
       }
 
       return res;
+   }
+
+   @Override
+   public List<String> getExpandableNavLinkNames()
+   {
+      return Collections.singletonList("User");
+   }
+
+   @Override
+   public List<Map<String, Object>> expand(String navlink_name, String self_url)
+   {
+      if (navlink_name.equals("User"))
+      {
+         return Expander.entityToData(new UserMap().get(getUsername()), self_url);
+      }
+      return super.expand(navlink_name, self_url);
    }
 
 }

@@ -90,6 +90,7 @@ public class Attribute extends Item
    public Object getProperty (String prop_name) throws ODataException
    {
       if (prop_name.equals (AttributeEntitySet.VALUE)) return getValue ();
+      if (prop_name.equals (AttributeEntitySet.CATEGORY)) return getCategory ();
 
       return super.getProperty (prop_name);
    }

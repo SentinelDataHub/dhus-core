@@ -2,7 +2,6 @@ package fr.gael.dhus.database.dao;
 
 import java.math.BigInteger;
 import java.sql.SQLException;
-import java.util.Iterator;
 
 import org.hibernate.HibernateException;
 import org.hibernate.SQLQuery;
@@ -15,7 +14,6 @@ import org.testng.Assert;
 
 import fr.gael.dhus.database.dao.interfaces.HibernateDao;
 import fr.gael.dhus.database.object.Search;
-import fr.gael.dhus.util.CheckIterator;
 import fr.gael.dhus.util.TestContextLoader;
 
 @ContextConfiguration (locations = "classpath:fr/gael/dhus/spring/context-test.xml", loader = TestContextLoader.class)
@@ -119,14 +117,6 @@ public class TestSearchDao extends TestAbstractHibernateDao<Search, String>
       Assert.assertEquals (dao.count (), (howMany () - 1));
       Assert.assertNull (dao.read (sid));
       Assert.assertEquals (countAdvanced (sid), 0);
-   }
-
-   @Override
-   public void scroll ()
-   {
-      String hql = "WHERE notify IS FALSE";
-      Iterator<Search> it = dao.scroll (hql, -1, -1).iterator ();
-      Assert.assertTrue (CheckIterator.checkElementNumber (it, 2));
    }
 
    @Override

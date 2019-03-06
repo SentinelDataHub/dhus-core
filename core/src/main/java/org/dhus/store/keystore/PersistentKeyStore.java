@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -23,8 +23,11 @@ import fr.gael.dhus.database.object.KeyStoreEntry;
 import fr.gael.dhus.service.KeyStoreService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 
-import org.apache.logging.log4j.Logger;
+import java.util.Iterator;
+import java.util.List;
+
 import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class PersistentKeyStore implements KeyStore
 {
@@ -59,34 +62,35 @@ public class PersistentKeyStore implements KeyStore
     * @param value the value to be store.
     */
    @Override
-   public void put(String key, String value)
+   public void put(String key, String tag, String value)
    {
-      KeyStoreEntry kse = keyStoreService.getEntry(name, key);
+      KeyStoreEntry kse = keyStoreService.getEntry(name, key, tag);
       if (kse != null)
       {
          LOGGER.warn("Key {}:{} already in the key store, replaced by {}:{}.",
                key, kse.getValue(), key, value);
          kse.setValue(value);
+         kse.setInsertionDate(System.currentTimeMillis());
          keyStoreService.updateEntry(kse);
       }
       else
       {
-         kse = new KeyStoreEntry(name, key, value);
+         kse = new KeyStoreEntry(name, key, tag, value, System.currentTimeMillis());
          keyStoreService.createEntry(kse);
       }
    }
 
    @Override
-   public String get(String key)
+   public String get(String key, String tag)
    {
-      KeyStoreEntry kse = keyStoreService.getEntry(name, key);
+      KeyStoreEntry kse = keyStoreService.getEntry(name, key, tag);
       return kse != null ? kse.getValue() : null;
    }
 
    @Override
-   public String remove(String key)
+   public String remove(String key, String tag)
    {
-      KeyStoreEntry kse = keyStoreService.getEntry(name, key);
+      KeyStoreEntry kse = keyStoreService.getEntry(name, key, tag);
       if (kse == null)
       {
          return null;
@@ -96,8 +100,32 @@ public class PersistentKeyStore implements KeyStore
    }
 
    @Override
-   public boolean exists(String key)
+   public boolean exists(String key, String tag)
    {
-      return keyStoreService.exists(name, key);
+      return keyStoreService.exists(name, key, tag);
+   }
+
+   @Override
+   public Iterator<KeyStoreEntry> getOldestEntries()
+   {
+      return keyStoreService.getOldestEntries(name);
+   }
+
+   @Override
+   public List<KeyStoreEntry> getEntriesByUuid(String uuid)
+   {
+      return keyStoreService.getByUuid(uuid);
+   }
+
+   @Override
+   public List<KeyStoreEntry> getUnalteredProductEntries()
+   {
+      return keyStoreService.getUnalteredProductEntries(name);
+   }
+
+   @Override
+   public List<KeyStoreEntry> getUnalteredProductEntries(int skip, int top)
+   {
+      return keyStoreService.getUnalteredProductEntries(name, skip, top);
    }
 }

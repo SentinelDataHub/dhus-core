@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2015,2016 GAEL Systems
+ * Copyright (C) 2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,7 +19,9 @@
  */
 package fr.gael.dhus.spring.security.handler;
 
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.spring.context.SecurityContextProvider;
+import fr.gael.dhus.spring.security.CookieKey;
 
 import javax.servlet.http.HttpSessionEvent;
 
@@ -30,10 +32,10 @@ import org.springframework.stereotype.Component;
 public class SessionDestroyedCleaner extends HttpSessionEventPublisher
 {
    @Override
-   public void sessionDestroyed (final HttpSessionEvent event)
+   public void sessionDestroyed(final HttpSessionEvent event)
    {
-      SecurityContextProvider.removeSecurityContext ((String) event
-         .getSession ().getAttribute ("integrity"));
-      super.sessionDestroyed (event);
+      SecurityContextProvider securityContextProvider = ApplicationContextProvider.getBean(SecurityContextProvider.class);
+      securityContextProvider.logout((String) event.getSession().getAttribute(CookieKey.INTEGRITY_ATTRIBUTE_NAME));
+      super.sessionDestroyed(event);
    }
 }

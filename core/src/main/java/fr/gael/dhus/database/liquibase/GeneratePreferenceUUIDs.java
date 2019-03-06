@@ -31,8 +31,13 @@ import liquibase.exception.SetupException;
 import liquibase.exception.ValidationErrors;
 import liquibase.resource.ResourceAccessor;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class GeneratePreferenceUUIDs implements CustomTaskChange
 {
+   private static final Logger LOGGER = LogManager.getLogger();
+
    @Override
    public String getConfirmationMessage ()
    {
@@ -100,7 +105,7 @@ public class GeneratePreferenceUUIDs implements CustomTaskChange
       }
       catch (Exception e)
       {
-         e.printStackTrace ();
+         LOGGER.error("An exception occured while generating preference UUIDs", e);
       }
       
    }

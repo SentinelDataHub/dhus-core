@@ -19,11 +19,14 @@
  */
 package fr.gael.dhus.server.http.valve.processings;
 
+import java.io.Serializable;
+
 /**
  * Gathers the informations regarding one request processing.
  */
-public class ProcessingInformation
+public class ProcessingInformation implements Serializable
 {
+   private static final long serialVersionUID = 1L;
    private final Long dateNs;
    private String request;
    /**

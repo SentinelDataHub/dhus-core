@@ -1,0 +1,16 @@
+property, eqValue, neValue
+Id, 0, 0
+Label, '', ''
+CreationDate, datetime'2016-12-20T11:52:23.787', datetime'2016-12-20T11:52:23.787'
+ModificationDate, datetime'2016-12-20T11:52:23.787', datetime'2016-12-20T11:52:23.787'
+Request, '', ''
+Schedule, '', ''
+Status, '', ''
+StatusDate, datetime'2016-12-20T11:52:23.787', datetime'2016-12-20T11:52:23.787'
+StatusMessage, '', ''
+ServiceUrl, '', ''
+ServiceLogin, '', ''
+ServicePassword, '', ''
+Cursor, 0, 0
+PageSize, 0, 0
+Force, 0, 0

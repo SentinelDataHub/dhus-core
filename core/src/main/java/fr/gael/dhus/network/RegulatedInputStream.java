@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
+
 import org.apache.commons.net.io.CopyStreamAdapter;
 
 import fr.gael.dhus.database.object.User;
@@ -136,12 +137,12 @@ public class RegulatedInputStream extends FilterInputStream
     * Controlled flow
     */
    private final ChannelFlow flow;
-   
+
    /**
     * Copy listener (optional)
     */
    private CopyStreamAdapter listener;
-   
+
    /**
     * This stream size if known.
     */
@@ -168,10 +169,10 @@ public class RegulatedInputStream extends FilterInputStream
          throw new IllegalArgumentException(
                "Invalid negative or null buffer size: " + builder.bufferSize);
       }
-      
+
       if (builder.listener!=null)
          this.listener = builder.listener;
-      
+
       if (builder.streamSize!=null)
          this.streamSize=builder.streamSize;
 
@@ -188,7 +189,7 @@ public class RegulatedInputStream extends FilterInputStream
          this.regulator = Regulator.getDefaultRegulator();
       }
 
-      
+
       long stream_size = 0L;
       try
       {
@@ -200,7 +201,7 @@ public class RegulatedInputStream extends FilterInputStream
       {
          LOGGER.warn(e);
       }
-      
+
       // Build connection parameters
       this.connectionParameters =
          new ConnectionParameters.Builder(builder.direction).user(builder.user)
@@ -214,17 +215,17 @@ public class RegulatedInputStream extends FilterInputStream
       }
       catch (RegulationException exception)
       {
-         LOGGER.error(exception);
+         LOGGER.info(exception);
          throw exception;
       }
 
       // Report opened flow
       LOGGER.debug("OPEN - " + this.flow);
    }
-   
+
    /**
     * This method aims to retrieve stream size. Of course, stream size is
-    * not always available, but in the case of file, the size is known, 
+    * not always available, but in the case of file, the size is known,
     * overwise stream is probably aware of possible block size can be served...
     * @param is the input stream to ge the size
     * @return the possible size of the stream
@@ -347,7 +348,7 @@ public class RegulatedInputStream extends FilterInputStream
             throw exception;
          }
       }
-      
+
       // Continue
       if (pos >= count)
       {
@@ -356,9 +357,9 @@ public class RegulatedInputStream extends FilterInputStream
             return -1;
       }
       if (listener != null)
-         listener.bytesTransferred(pos, 1, 
+         listener.bytesTransferred(pos, 1,
             this.connectionParameters.getStreamSize ());
-      
+
       return getBufIfOpen()[pos++] & 0xff;
    }
 
@@ -483,10 +484,11 @@ public class RegulatedInputStream extends FilterInputStream
             throw exception;
          }
       }
-      
+
       if (listener != null)
-         listener.bytesTransferred(this.flow.getTransferedSize (), total_nread, 
-            this.connectionParameters.getStreamSize ());
+      {
+         listener.bytesTransferred(this.flow.getTransferedSize(), total_nread, this.connectionParameters.getStreamSize());
+      }
 
       // Return total read number
       return total_nread;
@@ -620,7 +622,7 @@ public class RegulatedInputStream extends FilterInputStream
             getBean (NetworkUsageService.class);
 
          // Write database only if service exists and
-         // if quota configuration requires persistent informations to 
+         // if quota configuration requires persistent informations to
          // be saved.
          if ((network_service != null) &&
              (flow.getUserQuotas() != null) &&
@@ -631,18 +633,18 @@ public class RegulatedInputStream extends FilterInputStream
                   flow.getStartDate (), connectionParameters.getUser ());
          }
       }
-      
+
       // Notification of the error
       if (error && (this.listener != null))
       {
-         this.listener.bytesTransferred (flow.getTransferedSize (), -1, 
+         this.listener.bytesTransferred (flow.getTransferedSize (), -1,
             this.connectionParameters.getStreamSize ());
       }
 
       // Release flow
       this.regulator.releaseChannel(this.flow);
       LOGGER.debug("CLOSED - " + this.flow);
-      
+
       // Close stream
       byte[] buffer;
       while ((buffer = buf) != null)
@@ -657,8 +659,8 @@ public class RegulatedInputStream extends FilterInputStream
          }
          // Else retry in case a new buf was CASed in fill()
       }
-      
-      
+
+
    }
 
    /**
@@ -697,7 +699,7 @@ public class RegulatedInputStream extends FilterInputStream
        * User name (optional and used only is user class not provided).
        */
       private String userName = null;
-      
+
       /**
        * Listener to monitor stream copy (optional).
        */
@@ -753,7 +755,7 @@ public class RegulatedInputStream extends FilterInputStream
          this.bufferSize = buffer_size;
          return this;
       }
-      
+
       /**
        * Set stream size.
        */
@@ -781,11 +783,11 @@ public class RegulatedInputStream extends FilterInputStream
          this.userName = user_name;
          return this;
       }
-      
+
       /**
        * Set the copy stream listener to listen copy progress.
        */
-      public Builder copyStreamListener (CopyStreamAdapter listener)
+      public Builder copyStreamListener(CopyStreamAdapter listener)
       {
          this.listener = listener;
          return this;

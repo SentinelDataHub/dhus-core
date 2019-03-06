@@ -28,6 +28,7 @@ import fr.gael.dhus.olingo.v1.map.SubMap;
 import fr.gael.dhus.olingo.v1.map.SubMapBuilder;
 import fr.gael.dhus.service.UserService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.util.functional.IteratorAdapter;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -94,7 +95,7 @@ public class UserMap extends AbstractDelegatingMap<String, User>
 
          Iterator<fr.gael.dhus.database.object.User> it =
                olingoManager.getUsers(filter, orderBy, skip, top).iterator();
-         return new ODataEntityIterator<>(it, fr.gael.dhus.database.object.User.class, User.class);
+         return new IteratorAdapter<>(it, User::new);
       }
       catch (Exception e)
       {

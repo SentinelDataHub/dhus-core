@@ -26,6 +26,7 @@ import fr.gael.dhus.olingo.v1.map.SubMap;
 import fr.gael.dhus.olingo.v1.map.SubMapBuilder;
 import fr.gael.dhus.service.DeletedProductService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.util.functional.IteratorAdapter;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -81,7 +82,7 @@ public class DeletedProductsMap extends AbstractDelegatingMap<String, DeletedPro
          Iterator<fr.gael.dhus.database.object.DeletedProduct> it =
                olingoManager.getDeletedProducts(filter, orderBy, skip, top).iterator();
 
-         return new ODataEntityIterator<>(it, fr.gael.dhus.database.object.DeletedProduct.class, DeletedProduct.class);
+         return new IteratorAdapter<>(it, DeletedProduct::new);
       }
       catch (Exception e)
       {

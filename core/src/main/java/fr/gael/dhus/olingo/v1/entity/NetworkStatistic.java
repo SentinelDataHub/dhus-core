@@ -42,7 +42,7 @@ public class NetworkStatistic extends AbstractEntity
       ConfigurationManager cfgManager =
                ApplicationContextProvider.getBean (ConfigurationManager.class);
       this.abuseMetrics = (AccessValve.getMetrics (0, 
-         cfgManager.getOdataConfiguration ().getMaxRows ()));
+         cfgManager.getOdataConfiguration ().getDefaultTop ()));
    }
 
    @Override

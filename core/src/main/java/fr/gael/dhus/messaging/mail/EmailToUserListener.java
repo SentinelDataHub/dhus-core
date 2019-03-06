@@ -61,10 +61,6 @@ public class EmailToUserListener implements UserListener
                u.getUsername ()))
             return;
          
-         // Same for virtual user "public data"
-         if (userDao.getPublicData ().equals (u.getUsername ()))
-            return;
-         
          LOGGER.debug("Sending email to " + u.getEmail ());
          if (u.getEmail () == null)
             throw new UnsupportedOperationException (

@@ -24,8 +24,7 @@
    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
          http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
 
-   <changeSet author="nico" id="addColumnIngestionDate"
-		runOnChange="true">
+   <changeSet author="nico" id="addColumnIngestionDate" dbms="hsqldb" runOnChange="true">
         <preConditions onFail="MARK_RAN" onFailMessage="change already applied.">
            <sqlCheck expectedResult="0">
             select count(*) from DATABASECHANGELOG where ID LIKE 'addColumnIngestionDate'
@@ -36,21 +35,45 @@
 		</addColumn>
 	</changeSet>
 
-	<changeSet author="nico" id="addColumnContentStartEnd"
-		runOnChange="true">
-        <preConditions onFail="MARK_RAN" onFailMessage="change already applied.">
-           <sqlCheck expectedResult="0">
+   <changeSet author="nico" id="addColumnIngestionDate" dbms="postgresql" runOnChange="true">
+      <preConditions onFail="MARK_RAN" onFailMessage="change already applied.">
+         <sqlCheck expectedResult="0">
+            select count(*) from DATABASECHANGELOG where ID LIKE 'addColumnIngestionDate'
+         </sqlCheck>
+      </preConditions>
+      <addColumn tableName="PRODUCTS">
+         <column name="ingestiondate" type="TIMESTAMP" />
+      </addColumn>
+   </changeSet>
+
+   <changeSet author="nico" id="addColumnContentStartEnd" dbms="hsqldb" runOnChange="true">
+      <preConditions onFail="MARK_RAN" onFailMessage="change already applied.">
+         <sqlCheck expectedResult="0">
             select count(*) from DATABASECHANGELOG where ID LIKE 'addColumnContentStartEnd'
-           </sqlCheck>
-        </preConditions>
-		<addColumn tableName="PRODUCTS">
-			<column name="contentStart" type="TIMESTAMP" />
-		</addColumn>
-		<addColumn tableName="PRODUCTS">
-			<column name="contentEnd" type="TIMESTAMP" />
-		</addColumn>
-	</changeSet>
-   
+         </sqlCheck>
+      </preConditions>
+      <addColumn tableName="PRODUCTS">
+         <column name="contentStart" type="TIMESTAMP" />
+      </addColumn>
+      <addColumn tableName="PRODUCTS">
+         <column name="contentEnd" type="TIMESTAMP" />
+      </addColumn>
+   </changeSet>
+
+   <changeSet author="nico" id="addColumnContentStartEnd" dbms="postgresql" runOnChange="true">
+      <preConditions onFail="MARK_RAN" onFailMessage="change already applied.">
+         <sqlCheck expectedResult="0">
+            select count(*) from DATABASECHANGELOG where ID LIKE 'addColumnContentStartEnd'
+         </sqlCheck>
+      </preConditions>
+      <addColumn tableName="PRODUCTS">
+         <column name="contentstart" type="TIMESTAMP" />
+      </addColumn>
+      <addColumn tableName="PRODUCTS">
+         <column name="contentend" type="TIMESTAMP" />
+      </addColumn>
+   </changeSet>
+
    <changeSet author="nico" id="extractProductFieldsFromMetadata"
 		runOnChange="true">
         <preConditions onFail="MARK_RAN" onFailMessage="change already applied.">

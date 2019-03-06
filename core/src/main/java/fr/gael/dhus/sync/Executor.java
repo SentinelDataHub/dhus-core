@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,7 +19,7 @@
  */
 package fr.gael.dhus.sync;
 
-import fr.gael.dhus.database.object.SynchronizerConf;
+import fr.gael.dhus.database.object.config.synchronizer.SynchronizerConfiguration;
 
 /**
  * Executor Interface.
@@ -29,7 +29,7 @@ import fr.gael.dhus.database.object.SynchronizerConf;
 public interface Executor
 {
    boolean addSynchronizer(Synchronizer s);
-   Synchronizer removeSynchronizer(SynchronizerConf s);
+   Synchronizer removeSynchronizer(SynchronizerConfiguration s);
    void removeAllSynchronizers();
    boolean isRunning();
    void enableBatchMode(boolean enabled);
@@ -37,5 +37,5 @@ public interface Executor
    void start(boolean start_now);
    void stop();
    void terminate();
-   SynchronizerStatus getSynchronizerStatus(SynchronizerConf sc);
+   SynchronizerStatus getSynchronizerStatus(SynchronizerConfiguration sc);
 }

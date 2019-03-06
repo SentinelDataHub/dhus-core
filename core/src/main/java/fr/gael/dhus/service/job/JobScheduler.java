@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -44,7 +44,7 @@ public class JobScheduler extends SchedulerFactoryBean implements
    private ApplicationContext applicationContext;
 
    private HashMap<Class<? extends AbstractJob>, Trigger> triggers;
-   
+
    @Override
    public void setApplicationContext (final ApplicationContext context)
    {
@@ -77,13 +77,12 @@ public class JobScheduler extends SchedulerFactoryBean implements
 
    public Date getNextSystemCheckJobSchedule () throws SchedulerException
    {
-      
       return triggers.get (SystemCheckJob.class).getFireTimeAfter (new Date ());
    }
 
    public Date getNextFileScannerJobSchedule () throws SchedulerException
    {
-      return triggers.get (FileScannersJob.class).getFireTimeAfter (new Date());
+      return triggers.get(ScannersJob.class).getFireTimeAfter(new Date());
    }
 
    public Date getNextSearchesJobSchedule () throws SchedulerException
@@ -114,33 +113,9 @@ public class JobScheduler extends SchedulerFactoryBean implements
          new Date ());
    }
 
-   public Date getNextSendEvictionListJobSchedule () throws SchedulerException
-   {
-      return triggers.get (SendEvictionListJob.class).getFireTimeAfter (
-         new Date ());
-   }
-
-   public Date getNextEvictionJobSchedule () throws SchedulerException
-   {
-      return triggers.get (EvictionJob.class).getFireTimeAfter (new Date ());
-   }
-
-   public Date getNextScheduleArchiveSynchronization () throws
-         SchedulerException
-   {
-      return triggers.get (ArchiveSynchronizationJob.class).getFireTimeAfter (
-            new Date ());
-   }
-
    public Date getNextScheduleSystemCheck () throws SchedulerException
    {
       return triggers.get (SystemCheckJob.class).getFireTimeAfter (new Date ());
    }
 
-   public Date getNextLocalArchiveMonitorJobSchedule ()
-      throws SchedulerException
-   {
-      return triggers.get (ArchiveSynchronizationJob.class).getFireTimeAfter(
-         new Date ());
-   }
 }

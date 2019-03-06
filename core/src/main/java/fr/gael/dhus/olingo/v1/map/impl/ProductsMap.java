@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -27,6 +27,7 @@ import fr.gael.dhus.olingo.v1.map.SubMapBuilder;
 import fr.gael.dhus.service.ProductService;
 import fr.gael.dhus.service.exception.ProductNotExistingException;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.util.functional.IteratorAdapter;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -81,7 +82,7 @@ public class ProductsMap extends AbstractDelegatingMap<String, Product>
       {
          Iterator<fr.gael.dhus.database.object.Product> it =
                olingoManager.getProducts(filter, orderBy, skip, top).iterator();
-         return new ODataEntityIterator<>(it, fr.gael.dhus.database.object.Product.class, Product.class);
+         return new IteratorAdapter<>(it, Product::generateProduct);
       }
       catch (Exception e)
       {
@@ -108,10 +109,9 @@ public class ProductsMap extends AbstractDelegatingMap<String, Product>
    {
       try
       {
-         fr.gael.dhus.database.object.Product p =
-            productService.getProduct (key);
+         fr.gael.dhus.database.object.Product p = productService.getProduct(key);
          if (p == null) return null;
-         return new Product (p);
+         return Product.generateProduct(p);
       }
       catch (ProductNotExistingException e)
       {

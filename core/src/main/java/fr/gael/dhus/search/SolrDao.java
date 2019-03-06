@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,7 +19,13 @@
  */
 package fr.gael.dhus.search;
 
+import fr.gael.dhus.search.geocoder.CachedGeocoder;
+import fr.gael.dhus.search.geocoder.Geocoder;
+import fr.gael.dhus.search.geocoder.impl.NominatimGeocoder;
+import fr.gael.dhus.system.config.ConfigurationManager;
+
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
@@ -34,24 +40,22 @@ import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.ConcurrentUpdateSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.impl.InputStreamResponseParser;
 import org.apache.solr.client.solrj.request.GenericSolrRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.client.solrj.response.SimpleSolrResponse;
 import org.apache.solr.client.solrj.response.SuggesterResponse;
 import org.apache.solr.client.solrj.response.UpdateResponse;
+
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.ContentStream;
 import org.apache.solr.common.util.ContentStreamBase;
-
-import org.springframework.beans.factory.annotation.Autowired;
-
-import fr.gael.dhus.database.object.config.search.GeocoderConfiguration;
-import fr.gael.dhus.search.geocoder.CachedGeocoder;
-import fr.gael.dhus.search.geocoder.Geocoder;
-import fr.gael.dhus.search.geocoder.impl.NominatimGeocoder;
-import fr.gael.dhus.system.config.ConfigurationManager;
+import org.apache.solr.common.util.NamedList;
 
 /**
  * Low level Solr interface.
@@ -71,25 +75,53 @@ public class SolrDao
    private static final String SOLR_SVC = "/solr/dhus";
 
    /** SolrJ client. */
-   private final HttpSolrClient solrClient;
+   private final SolrClient solrClient;
 
    /** Default Geocoder. */
    private final Geocoder geocoder;
 
-   /** Dependency injection. */
-   @Autowired
-   private ConfigurationManager configurationManager;
+   /** DHuS configuration. */
+   private final ConfigurationManager configurationManager;
 
    /**
     * DO NOT CALL! use Spring instead.
-    * @param geocoder_conf geocoder's configuration object.
+    * @param conf DHuS configuration object.
     */
-   public SolrDao(GeocoderConfiguration geocoder_conf)
+   public SolrDao(ConfigurationManager conf)
    {
-       geocoder = new CachedGeocoder(new NominatimGeocoder(geocoder_conf));
-       solrClient = new HttpSolrClient("");
-       solrClient.setConnectionTimeout(INNER_TIMEOUT);
-       solrClient.setSoTimeout(INNER_TIMEOUT);
+      this.configurationManager = conf;
+      switch (conf.getSolrType())
+      {
+         case EMBED:
+         {
+            HttpSolrClient hsc = new HttpSolrClient("");
+            hsc.setConnectionTimeout(INNER_TIMEOUT);
+            hsc.setSoTimeout(INNER_TIMEOUT);
+            solrClient = hsc;
+            break;
+         }
+         case STANDALONE:
+         {
+            String svcURL = conf.getSolrStandaloneConfiguration().getServiceURL();
+            HttpSolrClient hsc = new HttpSolrClient(svcURL);
+            hsc.setConnectionTimeout(INNER_TIMEOUT);
+            hsc.setSoTimeout(INNER_TIMEOUT);
+            solrClient = hsc;
+            break;
+         }
+         case CLOUD:
+         {
+            String zkHosts = conf.getSolrCloudConfiguration().getZkHosts();
+            CloudSolrClient csc = new CloudSolrClient(zkHosts);
+            solrClient = csc;
+            break;
+         }
+         default:
+         {
+            throw new RuntimeException("Solr configuration not set in dhus.xml");
+         }
+      }
+      geocoder = new CachedGeocoder(new NominatimGeocoder(conf.getGeocoderConfiguration()));
    }
 
    /**
@@ -98,8 +130,13 @@ public class SolrDao
     */
    public void initServerStarted()
    {
-      String dhus_url = configurationManager.getServerConfiguration().getLocalUrl();
-      solrClient.setBaseURL(dhus_url + SOLR_SVC);
+      // Only for embed (and is client is an HTTP client (should always be true for embed solr))
+      if (configurationManager.getSolrType() == SolrType.EMBED
+          && HttpSolrClient.class.isAssignableFrom(solrClient.getClass()))
+      {
+         String dhus_url = configurationManager.getServerConfiguration().getLocalUrl();
+         HttpSolrClient.class.cast(solrClient).setBaseURL(dhus_url + SOLR_SVC);
+      }
    }
 
    /**
@@ -149,10 +186,29 @@ public class SolrDao
     */
    public void batchIndex(Iterator<SolrInputDocument> source) throws SolrServerException, IOException
    {
-      String dhus_url = configurationManager.getServerConfiguration().getUrl() + SOLR_SVC;
-      try (ConcurrentUpdateSolrClient client = new ConcurrentUpdateSolrClient(dhus_url, 1000, 10))
+      String svcUrl = null;
+      switch (configurationManager.getSolrType())
+      {
+         case EMBED:
+         {
+            svcUrl = configurationManager.getServerConfiguration().getUrl() + SOLR_SVC;
+            break;
+         }
+         case STANDALONE:
+         {
+            svcUrl = configurationManager.getSolrStandaloneConfiguration().getServiceURL();
+            break;
+         }
+         case CLOUD:
+         {
+            svcUrl = configurationManager.getSolrCloudConfiguration().getZkHosts();
+            break;
+         }
+      }
+      try (ConcurrentUpdateSolrClient client = new ConcurrentUpdateSolrClient(svcUrl, 1000, 10))
       {
          client.add(source);
+         client.blockUntilFinished();
          client.commit(true, true);
       }
    }
@@ -274,6 +330,35 @@ public class SolrDao
       ContentStream content = new ContentStreamBase.StringStream(command.toString());
       rq.setContentStreams(Collections.singleton(content));
       rq.process(solrClient);
+   }
+
+   /**
+    * Execute given query on the /select request handler, and returns the InputStream containing the
+    * response.
+    *
+    * @param query Query parameters
+    * @return the InputStream directly from the requested Solr server
+    * @throws SolrServerException solr error
+    * @throws IOException network error
+    */
+   public InputStream streamSelect(SolrParams query) throws SolrServerException, IOException
+   {
+      GenericSolrRequest rq = new GenericSolrRequest(SolrRequest.METHOD.GET, "/select", query);
+      rq.setResponseParser(new InputStreamResponseParser(query.get("wt")));
+      SimpleSolrResponse response = rq.process(solrClient);
+      LOGGER.debug("streamSelect done is {}ms", response.getElapsedTime());
+
+      NamedList<Object> res = response.getResponse();
+      if (res.size() > 0)
+      {
+         Object streamVal = res.get("stream");
+         if (streamVal != null && InputStream.class.isAssignableFrom(streamVal.getClass()))
+         {
+            InputStream istream = InputStream.class.cast(streamVal);
+            return istream;
+         }
+      }
+      throw new SolrServerException("No response from /select query handler");
    }
 
    /**
@@ -418,5 +503,15 @@ public class SolrDao
       {
          throw new UnsupportedOperationException("Not implemented.");
       }
+   }
+
+   /**
+    * @param uuid
+    * @throws IOException 
+    * @throws SolrServerException 
+    */
+   public void removeProduct(String uuid) throws SolrServerException, IOException
+   {
+      solrClient.deleteByQuery("uuid:"+uuid);
    }
 }

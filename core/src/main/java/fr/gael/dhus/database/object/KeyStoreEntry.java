@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,6 +20,7 @@
 package fr.gael.dhus.database.object;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 import javax.persistence.Column;
 import javax.persistence.Embeddable;
@@ -39,19 +40,23 @@ public class KeyStoreEntry implements Serializable
    @Column(name = "VALUE")
    private String value;
 
+   @Column(name = "INSERTIONDATE")
+   private Long insertionDate;
+
    public KeyStoreEntry()
    {
    }
 
-   public KeyStoreEntry(String keyStore, String entryKey, String value)
+   public KeyStoreEntry(String keyStore, String entryKey, String tag, String value, Long insertionDate)
    {
-      this(new Key(keyStore, entryKey), value);
+      this(new Key(keyStore, entryKey, tag), value, insertionDate);
    }
 
-   public KeyStoreEntry(Key key, String value)
+   public KeyStoreEntry(Key key, String value, Long insertionDate)
    {
       this.key = key;
       this.value = value;
+      this.insertionDate = insertionDate;
    }
 
    public String getValue()
@@ -74,9 +79,63 @@ public class KeyStoreEntry implements Serializable
       return key != null ? key.getEntryKey() : null;
    }
 
+   public String getTag()
+   {
+      return key != null ? key.getTag() : null;
+   }
+
    public Key getKey()
    {
       return key;
+   }
+
+   public Long getInsertionDate()
+   {
+      return insertionDate;
+   }
+
+   public void setInsertionDate(Long insertionDate)
+   {
+      this.insertionDate = insertionDate;
+   }
+
+   @Override
+   public boolean equals(Object obj)
+   {
+      if (this == obj)
+      {
+         return true;
+      }
+      if (obj == null)
+      {
+         return false;
+      }
+      if (getClass() != obj.getClass())
+      {
+         return false;
+      }
+
+      final KeyStoreEntry other = (KeyStoreEntry) obj;
+      if (!this.key.equals(other.key))
+      {
+         return false;
+      }
+      if (!Objects.equals(this.value, other.value))
+      {
+         return false;
+      }
+      if (!Objects.equals(this.insertionDate, other.insertionDate))
+      {
+         return false;
+      }
+
+      return true;
+   }
+
+   @Override
+   public int hashCode()
+   {
+      return Objects.hashCode(this.key);
    }
 
    @Embeddable
@@ -88,15 +147,16 @@ public class KeyStoreEntry implements Serializable
       private String keyStore;
       @Column(name = "ENTRYKEY", nullable = false)
       private String entryKey;
+      @Column(name = "TAG", nullable = false)
+      private String tag;
 
-      public Key()
-      {
-      }
+      public Key() {}
 
-      public Key(String keyStore, String entryKey)
+      public Key(String keyStore, String entryKey, String tag)
       {
          this.keyStore = keyStore;
          this.entryKey = entryKey;
+         this.tag = tag;
       }
 
       public String getKeyStore()
@@ -108,5 +168,58 @@ public class KeyStoreEntry implements Serializable
       {
          return entryKey;
       }
+
+      public String getTag()
+      {
+         return tag;
+      }
+
+      @Override
+      public String toString()
+      {
+         return "Keystore: " + keyStore + ", Entrykey: " + entryKey + ", Tag: " + tag;
+      }
+
+      @Override
+      public int hashCode()
+      {
+         int hash = 3;
+         hash = 17 * hash + Objects.hashCode(this.keyStore);
+         hash = 17 * hash + Objects.hashCode(this.entryKey);
+         hash = 17 * hash + Objects.hashCode(this.tag);
+         return hash;
+      }
+
+      @Override
+      public boolean equals(Object obj)
+      {
+         if (this == obj)
+         {
+            return true;
+         }
+         if (obj == null)
+         {
+            return false;
+         }
+         if (getClass() != obj.getClass())
+         {
+            return false;
+         }
+         final Key other = (Key) obj;
+         if (!Objects.equals(this.keyStore, other.keyStore))
+         {
+            return false;
+         }
+         if (!Objects.equals(this.entryKey, other.entryKey))
+         {
+            return false;
+         }
+         if (!Objects.equals(this.tag, other.tag))
+         {
+            return false;
+         }
+         return true;
+      }
+
    }
 }

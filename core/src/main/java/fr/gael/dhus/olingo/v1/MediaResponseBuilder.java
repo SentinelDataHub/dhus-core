@@ -136,6 +136,20 @@ public class MediaResponseBuilder
    }
 
    /**
+    * Generates a media response for async payload, as the payload is not there yet, it returns a
+    * 202 ACCEPTED HTTP response.
+    * @return the response for async payload
+    */
+   public static ODataResponse prepareAsyncMediaResponse()
+   {
+      ODataResponse.ODataResponseBuilder builder = ODataResponse.newBuilder ();
+
+      builder.status(HttpStatusCodes.ACCEPTED);
+
+      return builder.build();
+   }
+
+   /**
     * Builds an HTTP Response according to the current http context header. The
     * response is suitable for partial transfers and resume. It checks the
     * context and properly returns the status. The passed input stream is used

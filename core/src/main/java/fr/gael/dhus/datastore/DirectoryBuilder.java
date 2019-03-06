@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -26,5 +26,24 @@ import java.io.File;
  */
 public interface DirectoryBuilder
 {
-   public File getDirectory ();
+   /**
+    * Returns the next available folder (filename parameter to avoid name clash).
+    *
+    * @param filename of file to store
+    * @return path as File object
+    */
+   public File getDirectory(String filename);
+
+   /**
+    * Returns the next available folder.
+    * <p>
+    * Defaults to {@code getDirectory(null);}.
+    *
+    * @return path as File object
+    * @deprecated use {@link #getDirectory(String)} instead
+    */
+   default public File getDirectory()
+   {
+      return getDirectory(null);
+   }
 }

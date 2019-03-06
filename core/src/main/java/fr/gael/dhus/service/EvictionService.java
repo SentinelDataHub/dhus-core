@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,17 +19,29 @@
  */
 package fr.gael.dhus.service;
 
-import java.util.ArrayList;
-import java.util.Calendar;
+import fr.gael.dhus.database.object.DeletedProduct;
+import fr.gael.dhus.database.object.Product;
+import fr.gael.dhus.database.object.config.eviction.Eviction;
+import fr.gael.dhus.database.object.config.eviction.EvictionManager;
+import fr.gael.dhus.database.object.config.eviction.EvictionStatusEnum;
+import fr.gael.dhus.datastore.Destination;
+import fr.gael.dhus.service.eviction.EvictionScheduler;
+import fr.gael.dhus.system.config.ConfigurationManager;
+
+import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import javax.annotation.PostConstruct;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import org.joda.time.DateTime;
+import org.dhus.store.StoreException;
+import org.dhus.store.StoreService;
+
+import org.quartz.SchedulerException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,171 +49,376 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import fr.gael.dhus.database.dao.interfaces.IEvictionDao;
-import fr.gael.dhus.database.object.Eviction;
-import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.datastore.eviction.EvictionManager;
-import fr.gael.dhus.datastore.eviction.EvictionStrategy;
-
 @Service
 public class EvictionService extends WebService
 {
    private static final Logger LOGGER = LogManager.getLogger();
 
-   @Autowired
-   private EvictionManager evictionMgr;
+   private static final SimpleDateFormat DATE_FORMATTER = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
 
    @Autowired
-   private IEvictionDao evictionDao;
+   private ConfigurationManager cfgManager;
 
    @Autowired
-   private ProductService productService;
+   /** Service called to perform evictions * */
+   private StoreService storeService;
 
-   private static Eviction eviction;
+   /** Manages eviction objects and their configuration * */
+   private EvictionManager evictionManager;
 
-   @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
-   public Eviction getEviction()
+   /** Single thread executor used to queue eviction tasks * */
+   private Executor executor;
+
+   private EvictionScheduler scheduler;
+
+   @PostConstruct
+   private void init() throws SchedulerException
    {
-      if (EvictionService.eviction == null)
+      evictionManager = cfgManager.getEvictionManager();
+      executor = Executors.newSingleThreadExecutor();
+      scheduler = new EvictionScheduler();
+
+      for (Eviction eviction: getEvictions())
       {
-         EvictionService.eviction = evictionDao.getEviction();
+         if (eviction.getCron() != null && eviction.getCron().isActive())
+         {
+            try
+            {
+               scheduler.scheduleEviction(eviction);
+            }
+            catch (SchedulerException ex)
+            {
+               LOGGER.warn("Could not schedule eviction '{}'", eviction.getName());
+            }
+         }
       }
-      return EvictionService.eviction;
+      scheduler.start();
    }
 
-   @PreAuthorize("hasRole('ROLE_SYSTEM_MANAGER')")
-   @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
-   public int getKeepPeriod()
+   public Eviction getEviction(String evictionName)
    {
-      return getEviction().getKeepPeriod();
-   }
-
-   @PreAuthorize("hasRole('ROLE_SYSTEM_MANAGER')")
-   @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
-   public int getMaxDiskUsage()
-   {
-      return getEviction().getMaxDiskUsage();
-   }
-
-   @PreAuthorize("hasRole('ROLE_SYSTEM_MANAGER')")
-   @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
-   public EvictionStrategy getStrategy()
-   {
-      return getEviction().getStrategy();
-   }
-
-   @PreAuthorize("hasRole('ROLE_SYSTEM_MANAGER')")
-   @Transactional
-   public void save(EvictionStrategy strategy, int keep_period, int max_disk_usage)
-   {
-      Eviction eviction = getEviction();
-
-      // save/update eviction view
-      eviction.setStrategy(strategy);
-      eviction.setKeepPeriod(keep_period);
-      eviction.setMaxDiskUsage(max_disk_usage);
-
-      // save/update persistent eviction
-      evictionDao.update(strategy, keep_period, max_disk_usage);
+      return evictionManager.getEvictionByName(evictionName);
    }
 
    /**
-    * Returns a defensive copy of evictable products list.
+    * Run the eviction identified by the name passed in argument.
     *
-    * @return an evictable products list.
+    * @param evictionName the name of the eviction to run
     */
-   @PreAuthorize("hasRole('ROLE_SYSTEM_MANAGER')")
-   public List<Product> getEvictableProducts()
+   private void queueEvict(String evictionName)
    {
-      return new ArrayList<>(getEviction().getProducts());
-   }
-
-   @Transactional
-   public void doEvict()
-   {
-      computeNextProducts();
-      evictionMgr.doEvict(new ArrayList<>(getEviction().getProducts()));
-   }
-
-   /**
-    * Computes the date <i>days</i> days ago.
-    *
-    * @param days number of days
-    * @return a date representation of date <i>days</i> ago.
-    */
-   public Date getKeepPeriod(int days)
-   {
-      Calendar cal = Calendar.getInstance();
-      cal.add(Calendar.DAY_OF_YEAR, -days);
-      LOGGER.info("Eviction Max date : {}", cal.getTime());
-      return cal.getTime();
-   }
-
-   /**
-    * Compute of next evictable products
-    */
-   @Transactional
-   public void computeNextProducts()
-   {
-      Eviction eviction = getEviction();
-      if (eviction == null)
+      Eviction configuredEviction = getEviction(evictionName);
+      // check if eviction still exists
+      if (configuredEviction == null)
       {
-         LOGGER.warn("No Eviction setting found");
+         LOGGER.warn("Eviction '{}' not found", evictionName);
+         return;
+      }
+      // do not queue the same eviction twice
+      else if (configuredEviction.getStatus().equals(EvictionStatusEnum.QUEUED))
+      {
+         LOGGER.info("Eviction '{}' is already queued", evictionName);
          return;
       }
 
-      Set<Product> evictProduct = eviction.getProducts();
-      evictProduct.clear();
+      // TODO forbid queuing already STARTED evictions?
+      // mark eviction as queued
+      configuredEviction.setStatus(EvictionStatusEnum.QUEUED);
+      evictionManager.save();
+   }
 
-      Date deadline = getKeepPeriod(eviction.getKeepPeriod());
-      Iterator<Product> it = productService.getProductsByCreationDate(deadline, eviction.getMaxProductNumber());
-      while (it.hasNext())
-      {
-         evictProduct.add(it.next());
-      }
+   public void doEvict(String evictionName, String targetDataStore, Boolean safeMode)
+   {
+      queueEvict(evictionName);
+      // queue eviction in the executor
+      executor.execute(() -> performEviction(evictionName, targetDataStore, Long.MAX_VALUE, safeMode));
+   }
 
-      evictionDao.setProducts(evictProduct);
-      LOGGER.info("Found {} product(s) to evict", evictProduct.size());
+   public void doEvict(String evictionName)
+   {
+      queueEvict(evictionName);
+      // queue eviction in the executor
+      executor.execute(() -> performEviction(evictionName, null, Long.MAX_VALUE, false));
    }
 
    /**
-    * Returns the next evictable products.
+    * Run customizable automatic eviction.
     *
-    * @return a set of {@link Product}.
+    * @param evictionName  name of the eviction that is in the configuration of the DataStore
+    * @param dataStoreName name of the DataStore
+    * @param dataSize      size to evict (in bytes) from the DataStore
     */
-   public Set<Product> getProducts()
+   public void evictAtLeast(String evictionName, String dataStoreName, long dataSize)
    {
-      return getEviction().getProducts();
+      queueEvict(evictionName);
+      // queue eviction in the executor
+      executor.execute(() -> performEviction(evictionName, dataStoreName, dataSize, false));
    }
 
-   @PreAuthorize ("isAuthenticated()")
-   @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public Date getEvictionDate(Product product)
+   /**
+    * Run automatic Eviction.
+    *
+    * @param dataStoreName name of the DataStore
+    * @param sizeToEvict   size to evict in the DataStore
+    */
+   public void evictAtLeast(String dataStoreName, long sizeToEvict)
    {
-      Eviction e = getEviction();
-      if (e.getStrategy() == EvictionStrategy.NONE)
+      executor.execute(() -> {
+         try
+         {
+            storeService.evictAtLeast(sizeToEvict, dataStoreName);
+         }
+         catch (StoreException e)
+         {
+            LOGGER.error("Error during eviction in DataStore {}", dataStoreName, e);
+         }
+      });
+   }
+
+   private long performEviction(String evictionName, String dataStoreName, long dataSize, boolean safeMode)
+   {
+      // this method MUST read the eviction configuration in order to handle
+      // cases where the eviction has been deleted
+      Eviction effectiveEviction = getEviction(evictionName);
+
+      // skip eviction if it has been deleted
+      if (effectiveEviction == null)
+      {
+         LOGGER.warn("Eviction '{}' has been deleted, skipping", evictionName);
+         return 0L;
+      }
+      long evictAtLeast = 0L;
+      try
+      {
+         if (effectiveEviction.getStatus().equals(EvictionStatusEnum.CANCELED))
+         {
+            // skip eviction, nothing to do
+            LOGGER.info("Eviction '{}' has been cancelled, skipping", effectiveEviction.getName());
+         }
+         else
+         {
+            // If a trashPath is present in the conf (dhus.xml), evicted products will be saved in the
+            // trash folder before being removed
+            String trashPath = cfgManager.getTrashPath();
+            final Destination destination =
+                  (trashPath != null && !"".equals(trashPath)) ? Destination.TRASH : Destination.NONE;
+
+            // mark eviction as STARTED
+            effectiveEviction.setStatus(EvictionStatusEnum.STARTED);
+            evictionManager.save();
+
+            // eviction triggered by datastore's autoeviction
+            if (dataStoreName != null) // && dataSize > 0 ?
+            {
+               evictAtLeast = storeService.evictAtLeast(
+                     dataSize,
+                     dataStoreName,
+                     buildFilter(effectiveEviction.getFilter(), getKeepPeriod(effectiveEviction.computeKeepPeriod())),
+                     effectiveEviction.getOrderBy(),
+                     effectiveEviction.getTargetCollection(),
+                     effectiveEviction.getMaxEvictedProducts(),
+                     effectiveEviction.isSoftEviction(),
+                     destination,
+                     DeletedProduct.AUTO_EVICTION,
+                     safeMode);
+            }
+            // regular eviction started by scheduler or odata action
+            else
+            {
+               storeService.evictProducts(
+                     buildFilter(effectiveEviction.getFilter(), getKeepPeriod(effectiveEviction.computeKeepPeriod())),
+                     effectiveEviction.getOrderBy(),
+                     effectiveEviction.getTargetCollection(),
+                     effectiveEviction.getMaxEvictedProducts(),
+                     effectiveEviction.isSoftEviction(),
+                     destination,
+                     DeletedProduct.AUTO_EVICTION);
+            }
+         }
+      }
+      catch (StoreException e)
+      {
+         LOGGER.warn("Error during eviction '{}': {}", effectiveEviction.getName(), e.getMessage());
+      }
+      finally
+      {
+         // mark eviction as STOPPED
+         effectiveEviction.setStatus(EvictionStatusEnum.STOPPED);
+         evictionManager.save();
+      }
+      return evictAtLeast;
+   }
+
+   /**
+    * Add the minimal keeping period for the evicted products to the OData filter.
+    *
+    * @param filter          optional additional filter
+    * @param maxCreationDate threshold date to filter products
+    * @return an OData filter
+    */
+   private String buildFilter(String filter, Date maxCreationDate)
+   {
+      if (filter == null && maxCreationDate == null)
       {
          return null;
       }
+      if (maxCreationDate == null)
+      {
+         return filter;
+      }
 
-      DateTime dt = new DateTime(product.getCreated());
-      DateTime res = dt.plusDays(e.getKeepPeriod());
-      return res.toDate();
+      String maxDate = DATE_FORMATTER.format(maxCreationDate);
+      String newFilter = "CreationDate lt datetime'" + maxDate + "'";
+      if (filter != null && !filter.trim().isEmpty())
+      {
+         newFilter += " and " + filter;
+      }
+      return newFilter;
    }
 
-   // Methods for unit tests
-   void setEvictionDao(IEvictionDao eviction_dao)
+   /**
+    * Computes the date <i>span</i> ms ago.
+    *
+    * @param ms span in ms
+    * @return a date representation of date <i>days</i> ago.
+    */
+   public Date getKeepPeriod(long ms)
    {
-      this.evictionDao = eviction_dao;
+      Date date = new Date();
+      date = new Date(date.getTime() - ms);
+
+      LOGGER.info("Eviction KeepPeriod: {}", date);
+      return date;
    }
 
-   void setEvictionMgr(EvictionManager eviction_mgr)
+   @PreAuthorize("isAuthenticated()")
+   @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
+   public Date getEvictionDate(Product product)
    {
-      this.evictionMgr = eviction_mgr;
+      Date res = null;
+      for (Eviction eviction: getEvictions())
+      {
+         // The cron must exist and be active, and the given product must validate the filter
+         if (eviction.getCron() != null && eviction.getCron().isActive() && eviction.filter(product))
+         {
+            // Compute eviction date, sets the result reference if it is sooner
+            Date evictDate = new Date(product.getCreated().getTime() + eviction.computeKeepPeriod());
+            if (res == null || res.after(evictDate))
+            {
+               res = evictDate;
+            }
+         }
+      }
+      return res;
    }
 
-   void setProductService(ProductService productService)
+   /**
+    * Update an eviction an run it if the previous status was STOPPED and the new one is STARTED.
+    *
+    * @param eviction the eviction to update
+    * @param previousStatus the previous status of the eviction to update
+    */
+   public void updateEviction(Eviction eviction, EvictionStatusEnum previousStatus)
    {
-      this.productService = productService;
+      evictionManager.save();
+
+      try
+      {
+         if (eviction.getCron() != null && eviction.getCron().isActive())
+         {
+            scheduler.scheduleEviction(eviction);
+         }
+         else
+         {
+            scheduler.unscheduleEviction(eviction);
+         }
+      }
+      catch (SchedulerException ex)
+      {
+         LOGGER.warn("Could not unschedule eviction '{}'", eviction.getName());
+      }
+   }
+
+   /**
+    * Return all the evictions in the configuration file.
+    *
+    * @return a list of evictions
+    */
+   public List<Eviction> getEvictions()
+   {
+      return evictionManager.getEvictions();
+   }
+
+   /**
+    * Create and save an eviction in the configuration file.
+    *
+    * @param eviction the eviction to create
+    */
+   public void create(Eviction eviction)
+   {
+      evictionManager.create(eviction);
+
+      if (eviction.getCron() != null && eviction.getCron().isActive())
+      {
+         try
+         {
+            scheduler.scheduleEviction(eviction);
+         }
+         catch (SchedulerException ex)
+         {
+            LOGGER.warn("Could not schedule eviction '{}'", eviction.getName());
+         }
+      }
+   }
+
+   /**
+    * Delete an eviction in the configuration file.
+    *
+    * @param eviction the eviction to delete
+    */
+   public void delete(Eviction eviction)
+   {
+      try
+      {
+         scheduler.unscheduleEviction(eviction);
+      }
+      catch (SchedulerException ex)
+      {
+         LOGGER.warn("Could not unschedule eviction '{}'", eviction.getName());
+      }
+      evictionManager.delete(eviction);
+   }
+
+   /**
+    * Delete an eviction in the configuration file.
+    *
+    * @param evictionName the name of the eviction to delete
+    */
+   public void delete(String evictionName)
+   {
+      evictionManager.delete(getEviction(evictionName));
+   }
+
+   public boolean cancelEviction(String evictionName)
+   {
+      Eviction eviction = getEviction(evictionName);
+      if (eviction == null)
+      {
+         LOGGER.warn("Eviction '{}' not found", evictionName);
+         return false;
+      }
+
+      if (eviction.getStatus().equals(EvictionStatusEnum.QUEUED))
+      {
+         eviction.setStatus(EvictionStatusEnum.CANCELED);
+         evictionManager.save();
+         return true;
+      }
+      return false;
+   }
+
+   public void stopCurrentEviction()
+   {
+      storeService.stopCurrentEviction();
    }
 }

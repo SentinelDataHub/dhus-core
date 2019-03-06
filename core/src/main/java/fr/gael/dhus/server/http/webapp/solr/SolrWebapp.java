@@ -35,6 +35,7 @@ import org.apache.logging.log4j.Logger;
 
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 
 import fr.gael.dhus.database.object.config.search.SolrConfiguration;
@@ -45,6 +46,7 @@ import fr.gael.dhus.system.init.SolrInitializer;
 
 @Component
 @WebApp(name = "solr", allowIps = "127.\\d+.\\d+.\\d+|::1|0:0:0:0:0:0:0:1")
+@Conditional(SolrCondition.class)
 public class SolrWebapp extends WebApplication implements InitializingBean
 {
    private static final Logger LOGGER = LogManager.getLogger(SolrWebapp.class);

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -25,6 +25,7 @@ import java.util.List;
 import org.hibernate.HibernateException;
 import org.hibernate.Query;
 import org.hibernate.Session;
+import org.hibernate.type.StandardBasicTypes;
 import org.springframework.orm.hibernate3.HibernateCallback;
 import org.springframework.stereotype.Repository;
 
@@ -77,47 +78,43 @@ public class CountryDao extends HibernateDao<Country, Long>
          });
    }
 
-   public Country getCountryByName (String name)
+   public Country getCountryByName (final String name)
    {
-      List<Country> countries = (List<Country>) getHibernateTemplate ().find (
-            "FROM Country WHERE name=?", name);
-      if (countries.isEmpty ())
-      {
-         return null;
-      }
-      return countries.get (0);
+      return getHibernateTemplate ().execute(session -> {
+         Query query = session.createQuery("FROM Country WHERE name=?");
+         query.setParameter(0, name, StandardBasicTypes.STRING);
+         List list = query.list();
+         return (Country) (list.isEmpty() ? null : list.get(0));
+      });
    }
 
-   public Country getCountryByAlpha2 (String alpha2)
+   public Country getCountryByAlpha2 (final String alpha2)
    {
-      List<Country> countries = (List<Country>) getHibernateTemplate ().find (
-            "FROM Country WHERE alpha2=?", alpha2);
-      if (countries.isEmpty ())
-      {
-         return null;
-      }
-      return countries.get (0);
+      return getHibernateTemplate ().execute(session -> {
+         Query query = session.createQuery("FROM Country WHERE alpha2=?");
+         query.setParameter(0, alpha2, StandardBasicTypes.STRING);
+         List list = query.list();
+         return (Country) (list.isEmpty() ? null : list.get(0));
+      });
    }
 
-   public Country getCountryByAlpha3 (String alpha3)
+   public Country getCountryByAlpha3 (final String alpha3)
    {
-      List<Country> countries = (List<Country>) getHibernateTemplate ().find (
-            "FROM Country WHERE alpha3=?", alpha3);
-      if (countries.isEmpty ())
-      {
-         return null;
-      }
-      return countries.get (0);
+      return getHibernateTemplate ().execute(session -> {
+         Query query = session.createQuery("FROM Country WHERE alpha3=?");
+         query.setParameter(0, alpha3, StandardBasicTypes.STRING);
+         List list = query.list();
+         return (Country) (list.isEmpty() ? null : list.get(0));
+      });
    }
 
-   public Country getCountryByNumeric (Integer numeric)
+   public Country getCountryByNumeric (final Integer numeric)
    {
-      List<Country> countries = (List<Country>) getHibernateTemplate ().find (
-            "FROM Country WHERE numeric=?", numeric);
-      if (countries.isEmpty ())
-      {
-         return null;
-      }
-      return countries.get (0);
+      return getHibernateTemplate ().execute(session -> {
+         Query query = session.createQuery("FROM Country WHERE numeric=?");
+         query.setParameter(0, numeric, StandardBasicTypes.INTEGER);
+         List list = query.list();
+         return (Country) (list.isEmpty() ? null : list.get(0));
+      });
    }
 }

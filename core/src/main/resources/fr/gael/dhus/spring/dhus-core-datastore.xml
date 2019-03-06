@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2016 GAEL Systems
+   Copyright (C) 2016,2017 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -24,6 +24,12 @@
              "http://www.springframework.org/schema/beans
              http://www.springframework.org/schema/beans/spring-beans-4.1.xsd">
 
-   <bean name="dataStoreService" class="org.dhus.store.datastore.DefaultDataStoreService">
-   </bean>
+   <!-- services -->
+   <bean name="storeService" class="org.dhus.store.StoreService"></bean>
+   <bean name="defaultDataStoreManager" class="org.dhus.store.datastore.DefaultDataStoreManager"></bean>
+   <bean name="metadataStoreService" class="org.dhus.store.metadatastore.MetadataStoreService"></bean>
+
+   <!-- stores -->
+   <bean name="relationalMetadataStore" class="org.dhus.store.metadatastore.RelationalMetadataStore"></bean>
+   <bean name="solrMetadataStore" class="org.dhus.store.metadatastore.SolrMetadataStore"></bean>
 </beans>

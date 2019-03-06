@@ -79,22 +79,7 @@ public class StatisticsService extends WebService
          return null;
       return jobScheduler.getNextSendLogsJobSchedule ();
    }
-   
-   public Date getNextScheduleEviction () throws SchedulerException
-   {
-      if (!cfgManager.getEvictionCronConfiguration ().isActive ())
-         return null;
-      return jobScheduler.getNextEvictionJobSchedule ();
-   }
-   
-   public Date getNextScheduleArchiveSynchronization () throws
-         SchedulerException
-   {
-      if (!cfgManager.getArchiveSynchronizationCronConfiguration ().isActive ())
-         return null;
-      return jobScheduler.getNextScheduleArchiveSynchronization ();
-   }
-   
+
    public Date getNextScheduleSystemCheck () throws SchedulerException
    {
       if (!cfgManager.getSystemCheckCronConfiguration ().isActive ())

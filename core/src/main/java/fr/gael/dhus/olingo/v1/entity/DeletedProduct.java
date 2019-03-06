@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -79,7 +79,7 @@ public class DeletedProduct extends AbstractEntity
 
    public Long getSize()
    {
-      return deletedProduct.getDownloadSize();
+      return deletedProduct.getSize();
    }
 
    public Date getIngestionDate()

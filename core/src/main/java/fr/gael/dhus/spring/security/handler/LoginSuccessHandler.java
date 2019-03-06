@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,16 +22,16 @@ package fr.gael.dhus.spring.security.handler;
 import fr.gael.dhus.database.object.User.PasswordEncryption;
 import fr.gael.dhus.spring.context.SecurityContextProvider;
 import fr.gael.dhus.spring.security.CookieKey;
-import fr.gael.dhus.spring.security.authentication.ValidityAuthentication;
 import fr.gael.dhus.util.encryption.EncryptPassword;
 
+import java.util.Date;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
@@ -42,6 +42,9 @@ public class LoginSuccessHandler implements AuthenticationSuccessHandler
 {
    private static final Logger LOGGER = LogManager.getLogger(LoginSuccessHandler.class);
 
+   @Autowired
+   private SecurityContextProvider securityContextProvider;
+
    @Override
    public void onAuthenticationSuccess (HttpServletRequest request,
       HttpServletResponse response, Authentication authentication)
@@ -49,34 +52,22 @@ public class LoginSuccessHandler implements AuthenticationSuccessHandler
       String name = authentication.getName ();
       try
       {
-         ValidityAuthentication auth = (ValidityAuthentication) authentication;
-         
          name = EncryptPassword.encrypt (name, PasswordEncryption.MD5);
-         Cookie authCookie = new Cookie (CookieKey.AUTHENTICATION_COOKIE_NAME,
-               name);
+         Cookie authCookie = new Cookie(CookieKey.AUTHENTICATION_COOKIE_NAME, name);
          authCookie.setPath ("/");
          authCookie.setHttpOnly (true);
          authCookie.setMaxAge (-1);
 
-         String validity = auth.getValidity ();
-//         Cookie validityCookie = new Cookie (CookieKey.VALIDITY_COOKIE_NAME,
-//             validity);
-//         validityCookie.setPath ("/");
-//         validityCookie.setHttpOnly (true);
-
-         String integrity =
-            EncryptPassword.encrypt (name + validity, PasswordEncryption.SHA1);
-         Cookie integrityCookie = new Cookie (CookieKey.INTEGRITY_COOKIE_NAME,
-               integrity);
+         String integrity = EncryptPassword.encrypt(name + new Date(), PasswordEncryption.SHA1);
+         Cookie integrityCookie = new Cookie(CookieKey.INTEGRITY_COOKIE_NAME, integrity);
          integrityCookie.setPath ("/");
          integrityCookie.setHttpOnly (true);
          integrityCookie.setMaxAge (-1);
 
          response.addCookie (authCookie);
-//         response.addCookie (validityCookie);
          response.addCookie (integrityCookie);
-         request.getSession ().setAttribute ("integrity", integrity);
-         SecurityContextProvider.saveSecurityContext (integrity, SecurityContextHolder.getContext ());
+         request.getSession().setAttribute(CookieKey.INTEGRITY_ATTRIBUTE_NAME, integrity);
+         securityContextProvider.saveSecurityContext(integrity, SecurityContextHolder.getContext());
       }
       catch (Exception e)
       {

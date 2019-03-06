@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017 GAEL Systems
+ * Copyright (C) 2016,2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -21,12 +21,14 @@ package fr.gael.dhus.olingo.v1.formats;
 
 import fr.gael.dhus.olingo.v1.ExpectedException;
 import fr.gael.dhus.olingo.v1.Model;
+import fr.gael.dhus.olingo.v1.ServiceFactory;
 import fr.gael.dhus.olingo.v1.entity.AbstractEntity;
 import fr.gael.dhus.olingo.v1.entity.Product;
-import fr.gael.dhus.olingo.v1.entityset.UserEntitySet;
 import fr.gael.dhus.util.MetalinkBuilder;
+
 import java.nio.charset.Charset;
 import java.util.Collection;
+
 import javax.xml.transform.TransformerException;
 
 import org.apache.olingo.odata2.api.edm.EdmEntitySet;
@@ -65,18 +67,11 @@ public class MetalinkFormatter
          {
             Product p = Product.class.cast(entity);
 
-            String product_entity = "";
-            if (service_root.contains(Model.USER.getName()))
-            {
-               product_entity = UserEntitySet.CART;
-            }
-            else if (!service_root.contains(Model.PRODUCT.getName()))
-            {
-               product_entity = Model.PRODUCT.getName();
-            }
-            String url = service_root + product_entity + "('" + p.getId() + "')/" + "$value";
+            String root = ServiceFactory.ROOT_URL;
+            root = root + (root.endsWith("/") ? "" : "/");
+            String url = root + Model.PRODUCT.getName() + "('" + p.getId() + "')/" + "$value";
 
-            mb.addFile(p.getName() + ".zip")
+            mb.addFile(p.getMediaName())
                   .addUrl(url, null, 0)
                   .setSize(p.getContentLength())
                   .setHash(p.getChecksumAlgorithm(), p.getChecksumValue());

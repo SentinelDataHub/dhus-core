@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016 GAEL Systems
+ * Copyright (C) 2015-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,13 +19,14 @@
  */
 package fr.gael.dhus.service;
 
+import fr.gael.dhus.database.object.MetadataDefinition;
 import fr.gael.dhus.database.object.MetadataIndex;
 import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.Role;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.util.TestContextLoader;
 
 import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -38,6 +39,8 @@ import java.util.SortedSet;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import org.dhus.store.StoreException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.Cache;
@@ -57,8 +60,7 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 @ContextConfiguration (
-      locations = { "classpath:fr/gael/dhus/spring/context-test.xml",
-            "classpath:fr/gael/dhus/spring/context-security-test.xml" },
+      locations = { "classpath:fr/gael/dhus/spring/context-test.xml"},
       loader = TestContextLoader.class)
 @DirtiesContext (classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 public class TestCacheProductService
@@ -111,51 +113,37 @@ public class TestCacheProductService
       String productsCacheName = "products";
       String productIndexCacheName = "indexes";
 
-      MetadataIndex mi = new MetadataIndex ("a", "b", "c", "d", "e");
+      // retrieve or create metadata definition (cannot use MetadataFactory caused by dirty context)
+      MetadataDefinition metaDefinition = ApplicationContextProvider.getBean(MetadataService.class)
+            .getMetadataDefinition("a", "b", "c", "d");
+      if (metaDefinition == null)
+      {
+         metaDefinition = new MetadataDefinition("a", "b", "c", "d");
+      }
+      MetadataIndex mi = new MetadataIndex(metaDefinition, "e");
+
       List<MetadataIndex> index = new ArrayList<> (5);
       index.add (mi);
 
       // validate cache
-      Cache pCache = cacheManager.getCache (productsCacheName);
-      Cache iCache = cacheManager.getCache (productIndexCacheName);
+      Cache productCache = cacheManager.getCache(productsCacheName);
+      Cache indexCache = cacheManager.getCache(productIndexCacheName);
 
-      Assert.assertNull (pCache.get (uuid1, Product.class));
-      Assert.assertNull (pCache.get (uuid2, Product.class));
-      Assert.assertNull (iCache.get (productId1, List.class));
-      Assert.assertNull (iCache.get (productId2, List.class));
+      Assert.assertNull(productCache.get(uuid1, Product.class));
+      Assert.assertNull(productCache.get(uuid2, Product.class));
+      Assert.assertNull(indexCache.get(productId1, List.class));
+      Assert.assertNull(indexCache.get(productId2, List.class));
 
-      // Cacheable
-      Product product1 = productService.getProduct (uuid1);
-      Assert.assertEquals (pCache.get (uuid1, Product.class), product1);
-      Assert.assertNull (pCache.get (uuid2));
+      List<MetadataIndex> index1 = productService.getIndexes(productId1);
+      Assert.assertTrue(equalCollection(indexCache.get(productId1, List.class), index1));
+      Assert.assertNull(indexCache.get(productId2));
 
-      Product product2 = productService.getProduct (uuid2);
-      Assert.assertEquals (pCache.get (uuid2, Product.class), product2);
-
-      List<MetadataIndex> index1 = productService.getIndexes (productId1);
-      Assert.assertTrue (
-            equalCollection (iCache.get (productId1, List.class), index1));
-      Assert.assertNull (iCache.get (productId2));
-
-      List<MetadataIndex> index2 = productService.getIndexes (productId2);
-      Assert.assertTrue (
-            equalCollection (iCache.get (productId2, List.class), index2));
-
-      // CacheEvict
-      productService.setIndexes (productId1, index);
-      Assert.assertNull (iCache.get (productId1));
-      Assert.assertNotNull (iCache.get (productId2));
-
-      productService.getIndexes (productId1); // re-cached
-      productService.systemDeleteProduct (productId2, false, null);
-      Assert.assertNull (iCache.get (productId2));
-      Assert.assertNotNull (iCache.get (productId1));
-      Assert.assertNull (pCache.get (uuid1));
-      Assert.assertNull (pCache.get (uuid2));
+      List<MetadataIndex> index2 = productService.getIndexes(productId2);
+      Assert.assertTrue(equalCollection(indexCache.get(productId2, List.class), index2));
    }
 
    @Test
-   public void testProductCountCache ()
+   public void testProductCountCache () throws StoreException
    {
       fr.gael.dhus.database.object.Collection c =
             new fr.gael.dhus.database.object.Collection ();
@@ -166,29 +154,10 @@ public class TestCacheProductService
       Object filter_collection_key = Arrays.asList (filter, c.getUUID ());
       Object filter_key = Arrays.asList (filter, null);
       Object all_key = "all";
-      Cache cache;
-
-      // count (Collection, String)
-      Integer expected = productService.count (c, filter);
-      cache = cacheManager.getCache (cache_name);
-      Assert.assertEquals (
-            cache.get (filter_collection_key, Integer.class), expected);
-      expected = productService.count ((fr.gael.dhus.database.object.Collection)null, filter);
-      Assert.assertEquals (cache.get (filter_key, Integer.class), expected);
-
-      // count (String)
-      clearCache ();
-      expected = productService.count (filter);
-      Assert.assertEquals (cache.get (filter_key, Integer.class), expected);
-
-      // count (String, Long)
-      clearCache ();
-      expected = productService.count (filter, c.getUUID ());
-      Assert.assertEquals (
-            cache.get (filter_collection_key, Integer.class), expected);
 
       // countAuthorizedProducts ()
-      expected = productService.count ();
+      Integer expected = productService.count();
+      Cache cache = cacheManager.getCache(cache_name);
       Assert.assertEquals (cache.get (all_key, Integer.class), expected);
 
       // addProduct (Product)
@@ -198,54 +167,35 @@ public class TestCacheProductService
       Assert.assertNull (cache.get (filter_key, Integer.class));
       Assert.assertEquals (cache.get (all_key, Integer.class), expected);
 
-      // addProduct (URL, User, List, String, Scanner, FileScannerWrapper)
-      // TODO too hard to simulate the call ProductService.processProduct
-
       // deleteProduct (Long)
       expected = productService.count () - 1;
-      productService.deleteProduct (7L, false, null);
+      String product7Uuid = productService.getProduct(7L).getUuid();
+      productService.deleteByUuid(product7Uuid, false, null);
       Assert.assertEquals (cache.get (all_key, Integer.class), expected);
 
       // systemDeleteProduct (Long)
       expected = productService.count () - 1;
-      productService.systemDeleteProduct (6L, false, null);
+      String product6Uuid = productService.getProduct(6L).getUuid();
+      productService.deleteByUuid(product6Uuid, false, null);
       Assert.assertEquals (cache.get (all_key, Integer.class), expected);
    }
 
    @Test
-   public void testProductCache () throws MalformedURLException
+   public void testProductCache () throws MalformedURLException, StoreException
    {
       String cache_name = "product";
       String uuid;
       Long pid;
       Product product;
 
-      // systemGetProduct (Long)
-      pid = 0L;
-      product = productService.systemGetProduct (pid);
-      Cache cache = cacheManager.getCache (cache_name);
-      Assert.assertNotNull (cache);
-      Assert.assertEquals (cache.get (pid, Product.class), product);
       // getProduct (Long)
       pid = 1L;
       product = productService.getProduct (pid);
+      Cache cache = cacheManager.getCache (cache_name);
       Assert.assertEquals (cache.get (pid, Product.class), product);
-      // getProductToDownload (Long)
-      product = productService.getProductToDownload (pid);
-      Assert.assertEquals (product, cache.get (pid, Product.class));
-
-      // systemGetProduct (String)
-      uuid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa5";
-      product = productService.systemGetProduct (uuid);
-      Assert.assertEquals (cache.get (uuid, Product.class), product);
-      // getProduct (String)
-      product = productService.getProduct (uuid);
-      Assert.assertEquals (product, cache.get (uuid, Product.class));
-      // getProduct (String, User)
-      product = productService.getProduct (uuid);
-      Assert.assertEquals (product, cache.get (uuid, Product.class));
 
       // addProduct (Product)
+      uuid = "testaaaaaaaaaaaaaaaaaaaaaaaaaaa0";
       Assert.assertNull (cache.get (productTest.getId (), Product.class));
       Assert.assertNull (cache.get (productTest.getUuid (), Product.class));
       productService.addProduct (productTest);
@@ -254,58 +204,16 @@ public class TestCacheProductService
       Assert.assertNotNull (cache.get (productTest.getId (), Product.class));
       Assert.assertNotNull (cache.get (productTest.getUuid (), Product.class));
 
-      // addProduct (URL, User, List, String, Scanner, FileScannerWrapper)
-      // TODO simulate ingestion process
-
       // load cache 'product_count' with key 'all'
       Cache cacheCounter = cacheManager.getCache ("product_count");
       Integer number = productService.count ();
 
       // systemDeleteProduct (Long)
       product = productService.getProduct (0L); // load product by id
-      productService.systemDeleteProduct (product.getId (), false, null);
+      productService.deleteByUuid(product.getUuid(), false, null);
       Assert.assertNull (cache.get (product.getId (), Product.class));
       Assert.assertNull (cache.get (product.getUuid (), Product.class));
-      Assert.assertNull (cache.get (product.getPath (), Product.class));
       Assert.assertEquals (cacheCounter.get ("all", Integer.class).intValue (), (number - 1));
-
-      // deleteProduct (Long)
-      product = productService.systemGetProduct (uuid); // load product by uuid
-      productService.systemDeleteProduct (product.getId (), false, null);
-      Assert.assertNull (cache.get (product.getId (), Product.class));
-      Assert.assertNull (cache.get (product.getUuid (), Product.class));
-      Assert.assertNull (cache.get (product.getPath (), Product.class));
-      Assert.assertEquals (cacheCounter.get ("all", Integer.class).intValue (), (number - 2));
-   }
-
-   @Test
-   public void testProductsCache ()
-   {
-      String cache_name = "products";
-      Cache cache = cacheManager.getCache (cache_name);
-      List<Product> products;
-
-      // getProducts (List<Long>)
-      Object key2 = Arrays.asList (0L, 5L, 6L, 7L);
-      products = productService.getProducts ((List<Long>) key2);
-      Assert.assertEquals (cache.get (key2, List.class), products);
-
-      // addProduct (Product)
-      productService.addProduct (productTest);
-      Assert.assertNull (cache.get (key2, List.class));
-
-      // addProduct (URL, User, List, String, Scanner, FileScannerWrapper)
-      // TODO too hard to simulate the call ProductService.processProduct
-
-      // deleteProduct (Long)
-      productService.getProducts ((List<Long>) key2);
-      productService.deleteProduct (0L, false, null);
-      Assert.assertNull (cache.get (key2, List.class));
-
-      // systemDeleteProduct (Long)
-      productService.getProducts ((List<Long>) key2);
-      productService.systemDeleteProduct (5L, false, null);
-      Assert.assertNull (cache.get (key2, List.class));
    }
 
    @BeforeMethod
@@ -415,10 +323,7 @@ public class TestCacheProductService
       productTest = new Product ();
       productTest.setUuid ("testaaaaaaaaaaaaaaaaaaaaaaaaaaa0");
       productTest.setIdentifier ("test");
-      productTest.setPath (
-            new URL ("file://home/lambert/dhus/productTest.zip"));
       productTest.setLocked (false);
-      productTest.setProcessed (true);
       productTest.setOrigin ("space");
    }
 }

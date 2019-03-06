@@ -34,11 +34,6 @@
    </xs:annotation>
 
    <xs:complexType name="networkConfiguration">
-      <xs:annotation>
-         <xs:appinfo>
-            <inheritance:extends>fr.gael.dhus.database.object.config.ConfigurationPart</inheritance:extends>
-         </xs:appinfo>
-      </xs:annotation>
       <xs:sequence>
          <xs:element name="outbound" type="dhusNetwork:TrafficShapingType" minOccurs="0" />
          <xs:element name="inbound"  type="dhusNetwork:TrafficShapingType" minOccurs="0" />

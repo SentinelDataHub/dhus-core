@@ -30,7 +30,6 @@
 
     <test name="Data Store" preserve-order="true">
         <classes>
-            <class name="fr.gael.dhus.datastore.FileSystemDataStoreTest" />
             <class name="fr.gael.dhus.datastore.HierarchicalDirectoryBuilderTest" />
             <class name="fr.gael.dhus.datastore.scanner.ScannerFactoryTest" />
             <class name="fr.gael.dhus.datastore.scanner.AbstractScannerTest"/>
@@ -38,8 +37,9 @@
 
             <class name="org.dhus.store.HasImplTest" />
             <class name="org.dhus.store.datastore.hfs.HfsDataStoreTest" />
-            <class name="org.dhus.store.datastore.DefaultDataStoreServiceTest" />
+            <class name="org.dhus.store.datastore.DefaultDataStoreManagerTest" />
             <class name="org.dhus.store.keystore.PersistentKeyStoreTest" />
+            <class name="org.dhus.store.datastore.openstack.OpenStackDataStoreTest" />
         </classes>
     </test>
 
@@ -53,6 +53,7 @@
    <test name="synchronizer" preserve-order="true">
       <classes>
          <class name="fr.gael.dhus.sync.ExecutorTest" />
+         <class name="fr.gael.dhus.util.stream.MultiSourceInputStreamTest" />
       </classes>
    </test>
 

@@ -94,24 +94,36 @@ public class CacheAspectDefinition
          {
             cache.evict(p.getId());
             cache.evict(p.getUuid());
-            cache.putIfAbsent(p.getId(), p);
-            cache.putIfAbsent(p.getUuid(), p);
+            cache.put(p.getId(), p);
+            cache.put(p.getUuid(), p);
          }
 
-         // increment global 'product_count' and clear others key
-         cache = getCacheManager().getCache(PRODUCT_COUNT_CACHE_NAME);
-         synchronized (cache)
-         {
-            Integer oldValue = cache.get(PRODUCT_COUNT_TOTAL_KEY, Integer.class);
-            if (oldValue != null)
-            {
-               cache.clear();
-               cache.putIfAbsent(PRODUCT_COUNT_TOTAL_KEY, (oldValue + 1));
-            }
-         }
+         incrementProductCount(cacheManager);
 
          // clear 'products' cache
          getCacheManager().getCache(PRODUCTS_CACHE_NAME).clear();
+      }
+   }
+
+   /* FIXME This method was made public static to fix cached product count
+    * inconsistencies in fr.gael.dhus.datastore.Ingester ingest method
+    * 
+    * put this code back into addProduct above once the ingestion process
+    * has been fully incorporated into the Stores architecture
+    */
+   @Deprecated
+   public static void incrementProductCount(CacheManager cacheManager)
+   {
+      // increment global 'product_count' and clear others key
+      Cache cache = cacheManager.getCache(PRODUCT_COUNT_CACHE_NAME);
+      synchronized (cache)
+      {
+         Integer oldValue = cache.get(PRODUCT_COUNT_TOTAL_KEY, Integer.class);
+         if (oldValue != null)
+         {
+            cache.clear();
+            cache.put(PRODUCT_COUNT_TOTAL_KEY, (oldValue + 1));
+         }
       }
    }
 
@@ -154,7 +166,7 @@ public class CacheAspectDefinition
             // update value for all processed products if necessary
             if (oldValue != null)
             {
-               cache.putIfAbsent(PRODUCT_COUNT_TOTAL_KEY, (oldValue - 1));
+               cache.put(PRODUCT_COUNT_TOTAL_KEY, (oldValue - 1));
             }
          }
 

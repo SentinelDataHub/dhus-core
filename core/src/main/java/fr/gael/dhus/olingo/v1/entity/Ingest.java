@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -30,12 +30,11 @@ import static fr.gael.dhus.olingo.v1.entityset.IngestEntitySet.TARGET_COLLECTION
 import fr.gael.dhus.olingo.v1.ExpectedException.IncompleteDocException;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidKeyException;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidTargetException;
-import fr.gael.dhus.olingo.v1.Navigator;
 import fr.gael.dhus.olingo.v1.Model;
+import fr.gael.dhus.olingo.v1.Navigator;
+import fr.gael.dhus.olingo.v1.UriParsingUtils;
 import fr.gael.dhus.olingo.v1.map.FunctionalMap;
 import fr.gael.dhus.olingo.v1.visitor.IngestFunctionalVisitor;
-import fr.gael.dhus.service.CollectionService;
-import fr.gael.dhus.service.ProductService;
 import fr.gael.dhus.service.SecurityService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.system.init.WorkingDirectory;
@@ -63,7 +62,6 @@ import javax.xml.bind.DatatypeConverter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import org.apache.olingo.odata2.api.edm.Edm;
 import org.apache.olingo.odata2.api.edm.EdmEntitySet;
 import org.apache.olingo.odata2.api.ep.entry.ODataEntry;
 import org.apache.olingo.odata2.api.exception.ODataException;
@@ -73,6 +71,9 @@ import org.apache.olingo.odata2.api.uri.NavigationSegment;
 import org.apache.olingo.odata2.api.uri.PathSegment;
 import org.apache.olingo.odata2.api.uri.UriInfo;
 import org.apache.olingo.odata2.api.uri.UriParser;
+
+import org.dhus.store.ingestion.IngestibleRawProduct;
+import org.dhus.store.ingestion.ProcessingManager;
 
 /**
  * Ingest entity to upload/ingest new products.
@@ -86,16 +87,9 @@ public class Ingest extends AbstractEntity
    private static final SecurityService SECURITY_SERVICE =
          ApplicationContextProvider.getBean(SecurityService.class);
 
-   /** Provides the addProduct() method to add a product in the ingestion pipeline. */
-   private static final ProductService PRODUCT_SERVICE =
-         ApplicationContextProvider.getBean(ProductService.class);
-
-   /** To get db collections from their IDs. */
-   private static final CollectionService COLLECTION_SERVICE =
-         ApplicationContextProvider.getBean(CollectionService.class);
-
    /** To auto-increment `id`, not the size of `UPLOAD` because delete is implemented. */
    private static final AtomicLong CURSOR = new AtomicLong(0L);
+
    /** Map of uploaded products, key is the Id. */
    private static final Map<Long, Ingest> UPLOADS =
          Collections.synchronizedMap(new HashMap<Long, Ingest>());
@@ -195,33 +189,45 @@ public class Ingest extends AbstractEntity
          }
       }
 
-      List<String> target_collections = entry.getMetadata().getAssociationUris(TARGET_COLLECTIONS);
-      if (target_collections.size() > 0)
+      List<String> collectionUris = entry.getMetadata().getAssociationUris(TARGET_COLLECTIONS);
+      for (String collectionUri: collectionUris)
       {
-         Edm edm = RuntimeDelegate.createEdm(new Model());
-         UriParser urip = RuntimeDelegate.getUriParser(edm);
+         collectionUri = UriParsingUtils.extractResourcePath(collectionUri);
+         // get path segments from association uri
+         List<PathSegment> pathSegments = new ArrayList<>();
+         StringTokenizer stringTokenizer = new StringTokenizer(collectionUri, "/");
 
-         for (String target_collection: target_collections)
+         while (stringTokenizer.hasMoreTokens())
          {
-            List<PathSegment> path_segments = new ArrayList<>();
-            StringTokenizer st = new StringTokenizer(target_collection, "/");
-            while (st.hasMoreTokens ())
+            pathSegments.add(UriParser.createPathSegment(stringTokenizer.nextToken(), null));
+         }
+
+         // parse UriInfo
+         UriInfo uinfo = UriParser.parse(
+               RuntimeDelegate.createEdm(new Model()),
+               pathSegments,
+               Collections.<String, String>emptyMap());
+
+         // get start EntitySet
+         EdmEntitySet ingestEntitySet = uinfo.getStartEntitySet();
+         List<NavigationSegment> navSegments = uinfo.getNavigationSegments();
+
+         for (NavigationSegment navSegment: navSegments)
+         {
+            // follow the navigation toward TargetCollections if there is a key predicate
+            if (navSegment.getEntitySet().getName().equals(TARGET_COLLECTIONS)
+                  && !navSegment.getKeyPredicates().isEmpty())
             {
-               path_segments.add(UriParser.createPathSegment(st.nextToken(), null));
+               Collection collection = Navigator.<Collection>navigate(
+                     ingestEntitySet, navSegment.getKeyPredicates().get(0), navSegments, Collection.class);
+
+               if (collection == null)
+               {
+                  throw new ODataException("Target collection not found: " + collectionUri);
+               }
+
+               targetCollections.put(collection.getName(), collection);
             }
-            UriInfo uinfo = urip.parse(path_segments, Collections.EMPTY_MAP);
-
-            EdmEntitySet sync_ees = uinfo.getStartEntitySet();
-            KeyPredicate kp = uinfo.getKeyPredicates().get(0);
-            List<NavigationSegment> ns_l = uinfo.getNavigationSegments();
-
-            Collection coll = Navigator.<Collection>navigate(sync_ees, kp, ns_l, Collection.class);
-            if (coll == null)
-            {
-               throw new ODataException("Target collection not found: " + target_collection);
-            }
-
-            targetCollections.put(coll.getName(), coll);
          }
       }
 
@@ -229,22 +235,13 @@ public class Ingest extends AbstractEntity
       LOGGER.info(String.format("Ingesting product %s (IngestId=%d md5=%s) uploaded by %s",
             filename, id, md5, uploader.getUsername()));
 
-      List<fr.gael.dhus.database.object.Collection> collections =
-            new ArrayList<>(targetCollections.size());
-      for (Collection c: targetCollections.values())
-      {
-         collections.add(COLLECTION_SERVICE.getCollection(c.getUUID()));
-      }
-
       Path pname = temp_file.resolveSibling(filename);
       try
       {
          Files.move(temp_file, pname);
          temp_file = pname;
-         URL purl = pname.toUri().toURL();
-         fr.gael.dhus.database.object.Product p = PRODUCT_SERVICE.addProduct (
-               purl, uploader, purl.toString ());
-         PRODUCT_SERVICE.processProduct (p, uploader, collections, null, null);
+         IngestibleRawProduct productToProcess = new IngestibleRawProduct(pname.toUri().toURL());
+         ProcessingManager.processProduct(productToProcess, new ArrayList<>(targetCollections.keySet()), true);
       }
       catch (IOException ex)
       {

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -21,15 +21,11 @@ package fr.gael.dhus.database.dao;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertTrue;
 
 import fr.gael.dhus.database.dao.interfaces.HibernateDao;
 import fr.gael.dhus.database.object.KeyStoreEntry;
 import fr.gael.dhus.database.object.KeyStoreEntry.Key;
-import fr.gael.dhus.util.CheckIterator;
 import fr.gael.dhus.util.TestContextLoader;
-
-import java.util.Iterator;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -67,10 +63,10 @@ public class TestKeyStoreEntryDao extends TestAbstractHibernateDao<KeyStoreEntry
    @Test(dependsOnMethods = {"create"}, expectedExceptions = {DuplicateKeyException.class})
    public void primaryKey()
    {
-      KeyStoreEntry kse = new KeyStoreEntry("Toto", "key", "1");
+      KeyStoreEntry kse = new KeyStoreEntry("Toto", "key", "tag", "1", 0L);
       dao.create(kse);
       assertEquals(dao.count(), 7);
-      KeyStoreEntry kse2 = new KeyStoreEntry("Toto", "key", "2");
+      KeyStoreEntry kse2 = new KeyStoreEntry("Toto", "key", "tag", "2", 0L);
       dao.create(kse2);
    }
 
@@ -78,7 +74,7 @@ public class TestKeyStoreEntryDao extends TestAbstractHibernateDao<KeyStoreEntry
    @Test
    public void create()
    {
-      KeyStoreEntry kse = new KeyStoreEntry("Toto", "key", "1");
+      KeyStoreEntry kse = new KeyStoreEntry("Toto", "key", "tag", "1", 0L);
       dao.create(kse);
       assertEquals(dao.count(), 7);
    }
@@ -87,7 +83,7 @@ public class TestKeyStoreEntryDao extends TestAbstractHibernateDao<KeyStoreEntry
    @Test
    public void read()
    {
-      Key key = new Key("store1", "key1");
+      Key key = new Key("store1", "key1", "tag");
       assertEquals(dao.read(key).getValue(), "value1");
    }
 
@@ -95,7 +91,7 @@ public class TestKeyStoreEntryDao extends TestAbstractHibernateDao<KeyStoreEntry
    @Test(dependsOnMethods = {"read"})
    public void update()
    {
-      Key nk = new Key("store2", "key1");
+      Key nk = new Key("store2", "key1", "tag");
       KeyStoreEntry kse = dao.read(nk);
       assertEquals(kse.getValue(), "value1");
       kse.setValue("toto");
@@ -107,19 +103,11 @@ public class TestKeyStoreEntryDao extends TestAbstractHibernateDao<KeyStoreEntry
    @Test(dependsOnMethods = {"read"})
    public void delete()
    {
-      Key nk = new Key("store2", "key1");
+      Key nk = new Key("store2", "key1", "tag");
       KeyStoreEntry kse = dao.read(nk);
       assertEquals(dao.count(), 6);
       dao.delete(kse);
       assertEquals(dao.count(), 5);
-   }
-
-   @Override
-   public void scroll()
-   {
-      String hql = "WHERE KEYSTORE = 'store3'";
-      Iterator<KeyStoreEntry> it = dao.scroll(hql, -1, -1).iterator();
-      assertTrue(CheckIterator.checkElementNumber(it, 2));
    }
 
    @Override

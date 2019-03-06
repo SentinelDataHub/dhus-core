@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,10 +22,9 @@ package fr.gael.dhus.datastore.processing.fair;
 import java.util.concurrent.Callable;
 
 /**
- * An implementation of {@link Callable} adding a key to be handled by
- * {@link FairQueue}.
+ * An implementation of {@link Callable} adding a key to be handled by {@link FairQueue}.
  */
-public abstract class FairCallable extends FairQueueEntry implements Callable<Object>
+public abstract class FairCallable extends AbstractFairQueueEntry implements Callable<Object>
 {
    public FairCallable(Object listKey)
    {

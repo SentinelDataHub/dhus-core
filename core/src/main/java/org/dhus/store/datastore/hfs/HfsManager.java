@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017 GAEL Systems
+ * Copyright (C) 2016,2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -23,6 +23,7 @@ import fr.gael.dhus.datastore.HierarchicalDirectoryBuilder;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -38,40 +39,51 @@ import org.apache.logging.log4j.Logger;
  */
 public class HfsManager
 {
-   public static final String INCOMING_PRODUCT_DIR = "product";
-
    private static final Logger LOGGER = LogManager.getLogger();
 
    private String path;
    private Integer maxFileNo;
+   private Integer maxItems;
+   private HierarchicalDirectoryBuilder hdb;
 
    @SuppressWarnings("unused")
    private HfsManager() {}
 
-   public HfsManager(String path, int max_file_no)
+   public HfsManager(String path, int max_file_no, int maxItems)
    {
+      if (max_file_no < 5)
+      {
+         throw new IllegalArgumentException();
+      }
+
       this.path = path;
       this.maxFileNo = max_file_no;
+      this.maxItems = maxItems;
    }
 
-   public HierarchicalDirectoryBuilder getIncomingBuilder()
+   public HierarchicalDirectoryBuilder getHierarchicalDirectoryBuilder()
    {
       File root = new File(path);
       if (!root.exists())
       {
          root.mkdirs();
       }
-      return new HierarchicalDirectoryBuilder(root.getAbsoluteFile(), this.maxFileNo);
+      if (hdb == null)
+      {
+         hdb = new HierarchicalDirectoryBuilder(root.getAbsoluteFile(), this.maxFileNo, this.maxItems);
+      }
+      return hdb;
    }
 
    /**
-    * Returns existing available path into incoming folder.
+    * Returns the next existing available path of this HfsManager.
     *
+    * @param fileName Name of file that will be stored in the requested path
     * @return the path to an existing directory
     */
-   public synchronized File getNewIncomingPath()
+   public synchronized File getNewPath(String fileName)
    {
-      return getIncomingBuilder().getDirectory();
+      return getHierarchicalDirectoryBuilder().getDirectory(fileName);
    }
 
    /**
@@ -80,7 +92,7 @@ public class HfsManager
     * @param file file to check
     * @return true if HFS contains the file and if exists
     */
-   public boolean isInIncoming(File file)
+   public boolean isContaining(File file)
    {
       Path root = Paths.get(this.getPath()).toAbsolutePath();
       Path product_path = file.getAbsoluteFile().toPath();
@@ -89,60 +101,9 @@ public class HfsManager
       return product_path.startsWith(root) && product.exists() && product.isFile();
    }
 
-   public boolean isAnIncomingElement(File file)
-   {
-      int maxfileno = this.maxFileNo;
-
-      boolean is_digit = true;
-      try
-      {
-         // Incoming folders are "X5F" can be parse "0X5F" by decode
-         // Warning '09' means octal value that raise error because 9>8...
-         String filename = file.getName();
-         if (filename.toUpperCase().startsWith("X"))
-         {
-            filename = "0" + filename;
-         }
-
-         if (Long.decode(filename) > maxfileno)
-         {
-            throw new NumberFormatException("Expected value exceeded.");
-         }
-      }
-      catch (NumberFormatException e)
-      {
-         is_digit = false;
-      }
-
-      return isInIncoming(file) && (is_digit ||
-            file.getName().equals(HierarchicalDirectoryBuilder.DHUS_ENTRY_NAME) ||
-           (file.getName().equals(INCOMING_PRODUCT_DIR) &&
-                  file.getParentFile().getName().equals(HierarchicalDirectoryBuilder.DHUS_ENTRY_NAME)));
-   }
-
    /**
-    * Returns existing available path into incoming folder to store products.
-    *
-    * @return the path to an existing product directory
-    */
-   public synchronized File getNewProductIncomingPath()
-   {
-      File file = new File(getNewIncomingPath(), INCOMING_PRODUCT_DIR);
-      file.mkdirs();
-      return file;
-   }
-
-   /**
-    * The initialization of incoming manager.
-    */
-   public void initIncoming()
-   {
-      getIncomingBuilder().init();
-   }
-
-   /**
-    * Properly delete a path in incoming directory.
-    * If the path is not inside the incoming path, it will not be removed.
+    * Properly delete a path in HFSManager directory.
+    * If the path is not inside the HFSManager path, it will not be removed.
     *
     * @param path the path to delete.
     * @throws IOException
@@ -153,35 +114,29 @@ public class HfsManager
       LOGGER.debug("Delete of path {}", path);
 
       File container = new File(path);
-      // Case of path not inside incoming: do not remove !
-      if (!container.exists() || !isInIncoming(container))
+      // Case of path not inside hfsManager: do not remove !
+      if (!container.exists() || !isContaining(container))
       {
          return;
       }
-      // Case of path basename matches the incoming reserved "product" folder.
-      if (INCOMING_PRODUCT_DIR.equals(container.getParentFile().getName()))
+      // We first delete the file
+      Files.delete(Paths.get(path));
+      // Case of path basename matches the 'old' reserved "dhus_entry" folder
+      if (HierarchicalDirectoryBuilder.DHUS_ENTRY_NAME.equals(container.getParentFile().getName()))
       {
          container = container.getParentFile();
-      }
-      // Case of path basename matches the incoming reserved "dhus_entry" folder
-      if (HierarchicalDirectoryBuilder.DHUS_ENTRY_NAME.equals(container
-            .getParentFile().getName()))
-      {
-         container = container.getParentFile();
-      }
-      // Force recursive delete of the folder
-      if (container != null)
-      {
-         // We first delete the file
-         Files.delete(Paths.get(path));
-         try
+         // Force recursive delete of the folder
+         if (container != null)
          {
-            LOGGER.debug("Force delete of {}, Has rights to delete: {}", container, container.canWrite());
-            FileUtils.forceDelete(container);
-         }
-         catch(IOException e)
-         {
-            LOGGER.warn("Unable de delete directory {}", container);
+            try
+            {
+               Files.delete(container.toPath());
+            }
+            catch (DirectoryNotEmptyException suppressed) {}
+            catch (IOException ex)
+            {
+               LOGGER.warn("Unable de delete directory {}", container);
+            }
          }
       }
    }
@@ -204,6 +159,25 @@ public class HfsManager
    public void setMaxFileNo(Integer maxFileNo)
    {
       this.maxFileNo = maxFileNo;
+   }
+
+   /**
+    * Retrieves the size (in bytes) of the file pointed by path or zero if it does not exist.
+    *
+    * @param path of file
+    * @return the size of the file or zero
+    */
+   public long sizeOf(String path)
+   {
+      File file = new File(path);
+      if (file.exists())
+      {
+         return FileUtils.sizeOf(new File(path));
+      }
+      else
+      {
+         return 0;
+      }
    }
 
 }

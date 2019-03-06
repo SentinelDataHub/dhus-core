@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -17,7 +17,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
 package fr.gael.dhus.util;
 
 import net.sf.ehcache.CacheException;
@@ -51,40 +50,35 @@ public class LoggingCacheListenerFactory extends CacheEventListenerFactory
 
          @Override
          public void notifyElementRemoved(Ehcache cache, Element element)
-            throws CacheException
+               throws CacheException
          {
-            LOGGER.debug("Element removed from the cache : " +
-               element.getObjectValue());
+            LOGGER.debug("Element removed from the cache : {}", element.getObjectValue());
          }
 
          @Override
          public void notifyElementPut(Ehcache cache, Element element)
-            throws CacheException
+               throws CacheException
          {
-            LOGGER.debug("Element put into the cache : " + 
-               element.getObjectValue());
+            LOGGER.debug("Element put into the cache : {}", element.getObjectValue());
          }
 
          @Override
          public void notifyElementUpdated(Ehcache cache, Element element)
-            throws CacheException
+               throws CacheException
          {
-            LOGGER.debug("Element updated in the cache : " + 
-               element.getObjectValue());
+            LOGGER.debug("Element updated in the cache : {}", element.getObjectValue());
          }
 
          @Override
          public void notifyElementExpired(Ehcache cache, Element element)
          {
-            LOGGER.debug("Element expired in the cache : " +
-               element.getObjectValue());
+            LOGGER.debug("Element expired in the cache : {}", element.getObjectValue());
          }
 
          @Override
          public void notifyElementEvicted(Ehcache cache, Element element)
          {
-            LOGGER.debug("Element evicted from the cache : " +
-               element.getObjectValue());
+            LOGGER.debug("Element evicted from the cache : {}", element.getObjectValue());
          }
 
          @Override

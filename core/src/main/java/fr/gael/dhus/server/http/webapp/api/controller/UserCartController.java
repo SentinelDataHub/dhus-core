@@ -41,7 +41,7 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
 import org.dhus.store.datastore.DataStoreException;
-import org.dhus.store.datastore.DataStoreService;
+import org.dhus.store.datastore.DataStoreManager;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -63,7 +63,7 @@ public class UserCartController
    private ProductCartService productCartService;
 
    @Autowired
-   private DataStoreService dataStoreService;
+   private DataStoreManager dataStoreService;
    
    @PreAuthorize ("hasRole('ROLE_DOWNLOAD')")
    @RequestMapping (value = "/cart")

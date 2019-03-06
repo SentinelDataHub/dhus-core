@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2013,2014,2015 GAEL Systems
+   Copyright (C) 2014,2015,2016,2017 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -27,15 +27,26 @@
 
    <bean class="fr.gael.dhus.spring.context.DHuSContextLoader" />
 
-   <bean id="odataAuthEntryPoint" class="org.springframework.security.web.authentication.www.BasicAuthenticationEntryPoint">
-      <property name="realmName" value="OData service" />
+   <bean id="odataAuthEntryPoint" class="org.springframework.security.web.authentication.DelegatingAuthenticationEntryPoint">
+      <constructor-arg>
+         <map>
+            <entry key="hasHeader('X-Requested-With','XMLHttpRequest')" value-ref="ajaxEntyPoint" />
+         </map>
+      </constructor-arg>
+      <property name="defaultEntryPoint" ref="defaultEntryPoint"/>
+   </bean>
+
+   <bean id="ajaxEntyPoint" class="org.springframework.security.config.annotation.web.configurers.HttpBasicConfigurer.HttpStatusEntryPoint">
+      <constructor-arg name="httpStatus" value="#{T(org.springframework.http.HttpStatus).UNAUTHORIZED}"/>
+   </bean>
+
+   <bean id="defaultEntryPoint" class="org.springframework.security.web.authentication.www.BasicAuthenticationEntryPoint">
+      <property name="realmName" value="OData service"/>
    </bean>
 
    <security:http entry-point-ref="odataAuthEntryPoint" use-expressions="true" disable-url-rewriting="true">
-
       <security:custom-filter position="PRE_AUTH_FILTER" ref="preAuthFilter" />
       <security:custom-filter position="BASIC_AUTH_FILTER" ref="basicAuthFilter" />
       <security:intercept-url pattern="/**" access="isAuthenticated()" />
-
    </security:http>
 </beans>

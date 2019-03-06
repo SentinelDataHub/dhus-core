@@ -64,14 +64,6 @@ public class Collection implements Serializable
    @OrderBy ("identifier")
    private Set<Product> products = new HashSet<> ();
 
-   @ManyToMany (fetch = FetchType.LAZY)
-   @JoinTable (
-      name="COLLECTION_USER_AUTH",
-      joinColumns={@JoinColumn(name="COLLECTIONS_UUID", table="COLLECTIONS")},
-      inverseJoinColumns={@JoinColumn(name="USERS_UUID", table="USERS")})
-   @OrderBy ("username")
-   private Set<User> authorizedUsers = new HashSet<> ();
-
    /**
     * @return the uuid
     */
@@ -134,22 +126,6 @@ public class Collection implements Serializable
    public void setProducts (Set<Product> products)
    {
       this.products = products;
-   }
-
-   /**
-    * @param authorized_users the authorizedUsers to set
-    */
-   public void setAuthorizedUsers (Set<User> authorized_users)
-   {
-      this.authorizedUsers = authorized_users;
-   }
-
-   /**
-    * @return the authorizedUsers
-    */
-   public Set<User> getAuthorizedUsers ()
-   {
-      return authorizedUsers;
    }
 
    @Override

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -21,26 +21,22 @@ package fr.gael.dhus.olingo.v1.entity;
 
 import fr.gael.dhus.olingo.v1.entityset.ProductEntitySet;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
-import fr.gael.dhus.system.config.ConfigurationManager;
 
-import fr.gael.drb.DrbFactory;
 import fr.gael.drb.DrbNode;
 import fr.gael.drb.DrbSequence;
 import fr.gael.drb.query.Query;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.dhus.store.StoreException;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.DataStoreProduct;
-import org.dhus.store.datastore.DataStoreService;
-import org.dhus.store.datastore.hfs.HfsProduct;
+import org.dhus.store.derived.DerivedProductStore;
+import org.dhus.store.derived.DerivedProductStoreService;
 
 /**
  * @author pidancier
@@ -53,28 +49,35 @@ public class ThumbnailProduct extends Product
          "image/directory/Width", "image/directory/Height",
          "image/directory/NumBands" };
 
-   private final DataStoreService DATASTORE_SERVICE = ApplicationContextProvider.getBean(DataStoreService.class);
-   private final ConfigurationManager CFG_MGR = ApplicationContextProvider.getBean(ConfigurationManager.class);
-   private DataStoreProduct physical;
+   private static final DerivedProductStoreService DERIVED_PS_SERVICE = ApplicationContextProvider.getBean(DerivedProductStoreService.class);
+
+   private final DataStoreProduct physical;
+
+   static ThumbnailProduct generateThumbnailProduct(fr.gael.dhus.database.object.Product product)
+   {
+      DataStoreProduct data = null;
+      try
+      {
+         data = DERIVED_PS_SERVICE
+               .getDerivedProduct(product.getUuid(),DerivedProductStore.THUMBNAIL_TAG)
+               .getImpl(DataStoreProduct.class);
+      }
+      catch (StoreException suppressed) {}
+      return new ThumbnailProduct(product, data);
+   }
 
    /**
     * Build this Thumbnail instance.
     *
     * @param product
+    * @param data physical product, may be null
     * @throws NullPointerException is product contains no Quicklook.
     * @throws DataStoreException
     */
-   public ThumbnailProduct(fr.gael.dhus.database.object.Product product) throws DataStoreException
+   private ThumbnailProduct(fr.gael.dhus.database.object.Product product, DataStoreProduct data)
    {
       super (product);
-      try
-      {
-         physical = DATASTORE_SERVICE.get(product.getThumbnailPath()).getImpl(DataStoreProduct.class);
-      }
-      catch (DataStoreException e)
-      {
-         physical = null;
-      }
+      this.physical = data;
    }
 
    @Override
@@ -87,15 +90,6 @@ public class ThumbnailProduct extends Product
    public String getName ()
    {
       return "THUMB" + product.getIdentifier ();
-   }
-
-   @Override
-   public String getContentType ()
-   {
-      if (product.getThumbnailPath ().toLowerCase ().endsWith ("gif"))
-         return "image/gif";
-      else
-         return "image/jpeg";
    }
 
    @Override
@@ -122,16 +116,15 @@ public class ThumbnailProduct extends Product
       if (this.nodes == null)
       {
          Map<String, Node> nodes = new LinkedHashMap<>();
-         DrbNode parent;
          if (physical != null)
          {
-            parent = physical.getImpl(DrbNode.class);
+            DrbNode parent = physical.getImpl(DrbNode.class);
+            if (parent != null)
+            {
+               nodes.put(parent.getName(), new Node(parent));
+            }
          }
-         else
-         {
-            parent = DrbFactory.openURI(getDownloadablePath());
-         }
-         if (parent != null) nodes.put (parent.getName (), new Node (parent));
+
          this.nodes = nodes;
       }
       return this.nodes;
@@ -146,14 +139,10 @@ public class ThumbnailProduct extends Product
       if (this.attributes == null)
       {
          Map<String, Attribute> attributes = new LinkedHashMap<>();
-         DrbNode node;
+         DrbNode node = null;
          if (physical != null)
          {
             node = physical.getImpl(DrbNode.class);
-         }
-         else
-         {
-            node = DrbFactory.openURI(getDownloadablePath());
          }
 
          for (String xpath : xpath_attributes)
@@ -174,27 +163,15 @@ public class ThumbnailProduct extends Product
    }
 
    @Override
-   public String getDownloadablePath ()
-   {
-      return product.getThumbnailPath ();
-   }
-
-   @Override
-   public InputStream getInputStream () throws IOException
+   public InputStream getInputStream() throws IOException
    {
       try
       {
-         String resource = product.getThumbnailPath();
-         if (physical != null)
-         {
-            return physical.getImpl(InputStream.class);
-         }
-         // old storage
-         return new FileInputStream(resource);
+         return physical.getImpl(InputStream.class);
       }
       catch (Exception e)
       {
-         throw new IOException ("Cannot get thumbnail from product", e);
+         throw new IOException("Cannot get thumbnail from product", e);
       }
    }
 
@@ -206,23 +183,12 @@ public class ThumbnailProduct extends Product
       {
          response.put(ProductEntitySet.LOCAL_PATH, physical.getResourceLocation());
       }
-      else
-      {
-         String incPath = CFG_MGR.getArchiveConfiguration().getIncomingConfiguration().getPath();
-         String tnPath  = product.getThumbnailPath();
-         String relTnPath = Paths.get(incPath).relativize(Paths.get(tnPath)).toString();
-         response.put(ProductEntitySet.LOCAL_PATH, relTnPath);
-      }
       return response;
    }
 
    @Override
    protected DataStoreProduct getPhysicalProduct() throws DataStoreException
    {
-      if (physical == null)
-      {
-         return new HfsProduct(new File(getDownloadablePath()));
-      }
       return physical;
    }
 }

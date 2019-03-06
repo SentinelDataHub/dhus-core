@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,7 +20,6 @@
 package fr.gael.dhus.server.http;
 
 import com.google.common.io.Files;
-import fr.gael.dhus.server.ScalabilityManager;
 import fr.gael.dhus.server.http.webapp.WebApplication;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
@@ -65,9 +64,6 @@ public class TomcatServer
 
    @Autowired
    private ConfigurationManager configurationManager;
-   
-   @Autowired
-   private ScalabilityManager scalabilityManager;
 
    private String tomcatpath;
 
@@ -254,9 +250,9 @@ public class TomcatServer
    public void install (WebApplication web_application)
       throws TomcatException
    {
-      if (web_application.isPartOfScalability () && !scalabilityManager.isActive ())
+      if (!web_application.isActive())
       {
-         LOGGER.info ("Scalability - Skipping '"+web_application+"', because scalability is disabled");
+         LOGGER.info("Skipping '{}', because it is disabled", web_application);
          return;
       }
       LOGGER.info ("Installing webapp " + web_application);

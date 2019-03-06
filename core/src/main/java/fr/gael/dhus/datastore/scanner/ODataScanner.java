@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -42,6 +42,8 @@ import org.apache.olingo.odata2.api.exception.ODataException;
 import org.apache.olingo.odata2.api.rt.RuntimeDelegate;
 
 import fr.gael.dhus.olingo.ODataClient;
+import fr.gael.dhus.util.http.Timeouts;
+
 import static org.apache.olingo.odata2.api.edm.EdmSimpleTypeKind.DateTime;
 
 /**
@@ -97,12 +99,14 @@ public class ODataScanner extends AbstractScanner
             String basicAuth = "Basic " + 
                new String(new Base64 ().encode (userpass.getBytes ()));
             co.setRequestProperty ("Authorization", basicAuth);
+            co.setConnectTimeout(Timeouts.CONNECTION_TIMEOUT);
+            co.setReadTimeout(Timeouts.SOCKET_TIMEOUT);
             
             co.connect ();
             String cd = co.getHeaderField ("Content-Disposition");
             co.disconnect ();
             
-            Matcher m = Pattern.compile (".*?filename=\"(.*?)\\.zip\".*?")
+            Matcher m = Pattern.compile ("filename=\"(.+?)\"")
                .matcher ((cd));
             if (!m.matches ()) throw new Exception ("filename not in header");
             

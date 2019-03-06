@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2013,2014,2015,2016 GAEL Systems
+   Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -53,5 +53,11 @@
    <include file="changelog-0.13.2.xml" relativeToChangelogFile="true"/>
    <include file="changelog-object-storage.xml" relativeToChangelogFile="true"/>
    <include file="changelog-1.0.1.xml" relativeToChangelogFile="true" />
+   <include file="changelog-1.0.2.xml" relativeToChangelogFile="true" />
+   <include file="changelog-1.2.0.xml" relativeToChangelogFile="true" />
+   <include file="changelog-1.2.1.xml" relativeToChangelogFile="true" />
+   <include file="changelog-optimization.xml" relativeToChangelogFile="true" />
+   <include file="changelog-remove-product-path.xml" relativeToChangelogFile="true" />
+   <include file="changelog-add-metadata-definition-unique-constraint.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,18 +19,28 @@
  */
 package org.dhus.store.keystore;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import fr.gael.dhus.database.object.KeyStoreEntry;
 
-import org.apache.logging.log4j.Logger;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import org.dhus.Util;
+import org.dhus.store.datastore.DataStore;
 
 public class VolatileKeyStore implements KeyStore
 {
-   private static final Logger LOGGER = LogManager.getLogger(VolatileKeyStore.class);
+   private static final Logger LOGGER = LogManager.getLogger();
+
+   private static final String VOLATILE_KEYSTORE_NAME = "VolatileKeyStore";
 
    /** The map to store products keys is referenced by the given product Id. */
-   private final Map<String, String> map = new LinkedHashMap<>();
+   private final Map<VolatileKey, String> map = new LinkedHashMap<>();
 
    /**
     * Put a key into the store.
@@ -40,32 +50,117 @@ public class VolatileKeyStore implements KeyStore
     * @param value the value to be store.
     */
    @Override
-   public void put(String key, String value)
+   public void put(String key, String tag, String value)
    {
-      if (map.containsKey(key))
+      if (map.containsKey(new VolatileKey(key, tag)));
       {
          LOGGER.warn("Key {}:{} already in the key store, replaced by {}:{}.",
-               key, map.get(key), key, value);
+               new VolatileKey(key, tag), map.get(new VolatileKey(key, tag)), new VolatileKey(key, tag), value);
       }
-      map.put(key, value);
+      map.put(new VolatileKey(key, tag) , value);
    }
 
    @Override
-   public String get(String key)
+   public String get(String key, String tag)
    {
-      return map.get(key);
+      return map.get(new VolatileKey(key, tag));
    }
 
    @Override
-   public String remove(String key)
+   public String remove(String key, String tag)
    {
-      return map.remove(key);
+      return map.remove(new VolatileKey(key, tag));
    }
 
    @Override
-   public boolean exists(String id)
+   public boolean exists(String key, String tag)
    {
-      return map.containsKey(id);
+      return map.containsKey(new VolatileKey(key, tag));
    }
 
+   @Override
+   public Iterator<KeyStoreEntry> getOldestEntries()
+   {
+      return map.entrySet().stream()
+            .map(entry -> new KeyStoreEntry(VOLATILE_KEYSTORE_NAME,
+                  entry.getKey().getKey(), entry.getKey().getTag(),
+                  entry.getValue(), 0L))
+            .collect(Collectors.toList()).iterator();
+   }
+
+   @Override
+   public List<KeyStoreEntry> getEntriesByUuid(String uuid)
+   {
+      return map.entrySet().stream()
+            .filter(entry -> entry.getKey().getKey().equals(uuid))
+            .map(entry -> new KeyStoreEntry(VOLATILE_KEYSTORE_NAME,
+                  entry.getKey().getKey(), entry.getKey().getTag(),
+                  entry.getValue(), 0L))
+            .collect(Collectors.toList());
+   }
+
+   @Override
+   public List<KeyStoreEntry> getUnalteredProductEntries()
+   {
+      return map.entrySet().stream()
+            .filter(entry -> entry.getKey().getTag().equals(DataStore.UNALTERED_PRODUCT_TAG))
+            .map(entry -> new KeyStoreEntry(VOLATILE_KEYSTORE_NAME,
+                  entry.getKey().getKey(), entry.getKey().getTag(),
+                  entry.getValue(), 0L))
+            .collect(Collectors.toList());
+   }
+
+   @Override
+   public List<KeyStoreEntry> getUnalteredProductEntries(int skip, int top)
+   {
+      List<KeyStoreEntry> entries = getUnalteredProductEntries();
+      return Util.subList(entries, skip, top);
+   }
+
+   public static class VolatileKey
+   {
+      private final String key;
+      private final String tag;
+
+      public String getKey()
+      {
+         return key;
+      }
+
+      public String getTag()
+      {
+         return tag;
+      }
+
+      private VolatileKey(String key, String tag)
+      {
+         this.key = key;
+         this.tag = tag;
+      }
+
+      @Override
+      public boolean equals(Object obj)
+      {
+         if (obj == null)
+         {
+            return false;
+         }
+         if (this == obj)
+         {
+            return true;
+         }
+         if (obj instanceof VolatileKey)
+         {
+            VolatileKey other = (VolatileKey) obj;
+            return other.key.equals(key) && other.tag.equals(tag);
+         }
+         return false;
+      }
+
+      @Override
+      public int hashCode()
+      {
+         return key.concat(tag).hashCode();
+      }
+   }
 }

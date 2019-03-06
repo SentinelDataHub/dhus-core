@@ -1,6 +1,6 @@
 /*
  * Data Hub Service(DHuS) - For Space data distribution.
- * Copyright(C) 2015,2016 GAEL Systems
+ * Copyright(C) 2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,18 +19,18 @@
  */
 package fr.gael.dhus.service;
 
+import fr.gael.dhus.DHuS;
+import fr.gael.dhus.database.object.config.synchronizer.SynchronizerConfiguration;
+import fr.gael.dhus.service.exception.InvokeSynchronizerException;
+import fr.gael.dhus.sync.Executor;
+import fr.gael.dhus.sync.Synchronizer;
+import fr.gael.dhus.sync.SynchronizerStatus;
+
 import java.text.ParseException;
 import java.util.Iterator;
 
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
-
-import fr.gael.dhus.DHuS;
-import fr.gael.dhus.database.object.SynchronizerConf;
-import fr.gael.dhus.service.exception.InvokeSynchronizerException;
-import fr.gael.dhus.sync.Executor;
-import fr.gael.dhus.sync.Synchronizer;
-import fr.gael.dhus.sync.SynchronizerStatus;
 
 public interface ISynchronizerService extends
       ApplicationListener<ContextClosedEvent>
@@ -66,24 +66,29 @@ public interface ISynchronizerService extends
 
    /**
     * Returns a {@link SynchronizerConf} by its identifier.
+    *
+    * @param <T>
     * @param id {@link SynchronizerConf} identifier.
+    * @param requiredType runtime type for T
     * @return a {@link SynchronizerConf} or {@code null} if not found.
     */
-   SynchronizerConf getSynchronizerConfById (long id);
+   <T extends SynchronizerConfiguration> T getSynchronizerConfById(long id, Class<T> requiredType);
 
    /**
     * Returns all {@link SynchronizerConf}.
     * @return a Iterator of {@link SynchronizerConf}.
     */
-   Iterator<SynchronizerConf> getSynchronizerConfs ();
+   Iterator<SynchronizerConfiguration> getSynchronizerConfs();
 
    /**
     * Returns all {@link SynchronizerConf} of given type.
+    *
+    * @param <T>
     * @param type java path to an implementation of {@link Synchronizer}.
     * @return a Iterator of {@link SynchronizerConf}.
     * @see SynchronizerConf#setType(java.lang.String)
     */
-   Iterator<SynchronizerConf> getSynchronizerConfs (String type);
+   <T extends SynchronizerConfiguration> Iterator<T> getSynchronizerConfs(Class<T> type);
 
    /**
     * Returns how many {@link SynchronizerConf} exist in the database.
@@ -98,6 +103,7 @@ public interface ISynchronizerService extends
     *
     * @see SynchronizerConf#setCronExpression(String)
     *
+    * @param <T>
     * @param label see {@link SynchronizerConf#getLabel()}, can be null.
     * @param type see {@link SynchronizerConf#getType()}.
     * @param cron_exp the pace of the synchronization.
@@ -105,9 +111,12 @@ public interface ISynchronizerService extends
     * @return the newly created {@link SynchronizerConf}.
     *
     * @throws ParseException failed to parse the given cron expression.
+    * @throws java.lang.InstantiationException
+    * @throws java.lang.IllegalAccessException
     */
-   SynchronizerConf createSynchronizer (String label, String type,
-         String cron_exp) throws ParseException;
+   <T extends SynchronizerConfiguration>
+      T createSynchronizer(String label, String cron_exp, Class<T> type)
+         throws ParseException, ReflectiveOperationException;
 
    /**
     * Removes a {@link Synchronizer} with the given identifier.
@@ -144,15 +153,16 @@ public interface ISynchronizerService extends
 
    /**
     * Saves the configuration of a {@link Synchronizer}.
-    * First it deactivates the synchronizer with the given ID, then it saves its
-    * configuration, then it reactivates the synchronizer if its {@code active}
-    * field is set to {@code true}.
+    * <p>
+    * <b>You should deactivate that synchronizer first, to avoid any side effect!</b>
+    * <p>
+    * It will reactivate the synchronizer if its {@code active} field is set to {@code true}.
+    *
     * @param sc configuration.
     * @throws InvokeSynchronizerException if the given configuration does not
     *         allow instanciation of a {@link Synchronizer}.
     */
-   void saveSynchronizerConf (SynchronizerConf sc)
-         throws InvokeSynchronizerException;
+   void saveSynchronizerConf(SynchronizerConfiguration sc) throws InvokeSynchronizerException;
 
    /**
     * Saves the given synchronizer's configuration back in the databse.
@@ -170,7 +180,7 @@ public interface ISynchronizerService extends
     * @param sc an instance of SynchronizerConf that exists in the database.
     * @return status.
     */
-   SynchronizerStatus getStatus(SynchronizerConf sc);
+   SynchronizerStatus getStatus(SynchronizerConfiguration sc);
 
    /**
     * Starts the {@link Executor} after every webapps have been installed.

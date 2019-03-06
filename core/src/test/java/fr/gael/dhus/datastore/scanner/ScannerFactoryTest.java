@@ -147,8 +147,7 @@ public class ScannerFactoryTest
   @Test
   public void getScannerSupport ()
   {
-     ScannerFactory sf = new ScannerFactory ();
-     String[]supported_classes = sf.getDefaultCortexSupport ();
+     String[] supported_classes = ScannerFactory.getDefaultCortexSupport ();
      // http://www.gael.fr/test#product1 and http://www.gael.fr/test#product2 
      // plus the ones defined by DHuS: http://www.gael.fr/drb#tgz, 
      // http://www.gael.fr/drb#gzip, http://www.gael.fr/drb#zip, 

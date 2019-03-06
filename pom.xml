@@ -6,7 +6,7 @@
 
    <groupId>fr.gael.dhus</groupId>
    <artifactId>dhus-core-suite</artifactId>
-   <version>1.0</version>
+   <version>1.3.5-osf</version>
    <packaging>pom</packaging>
 
    <name>DHuS - Core Suite</name>
@@ -29,5 +29,35 @@
          </plugin>
       </plugins>
    </build>
+
+
+   <distributionManagement>
+      <repository>
+         <uniqueVersion>true</uniqueVersion>
+         <id>osf-releases</id>
+         <name>OSF Releases Repository</name>
+         <url>
+            https://copernicus.serco.eu/repository/nexus/content/repositories/releases/
+         </url>
+         <layout>default</layout>
+      </repository>
+      <site>
+         <id>gael-site</id>
+         <url>${site.baseUrl}/</url>
+      </site>
+   </distributionManagement>
+
+   <issueManagement>
+      <system>Jira</system>
+      <url>https://copernicus.serco.eu/jira-osf</url>
+   </issueManagement>
+
+   <scm>
+      <connection>scm:git:https://github.com/SercoSPA/dhus-core</connection>
+      <developerConnection>scm:git:https://github.com/SercoSPA/dhus-core</developerConnection>
+      <tag>HEAD</tag>
+      <url>https://github.com/SercoSPA/dhus-core</url>
+   </scm>
+
 
 </project>

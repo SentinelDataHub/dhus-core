@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,6 +19,7 @@
  */
 package fr.gael.dhus.olingo.v1;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -60,19 +61,20 @@ import org.hibernate.type.Type;
  *
  * @see http://olingo.apache.org/doc/odata2/tutorials/Olingo_Tutorial_AdvancedRead_FilterVisitor.html
  */
-public abstract class SQLVisitor implements ExpressionVisitor
+public abstract class SQLVisitor implements ExpressionVisitor, Serializable
 {
+   private static final long serialVersionUID = 1L;
    private static final String HQL_PREFIX = "FROM ";
 
    private final String hqlPrefix;
-   private final FilterExpression filterExpression;
+   private transient final FilterExpression filterExpression;
    private final OrderByExpression orderExpression;
    private final List<SQLVisitorParameter> hqlParameters;
 
    private String hqlFilter;
    private String hqlOrder;
 
-   protected SQLVisitor(Class entity, FilterExpression filter, OrderByExpression order)
+   protected SQLVisitor(Class<?> entity, FilterExpression filter, OrderByExpression order)
          throws ExceptionVisitExpression, ODataApplicationException
    {
       this.hqlPrefix = new StringBuilder(HQL_PREFIX).append(entity.getName()).append(" ").toString();
@@ -144,9 +146,26 @@ public abstract class SQLVisitor implements ExpressionVisitor
    public Object visitBinary(BinaryExpression binary_expression, BinaryOperator operator,
          Object left_side, Object right_side)
    {
-      StringBuilder sb = new StringBuilder().append(left_side);
-      switch (operator)
+      StringBuilder sb = new StringBuilder().append('(').append(left_side);
+
+      if (right_side.equals(""))
       {
+         switch (operator)
+         {
+            case EQ:
+               sb.append(" IS NULL ");
+               break;
+            case NE:
+               sb.append(" IS NOT NULL ");
+               break;
+            default:
+               throw new UnsupportedOperationException("Unsupported operator for null values: " + operator.toUriLiteral());
+         }
+      }
+      else
+      {
+        switch (operator)
+       {
          case EQ:
             sb.append(" = ");
             break;
@@ -180,9 +199,11 @@ public abstract class SQLVisitor implements ExpressionVisitor
          default:
             // Other operators are not supported for SQL Statements
             throw new UnsupportedOperationException("Unsupported operator: " + operator.toUriLiteral());
+         }
+         // return the binary statement
+         sb.append(right_side).append(')');
       }
-      // return the binary statement
-      return sb.append(right_side).toString();
+      return sb.toString();
    }
 
    /* Unary operator. */
@@ -222,12 +243,11 @@ public abstract class SQLVisitor implements ExpressionVisitor
    {
       Object result;
       Type resultType;
-      Class type = edm_literal.getType().getDefaultType();
+      Class<?> type = edm_literal.getType().getDefaultType();
 
       if (type == null)
       {
-         result = null;
-         resultType = null;
+         return "";
       }
       else if (type.equals(Boolean.class))
       {
@@ -577,8 +597,9 @@ public abstract class SQLVisitor implements ExpressionVisitor
       }
    }
 
-   public static final class SQLVisitorParameter
+   public static final class SQLVisitorParameter implements Serializable
    {
+      private static final long serialVersionUID = 1L;
       private final Type type;
       private final Object value;
 

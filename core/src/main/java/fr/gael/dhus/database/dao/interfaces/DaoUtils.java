@@ -21,7 +21,6 @@ package fr.gael.dhus.database.dao.interfaces;
 
 import java.sql.SQLException;
 
-import fr.gael.dhus.database.dao.UserDao;
 import org.hibernate.HibernateException;
 import org.hibernate.SQLQuery;
 import org.hibernate.Session;
@@ -31,10 +30,7 @@ import org.springframework.orm.hibernate3.HibernateCallback;
 import org.springframework.orm.hibernate3.support.HibernateDaoSupport;
 import org.springframework.stereotype.Repository;
 
-import fr.gael.dhus.database.object.Role;
-import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
-import fr.gael.dhus.system.config.ConfigurationManager;
 
 public class DaoUtils
 {
@@ -58,24 +54,7 @@ public class DaoUtils
       if (s==null) return null;
       return s.replace ("'", "''");
    }
-   
-   public static String userRestriction (User u, String pattern)
-   {
-      ConfigurationManager cfgManager = ApplicationContextProvider
-            .getBean(ConfigurationManager.class);
-      if (cfgManager.isDataPublic () || u == null
-            || u.getRoles ().contains (Role.DATA_MANAGER))
-      {
-         return "";
-      }
-
-      User pData = ApplicationContextProvider.getBean (
-            UserDao.class).getPublicData ();
-      return "('" + u.getUUID () + "' in elements(" + pattern + "authorizedUsers"
-         + ")" + " OR '" + pData.getUUID () + "' in elements(" +
-         pattern + "authorizedUsers))";
-   }
-   
+      
    public static void optimize ()
    {
       HibernateDaoLocalSupport support = ApplicationContextProvider.getBean (

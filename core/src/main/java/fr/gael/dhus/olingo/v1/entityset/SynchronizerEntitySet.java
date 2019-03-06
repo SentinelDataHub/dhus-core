@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ * Copyright (C) 2015-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -75,6 +75,7 @@ public class SynchronizerEntitySet extends AbstractEntitySet<Synchronizer>
    public static final String FILTER_PARAM = "FilterParam";
    public static final String SOURCE_COLLECTION = "SourceCollection";
    public static final String GEO_FILTER = "GeoFilter";
+   public static final String SKIP_ON_ERROR = "SkipOnError";
 
    // Association (Navigation link)
    public static final FullQualifiedName ASSO_SYNC_COLLECTION =
@@ -166,6 +167,10 @@ public class SynchronizerEntitySet extends AbstractEntitySet<Synchronizer>
                   .setDefaultValue ("stop")
             )
       );
+
+      properties.add(new SimpleProperty().setName(SKIP_ON_ERROR)
+            .setType(EdmSimpleTypeKind.Boolean)
+            .setFacets(new Facets().setNullable(false).setDefaultValue("true")));
 
       properties.add (new SimpleProperty ().setName (STATUS)
             .setType (EdmSimpleTypeKind.String)

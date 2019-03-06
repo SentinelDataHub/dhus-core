@@ -33,6 +33,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Paths;
 
+import org.apache.commons.io.FileUtils;
 import org.dhus.AbstractProduct;
 import org.dhus.store.datastore.DataStoreProduct;
 
@@ -263,14 +264,7 @@ public class HfsProduct extends AbstractProduct implements DataStoreProduct
       {
          if (getFile() != null && getFile().exists())
          {
-            if (getFile().isFile())
-            {
-               contentLength = getFile().length();
-            }
-            else
-            {
-               contentLength = UNKNOWN_PRODUCT_SIZE;
-            }
+            contentLength = FileUtils.sizeOf(getFile());
          }
       }
       return contentLength;

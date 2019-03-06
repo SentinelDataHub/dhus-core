@@ -19,17 +19,23 @@
  */
 package fr.gael.dhus.olingo.v1.map.impl;
 
-import fr.gael.dhus.database.object.ProductCart;
+import fr.gael.dhus.olingo.v1.OlingoManager;
 import fr.gael.dhus.olingo.v1.entity.Product;
 import fr.gael.dhus.olingo.v1.map.AbstractDelegatingMap;
-import fr.gael.dhus.service.ProductCartService;
+import fr.gael.dhus.olingo.v1.map.SubMap;
+import fr.gael.dhus.olingo.v1.map.SubMapBuilder;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.util.functional.IteratorAdapter;
 
-import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+import org.apache.olingo.odata2.api.exception.ODataApplicationException;
+import org.apache.olingo.odata2.api.uri.expression.ExceptionVisitExpression;
+import org.apache.olingo.odata2.api.uri.expression.FilterExpression;
+import org.apache.olingo.odata2.api.uri.expression.OrderByExpression;
+import org.apache.olingo.odata2.core.exception.ODataRuntimeException;
 
 /**
  * A map view on a User's cart.
@@ -37,15 +43,18 @@ import org.apache.logging.log4j.LogManager;
  * @see AbstractDelegatingMap
  */
 public class UserCartMap extends AbstractDelegatingMap<String, Product>
+      implements SubMap<String, Product>
 {
-   private static final Logger LOGGER = LogManager.getLogger(UserCartMap.class);
-
-   /** Service that manages user carts. */
-   private final ProductCartService PRODUCT_CART_SERVICE =
-         ApplicationContextProvider.getBean(ProductCartService.class);
+   /** To filter product carts. */
+   private final OlingoManager olingoManager =
+         ApplicationContextProvider.getBean(OlingoManager.class);
 
    /** User ID. */
    private final String user_uuid;
+   private final FilterExpression filter;
+   private final OrderByExpression orderBy;
+   private final int skip;
+   private int top;
 
    /**
     * Creates a Map on products from the given user's cart.
@@ -53,71 +62,83 @@ public class UserCartMap extends AbstractDelegatingMap<String, Product>
     */
    public UserCartMap(String user_uuid)
    {
+      this(user_uuid, null, null, 0, -1);
+   }
+
+   public UserCartMap(String user_uuid, FilterExpression filter, OrderByExpression order,
+         int skip, int top)
+   {
       this.user_uuid = user_uuid;
+      this.filter = filter;
+      this.orderBy = order;
+      this.skip = skip;
+      this.top = top;
    }
 
    @Override
    protected Product serviceGet(String key)
    {
-      ProductCart cart = PRODUCT_CART_SERVICE.getCartOfUser(user_uuid);
-      if (cart == null)
+      try
       {
+         List<fr.gael.dhus.database.object.Product> cart =
+               olingoManager.getProductCart(user_uuid, filter, orderBy, skip, top);
+         if (!cart.isEmpty())
+         {
+            for (fr.gael.dhus.database.object.Product prod: cart)
+            {
+               if (prod.getUuid().equals(key))
+               {
+                  return Product.generateProduct(prod);
+               }
+            }
+         }
          return null;
       }
-
-      Iterator<fr.gael.dhus.database.object.Product> it = cart.getProducts().iterator();
-
-      Product res = null;
-      while (it.hasNext())
+      catch (ExceptionVisitExpression | ODataApplicationException ex)
       {
-         fr.gael.dhus.database.object.Product p = it.next();
-         if (p.getUuid().equals(key))
-         {
-            res = new Product(p);
-            break;
-         }
+         throw new ODataRuntimeException(ex);
       }
-      return res;
    }
 
    @Override
    protected Iterator<Product> serviceIterator()
    {
-      ProductCart cart = PRODUCT_CART_SERVICE.getCartOfUser(user_uuid);
-      if (cart == null)
-      {
-         return Collections.<Product>emptyIterator();
+      try {
+         List<fr.gael.dhus.database.object.Product> cart =
+               olingoManager.getProductCart(user_uuid, filter, orderBy, skip, top);
+         final Iterator<fr.gael.dhus.database.object.Product> it = cart.iterator();
+         return new IteratorAdapter<>(it, Product::generateProduct);
       }
-
-      final Iterator<fr.gael.dhus.database.object.Product> it = cart.getProducts().iterator();
-
-      return new Iterator<Product>()
+      catch (ExceptionVisitExpression | ODataApplicationException ex)
       {
-         @Override
-         public boolean hasNext()
-         {
-            return it.hasNext();
-         }
-
-         @Override
-         public Product next()
-         {
-            fr.gael.dhus.database.object.Product p = it.next();
-            return new Product(p);
-         }
-
-         @Override
-         public void remove()
-         {
-            throw new UnsupportedOperationException("Do not use.");
-         }
-      };
+         throw new ODataRuntimeException(ex);
+      }
    }
 
    @Override
    protected int serviceCount()
    {
-      return PRODUCT_CART_SERVICE.countProductsInCart(user_uuid);
+      try
+      {
+         return olingoManager.getCartProductCount(user_uuid, filter);
+      }
+      catch (ExceptionVisitExpression | ODataApplicationException ex)
+      {
+         throw new ODataRuntimeException(ex);
+      }
+   }
+
+   @Override
+   public SubMapBuilder<String, Product> getSubMapBuilder()
+   {
+      return new SubMapBuilder<String, Product>()
+      {
+         @Override
+         public Map<String, Product> build()
+         {
+            return new UserCartMap(user_uuid, filter, orderBy, skip, top);
+         }
+      };
    }
 
 }

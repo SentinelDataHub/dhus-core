@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -145,6 +145,10 @@ public class ServerConfiguration extends AbstractServerConfiguration
       else
          url += ":" + extPort + extPath;
 
+      if (!url.endsWith("/"))
+      {
+         url = url + "/";
+      }
       return url;
    }
 }

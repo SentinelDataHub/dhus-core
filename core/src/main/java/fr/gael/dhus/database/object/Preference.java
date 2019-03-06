@@ -30,7 +30,6 @@ import javax.persistence.Entity;
 import javax.persistence.FetchType;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
-import javax.persistence.JoinTable;
 import javax.persistence.OneToMany;
 import javax.persistence.Table;
 
@@ -57,13 +56,6 @@ public class Preference implements Serializable
    @Cascade ({CascadeType.SAVE_UPDATE, CascadeType.DELETE})
    private Set<Search> searches = new HashSet<Search> ();
    
-   @OneToMany (fetch=FetchType.EAGER)
-   @JoinTable (name="FILE_SCANNER_PREFERENCES",  
-      joinColumns = {@JoinColumn(name="PREFERENCE_UUID")}, 
-      inverseJoinColumns = { @JoinColumn (name = "FILE_SCANNER_ID") })
-   @Cascade ({CascadeType.SAVE_UPDATE, CascadeType.DELETE})
-   private Set<FileScanner> fileScanners = new HashSet<FileScanner> ();
-
    /**
     * @return the uuid
     */
@@ -94,21 +86,5 @@ public class Preference implements Serializable
    public Set<Search> getSearches ()
    {
       return searches;
-   }
-
-   /**
-    * @param file_scanners the fileScanners to set
-    */
-   public void setFileScanners (Set<FileScanner> file_scanners)
-   {
-      this.fileScanners = file_scanners;
-   }
-
-   /**
-    * @return the fileScanners
-    */
-   public Set<FileScanner> getFileScanners ()
-   {
-      return fileScanners;
    }
 }

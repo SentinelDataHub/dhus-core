@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -21,16 +21,15 @@ package fr.gael.dhus.datastore.scanner;
 
 import java.net.URL;
 
-
 /**
  * manages extended URL including isDirectory flag and a name.
  */
-public class URLExt 
+public class URLExt
 {
    private URL url;
    private boolean isDirectory;
    private String name;
-   
+
    /**
     * Creates an URLExt with the given url.
     * The name field will be the last segment of the path path of the given URL.
@@ -40,9 +39,8 @@ public class URLExt
    public URLExt (URL url, boolean is_directory)
    {
       this (url, is_directory, null);
-      
    }
-   
+
    /**
     * Creates an URLExt with the given URL and filename
     * @param url an URL.
@@ -62,18 +60,14 @@ public class URLExt
          {
             path = path.substring (0, path.length ()-1);
          }
-         
+
          int lastslash = path.lastIndexOf ('/');
          if (lastslash != -1)
             name = path.substring (lastslash);
-
-         int zipind = name.lastIndexOf (".zip");
-         if (zipind != -1)
-            name = name.substring (0, zipind);
       }
       this.name = name;
    }
-   
+
    /**
     * @param url the url to set
     */
@@ -105,7 +99,7 @@ public class URLExt
    {
       return isDirectory;
    }
-   
+
    /**
     * @return this referenced object.
     */
@@ -113,7 +107,7 @@ public class URLExt
    {
       return name;
    }
-   
+
    /**
     * @param name set the name for the referenced object.
     */

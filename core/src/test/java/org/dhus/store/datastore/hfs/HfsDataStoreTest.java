@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -55,8 +55,8 @@ public class HfsDataStoreTest extends AbstractTransactionalTestNGSpringContextTe
    @BeforeClass
    void init() throws IOException
    {
-      HfsManager hfs = new HfsManager(TEMP_DIRECTORY_PATH, 5);
-      hfsDataStore = new HfsDataStore("hfs-test", hfs, false);
+      HfsManager hfs = new HfsManager(TEMP_DIRECTORY_PATH, 5,10);
+      hfsDataStore = new HfsDataStore("hfs-test", hfs, false, 0, -1L, 0, false);
       tmp = File.createTempFile("datastore", ".test");
       tmp.deleteOnExit();
    }
@@ -106,31 +106,8 @@ public class HfsDataStoreTest extends AbstractTransactionalTestNGSpringContextTe
          Assert.assertTrue(product.hasImpl(File.class));
          Assert.assertTrue(product.getImpl(File.class).exists());
 
-         hfsDataStore.delete(id);
+         hfsDataStore.deleteProduct(id);
          Assert.assertFalse(product.getImpl(File.class).exists());
-      }
-      catch (DataStoreException e)
-      {
-         Assert.fail("An exception occurred:", e);
-      }
-   }
-
-   @Test(dependsOnMethods = {"insert", "delete"})
-   public void move() throws DataStoreException
-   {
-      String id = UUID.randomUUID().toString();
-      hfsDataStore.move(id, new HfsProduct(tmp));
-      try
-      {
-         Product product = hfsDataStore.get(id);
-
-         Assert.assertNotNull(product);
-         Assert.assertTrue(product.getName().startsWith("datastore"));
-
-         Assert.assertTrue(product.hasImpl(File.class));
-         Assert.assertTrue(product.getImpl(File.class).exists());
-
-         Assert.assertFalse(tmp.exists());
       }
       catch (DataStoreException e)
       {

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2016,2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,23 +22,22 @@ package fr.gael.dhus.sync.impl;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.io.ParseException;
 
-import fr.gael.dhus.database.object.HfsDataStoreConf;
 import fr.gael.dhus.database.object.MetadataIndex;
-import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.database.object.SynchronizerConf;
+import fr.gael.dhus.database.object.config.synchronizer.ProductSynchronizer;
+import fr.gael.dhus.factory.MetadataFactory;
 import fr.gael.dhus.olingo.ODataClient;
 import fr.gael.dhus.olingo.v1.Model;
-import fr.gael.dhus.service.CollectionService;
-import fr.gael.dhus.service.DataStoreConfService;
+import fr.gael.dhus.service.DataStoreService;
 import fr.gael.dhus.service.ISynchronizerService;
 import fr.gael.dhus.service.MetadataTypeService;
 import fr.gael.dhus.service.ProductService;
-import fr.gael.dhus.service.SearchService;
 import fr.gael.dhus.service.metadata.MetadataType;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.sync.ProductSynchronizerUtils;
 import fr.gael.dhus.sync.SyncException;
 import fr.gael.dhus.sync.Synchronizer;
 import fr.gael.dhus.util.JTSGeometryValidator;
+import fr.gael.dhus.util.XmlProvider;
 import fr.gael.dhus.util.http.DownloadableProduct;
 import fr.gael.dhus.util.http.HttpAsyncClientProducer;
 import fr.gael.dhus.util.http.InterruptibleHttpClient;
@@ -62,7 +61,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import javax.xml.datatype.XMLGregorianCalendar;
 
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -84,13 +83,19 @@ import org.apache.olingo.odata2.api.ep.feed.ODataDeltaFeed;
 import org.apache.olingo.odata2.api.ep.feed.ODataFeed;
 import org.apache.olingo.odata2.api.exception.ODataException;
 
-import org.apache.solr.client.solrj.SolrServerException;
-
+import org.dhus.Product;
+import org.dhus.ProductConstants;
+import org.dhus.store.ParallelProductSetter;
+import org.dhus.store.StoreException;
+import org.dhus.store.StoreService;
 import org.dhus.store.datastore.DataStore;
-import org.dhus.store.datastore.DataStoreException;
-import org.dhus.store.datastore.DataStoreService;
-import org.dhus.store.datastore.ParallelProductSetter;
+import org.dhus.store.datastore.DataStoreFactory.InvalidConfigurationException;
+import org.dhus.store.datastore.DataStoreManager;
 import org.dhus.store.datastore.ProductReference;
+import org.dhus.store.datastore.config.DataStoreManager.UnavailableNameException;
+import org.dhus.store.ingestion.IngestibleODataProduct;
+import org.dhus.store.ingestion.IngestibleODataProduct.MissingProductsException;
+import org.dhus.store.datastore.config.HfsDataStoreConf;
 
 import org.hibernate.exception.LockAcquisitionException;
 
@@ -119,21 +124,17 @@ public class ODataProductSynchronizer extends Synchronizer
    private static final MetadataTypeService METADATA_TYPE_SERVICE =
          ApplicationContextProvider.getBean (MetadataTypeService.class);
 
-   /** Search Service, to add a new product in the index. */
-   private static final SearchService SEARCH_SERVICE =
-         ApplicationContextProvider.getBean (SearchService.class);
-
-   /** Collection Service, for to add a Product in the configured targetCollection. */
-   private static final CollectionService COLLECTION_SERVICE =
-         ApplicationContextProvider.getBean (CollectionService.class);
+   /** Service that manages all Stores */
+   private static final StoreService STORE_SERVICE =
+         ApplicationContextProvider.getBean(StoreService.class);
 
    /** Service that manages DataStores. */
-   private static final DataStoreService DATA_STORE_SERVICE =
-         ApplicationContextProvider.getBean(DataStoreService.class);
+   private static final DataStoreManager DATA_STORE_MANAGER =
+         ApplicationContextProvider.getBean(DataStoreManager.class);
 
    /** Service to store persistent DataStores. */
-   private static final DataStoreConfService DBC_STORE_SERVICE =
-         ApplicationContextProvider.getBean(DataStoreConfService.class);
+   private static final DataStoreService DSC_SERVICE =
+         ApplicationContextProvider.getBean(DataStoreService.class);
 
    /** Global set of all queued downloads, to avoid simultaneous downloads of the same product. */
    private static final Set<DownloadTask> RUNNING_DOWNLOADS = new HashSet<>();
@@ -160,8 +161,8 @@ public class ODataProductSynchronizer extends Synchronizer
    /** Path to the remote DHuS incoming directory (if accessible). */
    private final String remoteIncoming;
 
-   /** Adds every new product in this collection. */
-   private final String targetCollectionUUID;
+   /** Every new product is added to these collections. */
+   private final List<String> targetCollectionName;
 
    /** OData resource path to a remote source collection: "Collections('a')/.../Collections('z')" */
    private final String sourceCollection;
@@ -175,14 +176,11 @@ public class ODataProductSynchronizer extends Synchronizer
    /** GeoSync filter operator. */
    private final JTSGeometryValidator.WKTAdapter validator;
 
+   /** Skip product on error. */
+   private final boolean skipOnError;
+
    /** Last created product's updated time. */
-   private Date lastCreated;
-
-   /** Last updated product's updated time. */
-   private Date lastUpdated;
-
-   /** Last deleted product's deletion time. */
-   private Date lastDeleted;
+   private GregorianCalendar lastCreated;
 
    /** Set to true whenever one of the three date fields is modified. */
    private boolean dateChanged = false;
@@ -190,10 +188,13 @@ public class ODataProductSynchronizer extends Synchronizer
    /** Size of a Page (count of products to retrieve at once). */
    private int pageSize;
 
+   /** Controls whether we are updating LastCreationDate or not */
+   private boolean update_created = true;
+
    /**
     * Creates a new ODataSynchronizer.
     *
-    * @param sc configuration for this synchronizer.
+    * @param productSynchronizer configuration for this synchronizer.
     *
     * @throws IllegalStateException if the configuration doe not contains the
     *    required fields, or those fields are malformed.
@@ -205,15 +206,15 @@ public class ODataProductSynchronizer extends Synchronizer
     *    configuration field is not a number.
     * @throws ParseException Should not occur as the WKT in geofilter_shape is validated early.
     */
-   public ODataProductSynchronizer (SynchronizerConf sc)
+   public ODataProductSynchronizer(ProductSynchronizer productSynchronizer)
          throws IOException, ODataException, ParseException
    {
-      super (sc);
+      super(productSynchronizer);
 
       // Checks if required configuration is set
-      String urilit = sc.getConfig ("service_uri");
-      serviceUser = sc.getConfig ("service_username");
-      servicePass = sc.getConfig ("service_password");
+      String urilit = productSynchronizer.getServiceUrl();
+      serviceUser = productSynchronizer.getServiceLogin();
+      servicePass = productSynchronizer.getServicePassword();
       if (urilit == null || urilit.isEmpty ())
       {
          throw new IllegalStateException ("`service_uri` is not set");
@@ -234,47 +235,20 @@ public class ODataProductSynchronizer extends Synchronizer
          throw new IllegalStateException ("`service_uri` does not reference a DHuS odata service");
       }
 
-      String last_cr = sc.getConfig ("last_created");
-      if (last_cr != null && !last_cr.isEmpty ())
+      XMLGregorianCalendar last_cr = productSynchronizer.getLastCreated();
+      if (last_cr != null)
       {
-         lastCreated = new Date (Long.decode (last_cr));
+         lastCreated = last_cr.toGregorianCalendar();
       }
       else
       {
-         lastCreated = new Date (0L);
+         lastCreated = new GregorianCalendar();
+         lastCreated.setTimeInMillis(0L);
       }
 
-      String last_up = sc.getConfig ("last_updated");
-      if (last_up != null && !last_up.isEmpty ())
-      {
-         lastUpdated = new Date (Long.decode (last_up));
-      }
-      else
-      {
-         lastUpdated = new Date (0L);
-      }
+      pageSize = productSynchronizer.getPageSize();
 
-      String last_del = sc.getConfig ("last_deleted");
-      if (last_del != null && !last_del.isEmpty ())
-      {
-         lastDeleted = new Date (Long.decode (last_del));
-      }
-      else
-      {
-         lastDeleted = new Date (0L);
-      }
-
-      String page_size = sc.getConfig ("page_size");
-      if (page_size != null && !page_size.isEmpty ())
-      {
-         pageSize = Integer.decode (page_size);
-      }
-      else
-      {
-         pageSize = 30; // FIXME get that value from the config?
-      }
-
-      String remote_incoming = sc.getConfig("remote_incoming_path");
+      String remote_incoming = productSynchronizer.getRemoteIncoming();
       if (remote_incoming != null && !remote_incoming.isEmpty())
       {
          this.remoteIncoming = remote_incoming;
@@ -284,17 +258,18 @@ public class ODataProductSynchronizer extends Synchronizer
          this.remoteIncoming = null;
       }
 
-      String target_collection = sc.getConfig ("target_collection");
-      if (target_collection != null && !target_collection.isEmpty ())
+      // store target collection name in singleton list
+      String targetCollectionString = productSynchronizer.getTargetCollection();
+      if (targetCollectionString == null)
       {
-         this.targetCollectionUUID = target_collection;
+         targetCollectionName = Collections.<String>emptyList();
       }
       else
       {
-         this.targetCollectionUUID = null;
+         targetCollectionName = Collections.<String>singletonList(targetCollectionString);
       }
 
-      String filter_param = sc.getConfig ("filter_param");
+      String filter_param = productSynchronizer.getFilterParam();
       if (filter_param != null && !filter_param.isEmpty ())
       {
          filterParam = filter_param;
@@ -304,7 +279,7 @@ public class ODataProductSynchronizer extends Synchronizer
          filterParam = null;
       }
 
-      String source_collection = sc.getConfig("source_collection");
+      String source_collection = productSynchronizer.getSourceCollection();
       if (source_collection != null && !source_collection.isEmpty())
       {
          sourceCollection = source_collection;
@@ -314,15 +289,8 @@ public class ODataProductSynchronizer extends Synchronizer
          sourceCollection = "";
       }
 
-      String copy_product = sc.getConfig ("copy_product");
-      if (copy_product != null && !copy_product.isEmpty ())
-      {
-         this.copyProduct = Boolean.parseBoolean (copy_product);
-      }
-      else
-      {
-         this.copyProduct = false;
-      }
+      Boolean copy_product = productSynchronizer.isCopyProduct();
+      this.copyProduct = copy_product != null ? copy_product : false;
 
       if (this.copyProduct)
       {
@@ -333,8 +301,8 @@ public class ODataProductSynchronizer extends Synchronizer
          this.productSetter = null;
       }
 
-      String geofilter_op = sc.getConfig("geofilter_op");
-      String geofilter_shape = sc.getConfig("geofilter_shape");
+      String geofilter_op = productSynchronizer.getGeofilterOp();
+      String geofilter_shape = productSynchronizer.getGeofilterShape();
       if (geofilter_shape != null && !geofilter_shape.isEmpty() &&
             geofilter_op != null && !geofilter_op.isEmpty())
       {
@@ -362,65 +330,15 @@ public class ODataProductSynchronizer extends Synchronizer
       {
          validator = null;
       }
+
+      Boolean skipOnErrorObj = productSynchronizer.isSkipOnError();
+      this.skipOnError = skipOnErrorObj != null ? skipOnErrorObj : true;
    }
 
    /** Logs how much time an OData command consumed. */
    private void logODataPerf(String query, long delta_time)
    {
       LOGGER.debug("Synchronizer#{} query({}) done in {}ms", getId(), query, delta_time);
-   }
-
-   /**
-    * Stores (Downloads) a product and its quicklook and thumbnail,
-    * returns 3 Futures, 1st is the product, 2nd is the quicklook and 3rd is the thumbnail.
-    * 2nd and 3rd Futures may be null!
-    * It also sets the DownloadableType and DownloadableSize of the product, and the Path and Size
-    * of the product's quicklook and thumbnail.
-    */
-   private DownloadTask storeRemoteProduct(Product p) throws InterruptedException
-   {
-      InterruptibleHttpClient http_client = new InterruptibleHttpClient(new BasicAuthHttpClientProducer());
-
-      DownloadableProduct p_dl, t_dl = null, q_dl = null;
-
-      try {
-         String p_md5 = p.getDownload().getChecksums().get("MD5");
-         p_dl = new DownloadableProduct(http_client, DL_TRIES, p.getOrigin(), p_md5, p.getIdentifier());
-
-         // Downloads and sets the quicklook and thumbnail (if any)
-         if (p.getQuicklookFlag())
-         {
-            q_dl = new DownloadableProduct(http_client, DL_TRIES, p.getQuicklookPath(), null, "quicklook");
-         }
-         if (p.getThumbnailFlag())
-         {
-            t_dl = new DownloadableProduct(http_client, DL_TRIES, p.getThumbnailPath(), null, "thumbnail");
-         }
-      }
-      catch (IOException ex)
-      {
-         return new DownloadTask(p, new ErroneousFuture(new ExecutionException(ex)));
-      }
-
-      DownloadTask res = new DownloadTask(p, productSetter.submit(DATA_STORE_SERVICE, p.getUuid(), p_dl));
-      p.setDownloadableType(p_dl.contentType);
-      p.setDownloadableSize(p_dl.contentLength);
-      if (q_dl != null)
-      {
-         String uuid = UUID.randomUUID().toString();
-         res.quicklookDownload = productSetter.submit(DATA_STORE_SERVICE, uuid, q_dl);
-         p.setQuicklookPath(uuid);
-         p.setQuicklookSize(q_dl.contentLength);
-      }
-      if (t_dl != null)
-      {
-         String uuid = UUID.randomUUID().toString();
-         res.thumbnailDownload = productSetter.submit(DATA_STORE_SERVICE, uuid, t_dl);
-         p.setThumbnailPath(uuid);
-         p.setThumbnailSize(t_dl.contentLength);
-      }
-
-      return res;
    }
 
    /**
@@ -493,10 +411,10 @@ public class ODataProductSynchronizer extends Synchronizer
    }
 
    /** Returns the JTS footprint from the given product. */
-   private String getJTSFootprint(Product p)
+   private String getJTSFootprint(IngestibleODataProduct p)
    {
       // See what I have to do to get a metadata index (there is ~100 indexes)
-      for (MetadataIndex mi: p.getIndexes())
+      for (MetadataIndex mi: p.getMetadataIndexes())
       {
          if (mi.getName().equals("JTS footprint"))
          {
@@ -507,7 +425,7 @@ public class ODataProductSynchronizer extends Synchronizer
    }
 
    /** A post filter on Products, returns false is the product must not be saved. */
-   private boolean postFilter(Product product)
+   private boolean postFilter(IngestibleODataProduct product)
    {
       if (validator != null)
       {
@@ -540,210 +458,223 @@ public class ODataProductSynchronizer extends Synchronizer
    }
 
    /** Creates and returns a new Product from the given entry. */
-   private Product entryToProducts(ODataEntry entry)
-         throws ODataException, IOException, InterruptedException
+   private IngestibleODataProduct entryToProducts(ODataEntry productEntry, boolean getDownloads)
+         throws ODataException, IOException, InterruptedException, MissingProductsException
    {
       long delta;
-      Map<String, Object> props = entry.getProperties();
+      Map<String, Object> properties = productEntry.getProperties();
 
       // (`UUID` and `PATH` have unique constraint), PATH references the UUID
-      String uuid = (String) props.get("Id");
+      String uuid = (String) properties.get("Id");
+      String identifier = (String) properties.get("Name");
 
       // Makes the product resource path
-      String pdt_p = "Products('" + uuid + "')";
+      String odataProductResource = "Products('" + uuid + "')";
+      String origin = getProductMediaURI(odataProductResource);
 
-      Product product = new Product();
-      product.setUuid(uuid);
-
-      // Reads the properties
-      product.setIdentifier((String) props.get("Name"));
-      product.setIngestionDate(((GregorianCalendar) props.get("IngestionDate")).getTime());
-      product.setCreated(((GregorianCalendar) props.get("CreationDate")).getTime());
-      product.setFootPrint((String) props.get("ContentGeometry"));
-      product.setProcessed(Boolean.TRUE);
-      product.setSize((Long) props.get("ContentLength"));
-
-      // Reads the ContentDate complex type
-      Map contentDate = (Map) props.get("ContentDate");
-      product.setContentStart(((GregorianCalendar) contentDate.get("Start")).getTime());
-      product.setContentEnd(((GregorianCalendar) contentDate.get("End")).getTime());
-
-      // Sets the origin to the remote URI
-      product.setOrigin(client.getServiceRoot() + '/' + pdt_p + "/$value");
-
-      Map<String, String> checksum = (Map) props.get("Checksum");
-      Product.Download d = new Product.Download();
-      d.setType((String) props.get("ContentType"));
-      d.setChecksums(Collections.singletonMap(checksum.get(Model.ALGORITHM),checksum.get(Model.VALUE)));
-      d.setSize((Long) props.get("ContentLength"));
-      product.setDownload(d);
+      // checksum is MD5
+      @SuppressWarnings("unchecked")
+      Map<String, String> checksum = (Map<String, String>) properties.get("Checksum");
+      String checksumAlgorithm = checksum.get(Model.ALGORITHM);
+      String checksumValue = checksum.get(Model.VALUE);
 
       // Retrieves the Product Class if not inlined
-      ODataEntry pdt_class_e;
-      if (entry.containsInlineEntry() && props.get("Class") != null)
-      {
-         pdt_class_e = ODataEntry.class.cast(props.get("Class"));
-      }
-      else
-      {
-         delta = System.currentTimeMillis();
-         pdt_class_e = client.readEntry(pdt_p + "/Class", null);
-         logODataPerf(pdt_p + "/Class", System.currentTimeMillis() - delta);
-      }
-      Map<String, Object> pdt_class_pm = pdt_class_e.getProperties();
-      String pdt_class = String.class.cast(pdt_class_pm.get("Uri"));
-      product.setItemClass(pdt_class);
+      String itemClass = getClassFromEntry(productEntry, odataProductResource);
 
       // Retrieves Metadata Indexes (aka Attributes on odata) if not inlined
-      ODataFeed mif;
-      if (entry.containsInlineEntry() && props.get("Attributes") != null)
+      List<MetadataIndex> metadataIndexList = getMetadataIndexFromEntry(productEntry, odataProductResource, itemClass);
+
+      // Retrieves derived products if not inlined
+      ODataFeed derivedProductFeed;
+      if (productEntry.containsInlineEntry() && properties.get("Products") != null)
       {
-         mif = ODataDeltaFeed.class.cast(props.get("Attributes"));
+         derivedProductFeed = ODataDeltaFeed.class.cast(properties.get("Products"));
       }
       else
       {
          delta = System.currentTimeMillis();
-         mif = client.readFeed(pdt_p + "/Attributes", null);
-         logODataPerf(pdt_p + "/Attributes", System.currentTimeMillis() - delta);
+         derivedProductFeed = client.readFeed(odataProductResource + "/Products", null);
+         logODataPerf(odataProductResource + "/Products", System.currentTimeMillis() - delta);
       }
-      List<MetadataIndex> mi_l = new ArrayList<>(mif.getEntries().size());
-      for (ODataEntry mie: mif.getEntries())
-      {
-         Map<String, Object> mi_pm = mie.getProperties();
-         MetadataIndex mi = new MetadataIndex();
-         String mi_name = (String) mi_pm.get("Name");
-         mi.setName(mi_name);
-         mi.setType((String) mi_pm.get("ContentType"));
-         mi.setValue((String) mi_pm.get("Value"));
-         MetadataType mt = METADATA_TYPE_SERVICE.getMetadataTypeByName(pdt_class, mi_name);
-         if (mt != null)
-         {
-            mi.setCategory(mt.getCategory());
-            if (mt.getSolrField() != null)
-            {
-               mi.setQueryable(mt.getSolrField().getName());
-            }
-         }
-         else if (mi_name.equals("Identifier"))
-         {
-            mi.setCategory("");
-            mi.setQueryable("identifier");
-         }
-         else if (mi_name.equals("Ingestion Date"))
-         {
-            mi.setCategory("product");
-            mi.setQueryable("ingestionDate");
-         }
-         else
-         {
-            mi.setCategory("");
-         }
-         mi_l.add(mi);
-      }
-      product.setIndexes(mi_l);
 
-      // Retrieves subProducts if not inlined
-      ODataFeed subp;
-      if (entry.containsInlineEntry() && props.get("Products") != null)
+      Map<String, ? extends Product> productAndDerived;
+      if (getDownloads)
       {
-         subp = ODataDeltaFeed.class.cast(props.get("Products"));
+         productAndDerived = getDownloadableProductsFromEntry(productEntry, derivedProductFeed,
+               odataProductResource, origin, checksumValue, identifier);
       }
+      // case of sync without copy, make ingestible product from product references
       else
       {
-         delta = System.currentTimeMillis();
-         subp = client.readFeed(pdt_p + "/Products", null);
-         logODataPerf(pdt_p + "/Products", System.currentTimeMillis() - delta);
+         productAndDerived = getProductReferences(productEntry, derivedProductFeed);
       }
-      for (ODataEntry subpe: subp.getEntries())
-      {
-         String id = (String) subpe.getProperties().get("Id");
-         Long content_len = (Long) subpe.getProperties().get("ContentLength");
 
-         String path = (String) subpe.getProperties().get("LocalPath");
-         if (this.copyProduct)
-         {
-            path = client.getServiceRoot() + '/' + pdt_p +
-                   "/Products('" + subpe.getProperties().get("Id") + "')/$value";
-         }
+      IngestibleODataProduct ingestibleODataProduct =
+            IngestibleODataProduct.fromODataEntry(productEntry, origin, itemClass, metadataIndexList, productAndDerived);
+
+      ingestibleODataProduct.setProperty(ProductConstants.CHECKSUM_PREFIX + "." + checksumAlgorithm, checksumValue);
+
+      return ingestibleODataProduct;
+   }
+
+   private Map<String, ProductReference> getProductReferences(ODataEntry productEntry, ODataFeed derivedProductFeed)
+   {
+      Map<String, ProductReference> productReferences = new HashMap<>();
+
+      // handle unaltered product reference
+      ProductReference unalteredProductReference = new ProductReference(getResourceLocation(productEntry));
+      unalteredProductReference.setProperty(ProductConstants.DATA_SIZE, (Long) productEntry.getProperties().get("ContentLength"));
+
+      productReferences.put(IngestibleODataProduct.UNALTERED, unalteredProductReference);
+
+      // make derived product references
+      for (ODataEntry derivedProductEntry: derivedProductFeed.getEntries())
+      {
+         String id = (String) derivedProductEntry.getProperties().get("Id");
+         String path = (String) derivedProductEntry.getProperties().get("LocalPath");
 
          // Retrieves the Quicklook
          if (id.equals("Quicklook"))
          {
-            product.setQuicklookSize(content_len);
-            product.setQuicklookPath(path);
+            ProductReference quicklookReference = new ProductReference(path);
+            quicklookReference.setProperty(ProductConstants.DATA_SIZE, (Long) derivedProductEntry.getProperties().get("ContentLength"));
+            productReferences.put(IngestibleODataProduct.QUICKLOOK, quicklookReference);
          }
 
          // Retrieves the Thumbnail
          else if (id.equals("Thumbnail"))
          {
-            product.setThumbnailSize(content_len);
-            product.setThumbnailPath(path);
+            ProductReference thumbnailReference = new ProductReference(path);
+            thumbnailReference.setProperty(ProductConstants.DATA_SIZE, (Long) derivedProductEntry.getProperties().get("ContentLength"));
+            productReferences.put(IngestibleODataProduct.THUMBNAIL, thumbnailReference);
          }
       }
-
-      // `processed` must be set to TRUE
-      product.setProcessed(Boolean.TRUE);
-
-      return product;
+      return productReferences;
    }
 
-   private void save(Product product)
+   private Map<String, DownloadableProduct> getDownloadableProductsFromEntry(ODataEntry productEntry,
+         ODataFeed derivedProductFeed, String odataProductResource, String origin, String checksumValue, String identifier)
+         throws IOException, InterruptedException, ODataException
    {
-      List<MetadataIndex> metadatas = product.getIndexes();
+      // create http client to handle downloadable data
+      InterruptibleHttpClient httpClient = new InterruptibleHttpClient(new BasicAuthHttpClientProducer());
 
-      // Stores `product` in the database
-      product = PRODUCT_SERVICE.addProduct(product);
-      product.setIndexes(metadatas); // DELME lazy loading not working atm ...
+      // initialize result map
+      Map<String, DownloadableProduct> resultDownloadableProducts = new HashMap<>();
 
-      // Stores `product` in the index
-      try
-      {
-         long delta = System.currentTimeMillis();
-         SEARCH_SERVICE.index(product);
-         LOGGER.debug("Synchronizer#{} indexed product {} in {}ms",
-               getId(), product.getIdentifier(), (System.currentTimeMillis() - delta));
-      }
-      catch (IOException | SolrServerException ex)
-      {
-         LOGGER.error("Synchronizer#{} Failed to index product {} in Solr's index",
-               getId(), product.getIdentifier(), ex);
-         throw new RuntimeException(ex);
-      }
+      // unaltered physical product
+      DownloadableProduct downloadableProduct = new DownloadableProduct(httpClient, DL_TRIES, origin, checksumValue, identifier);
+      resultDownloadableProducts.put(IngestibleODataProduct.UNALTERED, downloadableProduct);
 
-      // Sets the target collection both in the DB and Solr
-      if (this.targetCollectionUUID != null)
+
+      // make downloadable derived products
+      for (ODataEntry derivedProductEntry: derivedProductFeed.getEntries())
       {
-         try
+         String id = (String) derivedProductEntry.getProperties().get("Id");
+         String path = client.getServiceRoot() + '/' + odataProductResource
+               + "/Products('" + derivedProductEntry.getProperties().get("Id") + "')/$value";
+
+         // Retrieves the Quicklook
+         if (id.equals("Quicklook"))
          {
-            COLLECTION_SERVICE.systemAddProduct(this.targetCollectionUUID, product.getId(), false);
+            DownloadableProduct quicklook = new DownloadableProduct(httpClient, DL_TRIES, path, null, "quicklook");
+            resultDownloadableProducts.put(IngestibleODataProduct.QUICKLOOK, quicklook);
          }
-         catch (RuntimeException ex)
+
+         // Retrieves the Thumbnail
+         else if (id.equals("Thumbnail"))
          {
-            LOGGER.error("Synchronizer#{} Failed to set collection#{} for product {}",
-                  getId(), this.targetCollectionUUID, product.getIdentifier(), ex);
-            // Reverting ...
-            PRODUCT_SERVICE.systemDeleteProduct(product.getId(), false, null);
-            throw ex;
+            DownloadableProduct thumbnail = new DownloadableProduct(httpClient, DL_TRIES, path, null, "thumbnail");
+            resultDownloadableProducts.put(IngestibleODataProduct.THUMBNAIL, thumbnail);
          }
       }
+
+      return resultDownloadableProducts;
    }
 
-   /** DownloadTask parameter must be done! */
-   private void cleanupDownloadTask(DownloadTask dltask)
+   private List<MetadataIndex> getMetadataIndexFromEntry(ODataEntry productEntry, String odataProductResource, String productClass)
+         throws IOException, ODataException, InterruptedException
    {
-      try
+      long delta;
+      ODataFeed attributesFeed;
+      Map<String, Object> properties = productEntry.getProperties();
+      if (productEntry.containsInlineEntry() && properties.get("Attributes") != null)
       {
-         DATA_STORE_SERVICE.delete(dltask.product.getUuid());
-         if (dltask.quicklookDownload != null)
-         {
-            DATA_STORE_SERVICE.delete(dltask.product.getQuicklookPath());
-         }
-         if (dltask.quicklookDownload != null)
-         {
-            DATA_STORE_SERVICE.delete(dltask.product.getThumbnailPath());
-         }
+         attributesFeed = ODataDeltaFeed.class.cast(properties.get("Attributes"));
       }
-      catch (DataStoreException suppressed) {}
+      else
+      {
+         delta = System.currentTimeMillis();
+         attributesFeed = client.readFeed(odataProductResource + "/Attributes", null);
+         logODataPerf(odataProductResource + "/Attributes", System.currentTimeMillis() - delta);
+      }
+
+      List<MetadataIndex> metadataIndexList = new ArrayList<>(attributesFeed.getEntries().size());
+      for (ODataEntry attributeEntry: attributesFeed.getEntries())
+      {
+         Map<String, Object> attributeProperties = attributeEntry.getProperties();
+
+         // retrieve or create metadata definition
+         String name = (String) attributeProperties.get("Name");
+         String type = (String) attributeProperties.get("ContentType");
+         String queryable = null;
+         String category;
+
+         MetadataType mt = METADATA_TYPE_SERVICE.getMetadataTypeByName(productClass, name);
+         if (mt != null)
+         {
+            category = mt.getCategory();
+            if (mt.getSolrField() != null)
+            {
+               queryable = mt.getSolrField().getName();
+            }
+         }
+         else if (name.equals("Identifier"))
+         {
+            category = "summary";
+            queryable = "identifier";
+         }
+         else if (name.equals("Ingestion Date"))
+         {
+            category = "product";
+            queryable = "ingestionDate";
+         }
+         else
+         {
+            category = "";
+         }
+
+         // generate metadata
+         metadataIndexList.add(MetadataFactory.createMetadataIndex(
+               name, type, category, queryable, (String) attributeProperties.get("Value")));
+      }
+      return metadataIndexList;
+   }
+
+   private String getProductMediaURI(String odataProductResource)
+   {
+      return client.getServiceRoot() + '/' + odataProductResource + "/$value";
+   }
+
+   private String getClassFromEntry(ODataEntry productEntry, String odataProductRessource)
+         throws IOException, ODataException, InterruptedException
+   {
+      long delta;
+      Map<String, Object> properties = productEntry.getProperties();
+      ODataEntry classEntry;
+      if (productEntry.containsInlineEntry() && properties.get("Class") != null)
+      {
+         classEntry = ODataEntry.class.cast(properties.get("Class"));
+      }
+      else
+      {
+         delta = System.currentTimeMillis();
+         classEntry = client.readEntry(odataProductRessource + "/Class", null);
+         logODataPerf(odataProductRessource + "/Class", System.currentTimeMillis() - delta);
+      }
+      Map<String, Object> pdt_class_pm = classEntry.getProperties();
+      String pdt_class = String.class.cast(pdt_class_pm.get("Uri"));
+      return pdt_class;
    }
 
    /**
@@ -754,52 +685,53 @@ public class ODataProductSynchronizer extends Synchronizer
    private boolean checkDownloadTasks() throws InterruptedException
    {
       int count = 0;
+      int skip = 0;
       // Get download results from Futures, and create product entries in DB, Solr
       Iterator<DownloadTask> itdl = this.runningDownloads.iterator();
-      boolean update_created = true; // Controls whether we are updating LastCreationDate or not
       while (itdl.hasNext())
       {
          DownloadTask dltask = itdl.next();
          if (!dltask.isDone())
          {
+            LOGGER.debug("Synchronizer#{} Download of product {} in progress", getId(), dltask.product.getIdentifier());
             update_created = false;
             continue;
          }
-
-         Product product = dltask.product;
+         IngestibleODataProduct product = dltask.product;
          try
          {
             dltask.productDownload.get();
-
-            if (product.getQuicklookFlag() && dltask.quicklookDownload != null)
-            {
-               dltask.quicklookDownload.get();
-            }
-
-            if (product.getThumbnailFlag() && dltask.thumbnailDownload != null)
-            {
-               dltask.thumbnailDownload.get();
-            }
-
-            Date last_created = product.getCreated();
-            save(product);
             RUNNING_DOWNLOADS.remove(dltask);
             itdl.remove();
             count++;
             if (update_created)
             {
-               this.lastCreated = last_created;
+               this.lastCreated.setTime(product.getCreationDate ());
                this.dateChanged = true;
             }
 
             LOGGER.info("Synchronizer#{} Product {} ({} bytes compressed) successfully synchronized from {}",
-                  getId(), product.getIdentifier(), product.getSize(), this.client.getServiceRoot());
+                  getId(), product.getIdentifier(), product.getProperty(ProductConstants.DATA_SIZE), this.client.getServiceRoot());
          }
          catch (ExecutionException ex)
          {
+            if (this.skipOnError)
+            {
+               // force lsatCreated update in case of skip
+               if (update_created)
+               {
+                  this.lastCreated.setTime(product.getCreationDate());
+                  this.dateChanged = true;
+               }
+               LOGGER.warn("Synchronizer#{} PRODUCT SKIPPED from '{}', creationDate: {}",
+                     getId(), product.getOrigin(), product.getCreationDate());
+               skip++;
+            }
+            else
+            {
+               update_created = false;
+            }
             LOGGER.error("Synchronizer#{} Product {} failed to download", getId(), product.getIdentifier(), ex);
-            update_created = false;
-            cleanupDownloadTask(dltask);
             RUNNING_DOWNLOADS.remove(dltask);
             itdl.remove();
          }
@@ -807,29 +739,30 @@ public class ODataProductSynchronizer extends Synchronizer
          {
             LOGGER.debug("Synchronizer#{} download of Product {} cancelled", getId(), product.getIdentifier());
             update_created = false;
-            cleanupDownloadTask(dltask);
             RUNNING_DOWNLOADS.remove(dltask);
             itdl.remove();
          }
       }
-      if (count > 0)
+      if (count > 0 || skip > 0)
       {
-         LOGGER.info("Synchronizer#{} {} new Products copied", getId(), count);
+         LOGGER.info("Synchronizer#{} {} new Products copied and {} Products skipped", getId(), count, skip);
       }
       return runningDownloads.size() < this.pageSize;
    }
 
    /** Returns TRUE if download of given product is already queued. */
-   private boolean isAlreadyQueued(Product product)
+   private boolean isAlreadyQueued(IngestibleODataProduct product)
    {
       // Uses the UUID to identify products
       return RUNNING_DOWNLOADS.contains(new DownloadTask(product, null));
    }
 
    /** Insert given product in the download queue. */
-   private void queue(Product product) throws IOException, InterruptedException
+   private void queue(IngestibleODataProduct product) throws IOException, InterruptedException
    {
-      DownloadTask downloadTask = storeRemoteProduct(product);
+      Future<?> result = productSetter.submitProduct(STORE_SERVICE, product, targetCollectionName);
+      DownloadTask downloadTask = new DownloadTask(product, result);
+
       RUNNING_DOWNLOADS.add(downloadTask); // To avoid simultaneaous download of same product
       this.runningDownloads.add(downloadTask); // For ordered processing
    }
@@ -848,21 +781,29 @@ public class ODataProductSynchronizer extends Synchronizer
          while (count > 0)
          {
             ODataFeed pdf = getPage(skip, true);
+            update_created = true;
             if (pdf.getEntries().isEmpty()) // No more products
             {
                break;
             }
 
-            skip += this.pageSize;
+            skip += pdf.getEntries().size();
 
-            for (ODataEntry pdt: pdf.getEntries ())
+            for (ODataEntry pdt: pdf.getEntries())
             {
                if (exists(pdt))
                {
+                  LOGGER.info("Synchronizer#{} Product of UUID {} already exists, skipping",
+                        getId(), (String) pdt.getProperties().get("Id"));
+                  continue;
+               }
+               if (!ProductSynchronizerUtils.isOnline(pdt))
+               {
+                  LOGGER.debug("Synchronizer#{} Product {} is not online", getId(), pdt.getProperties().get("Name"));
                   continue;
                }
 
-               Product product = entryToProducts(pdt);
+               IngestibleODataProduct product = entryToProducts(pdt, true);
 
                // Avoid downloading of the same product several times
                // and run post-filters of the product to download
@@ -874,13 +815,19 @@ public class ODataProductSynchronizer extends Synchronizer
                res++;
 
                queue(product);
+               LOGGER.info("Synchronizer#{} added product {} to the queue ", getId(), product.getIdentifier());
             }
          }
+         LOGGER.info("Synchronizer#{} queued products: ", getId());
 
+         for (DownloadTask rd: this.runningDownloads)
+         {
+            LOGGER.info("Product name, uuid : {}, {}", rd.product.getIdentifier(), rd.product.getUuid());
+         }
       }
-      catch (IOException | ODataException ex)
+      catch (IOException | ODataException | MissingProductsException ex)
       {
-         LOGGER.error ("OData failure", ex);
+         LOGGER.error("Synchronizer#{} OData failure", getId(), ex);
       }
       finally
       {
@@ -896,6 +843,7 @@ public class ODataProductSynchronizer extends Synchronizer
    private int getNewProducts () throws InterruptedException
    {
       int res = 0;
+      int skip = 0;
       try
       {
          ODataFeed pdf = getPage(null, true);
@@ -905,48 +853,78 @@ public class ODataProductSynchronizer extends Synchronizer
          {
             if (exists(pdt))
             {
-               this.lastCreated = getCreationDate(pdt);
+               this.lastCreated.setTime(getCreationDate(pdt));
+               this.dateChanged = true;
+               continue;
+            }
+            if (!ProductSynchronizerUtils.isOnline(pdt))
+            {
+               LOGGER.info("Synchronizer#{} Product {} is not online", getId(), pdt.getProperties().get("Name"));
+               this.lastCreated.setTime(getCreationDate(pdt));
                this.dateChanged = true;
                continue;
             }
 
-            Product product = entryToProducts(pdt);
+            IngestibleODataProduct product = entryToProducts(pdt, false);
 
             if (!postFilter(product))
             {
-               this.lastCreated = getCreationDate(pdt);
+               this.lastCreated.setTime(getCreationDate(pdt));
                this.dateChanged = true;
                continue;
             }
 
-            String product_uuid = product.getUuid();
+            String productUuid = product.getUuid();
             String product_resource_location = getResourceLocation(pdt);
             // check product accessibility
-            if (!DATA_STORE_SERVICE.canAccess(product_resource_location))
+            if (product_resource_location == null)
+            {
+               LOGGER.warn("Synchronizer#{} Cannot synchronize product '{}' (uuid: {}), LocalPath property is null;"
+                     + " please check that user '{}' has the Archive Manager role on the backend",
+                     getId(), product.getIdentifier(), product.getUuid(), serviceUser);
+               if (this.skipOnError)
+               {
+                  LOGGER.warn("Synchronizer#{} PRODUCT SKIPPED from '{}', creationDate: {}",
+                        getId(), product.getOrigin(), product.getCreationDate());
+                  skip++;
+                  // force lsatCreated update in case of skip
+                  this.lastCreated.setTime(getCreationDate(pdt));
+                  this.dateChanged = true;
+               }
+               continue;
+            }
+            if (!DATA_STORE_MANAGER.canAccess(product_resource_location))
             {
                boolean success = false;
                // If remoteIncoming set, tries to create DS and check it can access product
                if (remoteIncoming != null)
                {
                   String dataStoreName = DATASTORE_SYNC_PREFIX_NAME + String.valueOf(getId());
-                  HfsDataStoreConf conf;
-                  conf = new HfsDataStoreConf();
-                  conf.setName(dataStoreName);
-                  conf.setReadOnly(true);
-                  conf.setPath(remoteIncoming);
+                  HfsDataStoreConf dataStoreConf;
+                  dataStoreConf = new HfsDataStoreConf();
+                  dataStoreConf.setName(dataStoreName);
+                  dataStoreConf.setReadOnly(true);
+                  dataStoreConf.setPath(remoteIncoming);
 
-                  if (!DBC_STORE_SERVICE.dataStoreExists(dataStoreName))
+                  if (!DSC_SERVICE.dataStoreExists(dataStoreName))
                   {
-                     DBC_STORE_SERVICE.create(conf);
-                     DataStore riDs = DBC_STORE_SERVICE.getDataStoreByName(dataStoreName);
-                     if (riDs.canAccess(product_resource_location))
+                     try
                      {
-                        DATA_STORE_SERVICE.add(riDs);
-                        success = true;
+                        DSC_SERVICE.createNamed(dataStoreConf);
+                        DataStore liveDataStore = DSC_SERVICE.getDataStoreByName(dataStoreName);
+                        if (liveDataStore.canAccess(product_resource_location))
+                        {
+                           DATA_STORE_MANAGER.add(liveDataStore);
+                           success = true;
+                        }
+                        else
+                        {
+                           DSC_SERVICE.delete(dataStoreConf);
+                        }
                      }
-                     else
+                     catch (UnavailableNameException | InvalidConfigurationException e)
                      {
-                        DBC_STORE_SERVICE.delete(conf);
+                        LOGGER.error("Synchronizer#{}", getId(), e);
                      }
                   }
                }
@@ -954,65 +932,49 @@ public class ODataProductSynchronizer extends Synchronizer
                if (!success)
                {
                   String err = String.format("Product not available in datastores and RemoteIncoming: %s/Products('%s')",
-                        client.getServiceRoot(), product_uuid);
-                  LOGGER.error(err);
-                  throw new SyncException(err);
+                        client.getServiceRoot(), productUuid);
+                  LOGGER.error("Synchronizer#{} {}", getId(), err);
+                  if (!this.skipOnError)
+                  {
+                     throw new SyncException(err);
+                  }
+                  LOGGER.warn("Synchronizer#{} PRODUCT SKIPPED from '{}', creationDate: {}",
+                        getId(), product.getOrigin(), product.getCreationDate());
+                  skip++;
+                  // force lsatCreated update in case of skip
+                  this.lastCreated.setTime(getCreationDate(pdt));
+                  this.dateChanged = true;
+                  continue;
                }
-
             }
 
-            // adding product
+            // adding product and derived products
             try
             {
-               if (!DATA_STORE_SERVICE.addProductReference(product_uuid, new ProductReference(product_resource_location)))
-               {
-                  String err = String.format("Cannot add product reference for '%s'", product_uuid);
-                  LOGGER.error(err);
-                  throw new DataStoreException(err);
-               }
-
-               // Add Quicklook
-               if (product.getQuicklookFlag())
-               {
-                  String uuid = UUID.randomUUID().toString();
-                  if (!DATA_STORE_SERVICE.addProductReference(uuid, new ProductReference(product.getQuicklookPath())))
-                  {
-                     String err = String.format("Cannot add quicklook reference for product '%s'", product_uuid);
-                     LOGGER.error(err);
-                     throw new DataStoreException(err);
-                  }
-                  product.setQuicklookPath(uuid);
-               }
-
-               // Add Thumbnail
-               if (product.getThumbnailFlag())
-               {
-                  String uuid = UUID.randomUUID().toString();
-                  if (!DATA_STORE_SERVICE.addProductReference(uuid, new ProductReference(product.getThumbnailPath())))
-                  {
-                     String err = String.format("Cannot add thumbnail reference for product '%s'", product_uuid);
-                     LOGGER.error(err);
-                     throw new DataStoreException(err);
-                  }
-                  product.setThumbnailPath(uuid);
-               }
+               STORE_SERVICE.addProductReference(product, targetCollectionName);
             }
-            catch (DataStoreException e)
+            catch (StoreException e)
             {
-               LOGGER.error("Cannot synchronise product '{}'", product_uuid, e);
-               throw new SyncException(e);
+               LOGGER.error("Synchronizer#{} Cannot synchronise product '{}'", getId(), productUuid, e);
+               if (!this.skipOnError)
+               {
+                  throw new SyncException(e);
+               }
+               LOGGER.warn("Synchronizer#{} PRODUCT SKIPPED from '{}', creationDate: {}",
+                     getId(), product.getOrigin(), product.getCreationDate());
+               skip++;
+               // force lsatCreated update in case of skip
+               this.lastCreated.setTime(getCreationDate(pdt));
+               this.dateChanged = true;
+               continue;
             }
-
-            Date last_created = product.getCreated();
-            save(product);
-
-            this.lastCreated = last_created;
-            this.dateChanged = true;
 
             LOGGER.info("Synchronizer#{} Product {} ({} bytes compressed) successfully synchronized from {}",
-                  getId(), product.getIdentifier(), product.getSize(), this.client.getServiceRoot());
+                  getId(), product.getIdentifier(), product.getProperty(ProductConstants.DATA_SIZE), this.client.getServiceRoot());
 
             res++;
+            this.lastCreated.setTime(getCreationDate(pdt));
+            this.dateChanged = true;
 
             // Checks if we have to abandon the current pass
             if (Thread.interrupted ())
@@ -1021,15 +983,15 @@ public class ODataProductSynchronizer extends Synchronizer
             }
          }
       }
-      catch (IOException | ODataException ex)
+      catch (IOException | ODataException | MissingProductsException ex)
       {
-         LOGGER.error ("OData failure", ex);
+         LOGGER.error("Synchronizer#{} OData failure", getId(), ex);
          throw new SyncException(ex);
       }
       finally
       {
          // Logs a summary of what it has been done
-         LOGGER.info("Synchronizer#{} {} new Products", getId(), res);
+         LOGGER.info("Synchronizer#{} {} new Products and {} Products skipped", getId(), res, skip);
       }
 
       return res;
@@ -1067,6 +1029,7 @@ public class ODataProductSynchronizer extends Synchronizer
       {
          if (this.copyProduct)
          {
+            // synchronization with copy
             if (checkDownloadTasks())
             {
                retrieved = getAndCopyNewProduct();
@@ -1074,6 +1037,7 @@ public class ODataProductSynchronizer extends Synchronizer
          }
          else
          {
+            // synchronization without copy
             retrieved = getNewProducts();
          }
          if (Thread.interrupted ())
@@ -1098,7 +1062,7 @@ public class ODataProductSynchronizer extends Synchronizer
          // Writes the database only if there is a modification
          if (this.dateChanged)
          {
-            this.syncConf.setConfig("last_created", String.valueOf(this.lastCreated.getTime()));
+            ((ProductSynchronizer)this.syncConf).setLastCreated(XmlProvider.getCalendar(this.lastCreated));
             SYNC_SERVICE.saveSynchronizer(this);
             this.dateChanged = false;
          }
@@ -1117,29 +1081,18 @@ public class ODataProductSynchronizer extends Synchronizer
          {
             try
             {
-               task.productDownload.cancel(true);
+               if (task.product != null)
+               {
+                  task.product.close();
+               }
+               task.productDownload.cancel(false);
                task.productDownload.get();
             }
             catch (CancellationException | ExecutionException none) {}
-            if (task.quicklookDownload != null)
-            {
-               try
-               {
-                  task.quicklookDownload.cancel(true);
-                  task.quicklookDownload.get();
-               }
-               catch (CancellationException | ExecutionException none) {}
-            }
-            if (task.thumbnailDownload != null)
-            {
-               try
-               {
-                  task.thumbnailDownload.cancel(true);
-                  task.thumbnailDownload.get();
-               }
-               catch (CancellationException | ExecutionException none) {}
-            }
+
+            RUNNING_DOWNLOADS.remove(task);
          }
+         this.runningDownloads.clear();
          this.productSetter.shutdownNow();
       }
    }
@@ -1147,7 +1100,7 @@ public class ODataProductSynchronizer extends Synchronizer
    @Override
    public String toString ()
    {
-      return "OData Product Synchronizer on " + syncConf.getConfig("service_uri");
+      return "OData Product Synchronizer on " + syncConf.getServiceUrl();
    }
 
    /** Creates a client producer that produces HTTP Basic auth aware clients. */
@@ -1174,32 +1127,23 @@ public class ODataProductSynchronizer extends Synchronizer
       }
    }
 
-   /** Returned by {@link #storeRemoteProduct(fr.gael.dhus.database.object.Product)}. */
    private static class DownloadTask implements Comparable<DownloadTask>
    {
       /** Not null */
-      public Product product;
+      public final IngestibleODataProduct product;
       /** Not null */
-      public Future<?> productDownload;
-      /** May be null for e.g.: RAW products */
-      public Future<?> quicklookDownload;
-      /** May be null for e.g.: RAW products */
-      public Future<?> thumbnailDownload;
+      public final Future<?> productDownload;
 
-      public DownloadTask(Product prod, Future<?> pdl)
+      public DownloadTask(IngestibleODataProduct prod, Future<?> pdl)
       {
          this.product = prod;
          this.productDownload = pdl;
-         this.quicklookDownload = null;
-         this.thumbnailDownload = null;
       }
 
       /** Returns true of all Futures are done. */
       public boolean isDone()
       {
-         return productDownload.isDone() &&
-               (quicklookDownload == null || quicklookDownload.isDone()) &&
-               (thumbnailDownload == null || thumbnailDownload.isDone());
+         return productDownload.isDone();
       }
 
       @Override
@@ -1224,7 +1168,7 @@ public class ODataProductSynchronizer extends Synchronizer
       {
          // Ordering by creation date is important because it is the pivot between already synced
          // products and to be synced products. Used to order elements in the `runningDownloads` set.
-         int result = product.getCreated().compareTo(o.product.getCreated());
+         int result = product.getCreationDate().compareTo(o.product.getCreationDate());
 
          // In case of two products have the same creation date.
          if (result == 0)
@@ -1232,47 +1176,6 @@ public class ODataProductSynchronizer extends Synchronizer
             result = product.getUuid().compareTo(o.product.getUuid());
          }
          return result;
-      }
-   }
-
-   /** A future for failed tasks. */
-   private static class ErroneousFuture implements Future<Object>
-   {
-      public final ExecutionException ex;
-
-      public ErroneousFuture(final ExecutionException ex)
-      {
-         this.ex = ex;
-      }
-
-      @Override
-      public boolean cancel(boolean mayInterruptIfRunning)
-      {
-         return false;
-      }
-
-      @Override
-      public boolean isCancelled()
-      {
-         return true;
-      }
-
-      @Override
-      public boolean isDone()
-      {
-         return true;
-      }
-
-      @Override
-      public Object get() throws InterruptedException, ExecutionException
-      {
-         throw this.ex;
-      }
-
-      @Override
-      public Object get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException
-      {
-         throw this.ex;
       }
    }
 }

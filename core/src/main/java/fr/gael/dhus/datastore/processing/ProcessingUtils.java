@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,37 +19,18 @@
  */
 package fr.gael.dhus.datastore.processing;
 
-import java.awt.image.RenderedImage;
-import java.awt.image.renderable.ParameterBlock;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.StringReader;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.activation.MimeType;
-import javax.activation.MimeTypeParseException;
-import javax.media.jai.Interpolation;
-import javax.media.jai.JAI;
-
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-import org.geotools.gml2.GMLConfiguration;
-import org.geotools.xml.Configuration;
-import org.geotools.xml.Parser;
-import org.xml.sax.InputSource;
-
 import com.hp.hpl.jena.ontology.OntClass;
 import com.hp.hpl.jena.reasoner.IllegalParameterException;
 import com.hp.hpl.jena.util.iterator.ExtendedIterator;
+
 import com.vividsolutions.jts.geom.Geometry;
+import com.vividsolutions.jts.io.ParseException;
 import com.vividsolutions.jts.io.WKTReader;
 import com.vividsolutions.jts.operation.valid.IsValidOp;
 import com.vividsolutions.jts.operation.valid.TopologyValidationError;
 
 import fr.gael.dhus.database.object.MetadataIndex;
-import fr.gael.dhus.database.object.Product;
+import fr.gael.dhus.factory.MetadataFactory;
 import fr.gael.dhus.util.UnZip;
 import fr.gael.drb.DrbAttribute;
 import fr.gael.drb.DrbFactory;
@@ -61,13 +42,39 @@ import fr.gael.drb.value.Value;
 import fr.gael.drbx.cortex.DrbCortexItemClass;
 import fr.gael.drbx.cortex.DrbCortexModel;
 
-/**
- * @author pidancier
- *
- */
+import java.awt.image.RenderedImage;
+import java.awt.image.renderable.ParameterBlock;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.StringReader;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.activation.MimeType;
+import javax.activation.MimeTypeParseException;
+
+import javax.media.jai.Interpolation;
+import javax.media.jai.JAI;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import org.dhus.store.datastore.remotedhus.DhusODataV1Node;
+
+import org.geotools.gml2.GMLConfiguration;
+import org.geotools.xml.Configuration;
+import org.geotools.xml.Parser;
+
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+
 public class ProcessingUtils
 {
    private static final Logger LOGGER = LogManager.getLogger(ProcessingUtils.class);
+   public static final String THUMBNAIL_SUFFIX = "-th.jpg";
+   public static final String QUICKLOOK_SUFFIX = "-ql.jpg";
 
    /**
     * Hide utility class constructor
@@ -82,8 +89,8 @@ public class ProcessingUtils
    {
       RenderedImage resizedImage=image;
       // Computes ratio and scale
-      float scale=getScale(image.getWidth(),image.getHeight(),width,height);
-      
+      float scale = getScale(image.getWidth(), image.getHeight(), width, height);
+
       // Processing resize process
       ParameterBlock pb = new ParameterBlock();
       // The source image
@@ -99,13 +106,12 @@ public class ProcessingUtils
       // The interpolation
       pb.add(Interpolation.getInstance(Interpolation.INTERP_BICUBIC));
       resizedImage = JAI.create("scale", pb, null);
-      
-      LOGGER.debug("Image resized to : " + resizedImage.getWidth() + "x"
-         + resizedImage.getHeight());
-      
+
+      LOGGER.debug("Image resized to : {}x{}", resizedImage.getWidth(), resizedImage.getHeight());
+
       return resizedImage;
    }
-   
+
    /**
     * Computes the image scale keeping the aspect ratio.
     * The image size is never always exactly matching the target image size.
@@ -113,7 +119,7 @@ public class ProcessingUtils
     * number of pixels is used:
     * When the image target is expected 512x512, it number of pixels is 262144
     * if the  source image is 15100x1217 computed image is 1803x145
-    *    
+    *
     * @param orig_width source width.
     * @param orig_height source height.
     * @param width destination width.
@@ -135,8 +141,7 @@ public class ProcessingUtils
       float scale = (float)(target_height/orig_height);
       return scale;
    }
-   
-   
+
    public static DrbNode getNodeFromPath (String location)
    {
       DrbNode node = null;
@@ -147,7 +152,7 @@ public class ProcessingUtils
          if ((sequence == null) || (sequence.getLength() == 0)) return null;
          node = (DrbNode)sequence.getItem(0);
       }
-      catch (Exception e)
+      catch (RuntimeException ex)
       {
          DrbSequence sequence = null;
          String path = location.replace ('\\', '/');
@@ -156,15 +161,15 @@ public class ProcessingUtils
          for (int i=0; i<tokens.length; i++)
          {
             path +=  checkPathElement(tokens[i]) + "/";
-            LOGGER.debug("looking for path " + path);
-            try 
-            {                                    
+            LOGGER.debug("looking for path {}", path);
+            try
+            {
                Query query = new Query(path);
                sequence = query.evaluate(DrbFactory.openURI("."));
             }
-            catch (Exception exc)
-            { 
-               LOGGER.debug(path + " NOT supported by Drb.");
+            catch (RuntimeException exc)
+            {
+               LOGGER.debug("{} NOT supported by Drb", path);
             }
          }
          if ((sequence == null) || (sequence.getLength() == 0)) return null;
@@ -173,19 +178,20 @@ public class ProcessingUtils
       }
       if (UnZip.supported (location))
       {
-         return node.getFirstChild ();
+         return node.getFirstChild();
       }
       return node;
    }
 
-   
    static String checkPathElement (String elt)
    {
-      if (elt.matches ("(\\d.*)|(.*-.*)"))
-         return "*[name()=\""+elt.replaceAll ("%20", " ")+"\"]";
-      else return elt;
+      if (elt.matches("(\\d.*)|(.*-.*)"))
+      {
+         return "*[name()=\"" + elt.replaceAll("%20", " ") + "\"]";
+      }
+      return elt;
    }
-   
+
    /**
     * Retrieve DrbCortex class from passed node.
     * @param node the node to retrieve the class.
@@ -193,21 +199,43 @@ public class ProcessingUtils
     * @throws IOException if model is not reachable.
     * @throws UnsupportedOperationException if class cannot be found.
     */
-   public static DrbCortexItemClass getClassFromNode(DrbNode node) 
+   public static DrbCortexItemClass getClassFromNode(DrbNode node)
       throws IOException
    {
-      DrbCortexModel model = DrbCortexModel.getDefaultModel ();
-      DrbCortexItemClass cl = model.getClassOf (node);
-      if(cl == null)
+      DrbCortexModel model = DrbCortexModel.getDefaultModel();
+      DrbCortexItemClass cl = model.getClassOf(node);
+      if (cl == null)
       {
-         throw new UnsupportedOperationException(
-            "Class cannot be retrieved for product " + node.getPath());
+         throw new UnsupportedOperationException("Class cannot be retrieved for product " + node.getPath());
       }
-      LOGGER.info("Class \"" + cl.getLabel () + "\" for product " +
-         node.getName ());
+      LOGGER.info("Class \"{}\" for product {}", cl.getLabel(), node.getName());
       return cl;
    }
-   
+
+   /**
+    * Returns the Item Class label of given DrbNode
+    * @param node non null DrbNode
+    * @return the label or "Item" if no class found
+    */
+   public static String getClassLabelFromNode(DrbNode node)
+   {
+      if (node instanceof DhusODataV1Node)
+      {
+         DhusODataV1Node n = (DhusODataV1Node) node;
+         return n.getContentType();
+      }
+      DrbCortexItemClass clas;
+      try
+      {
+         clas = getClassFromNode(node);
+      }
+      catch (IOException | RuntimeException ex)
+      {
+         return "Item";
+      }
+      return clas.getLabel();
+   }
+
    /**
     * Retrieve DrbCortex class from passed url.
     * @param url the url to retrieve the class.
@@ -221,53 +249,46 @@ public class ProcessingUtils
          ProcessingUtils.getNodeFromPath (url.getPath ()));
    }
 
-   /**
-    * Retrieve DrbCortex class from passed product.
-    * @param url the product to retrieve the class.
-    * @return the related class to the product.
-    * @throws IOException if model is not reachable.
-    * @throws UnsupportedOperationException if class cannot be found.
-    */
-   public static DrbCortexItemClass getClassFromProduct(Product product) 
-      throws IOException
+   public static List<String> getSuperClass(String URI)
    {
-      return ProcessingUtils.getClassFromUrl(product.getPath());
-   }
-   
-   public static List<String>getSuperClass(String URI)
-   {
-      List<String>super_classes = new ArrayList<String>();
+      List<String> super_classes = new ArrayList<>();
       DrbCortexItemClass cl = DrbCortexItemClass.getCortexItemClassByName(URI);
       ExtendedIterator it = cl.getOntClass().listSuperClasses(true);
       while (it.hasNext())
       {
-         String ns = ((OntClass)it.next()).getURI();
-         if(ns!=null) super_classes.add(ns);
+         String ns = ((OntClass) it.next()).getURI();
+         if (ns != null)
+         {
+            super_classes.add(ns);
+         }
       }
       return super_classes;
    }
-   
-   public static List<String>getSubClass(String URI)
+
+   public static List<String> getSubClass(String URI)
    {
-      List<String>sub_classes = new ArrayList<String>();
+      List<String> sub_classes = new ArrayList<>();
       DrbCortexItemClass cl = DrbCortexItemClass.getCortexItemClassByName(URI);
       ExtendedIterator it = cl.getOntClass().listSubClasses(true);
       while (it.hasNext())
       {
-         String ns = ((OntClass)it.next()).getURI();
-         if(ns!=null) sub_classes.add(ns);
+         String ns = ((OntClass) it.next()).getURI();
+         if (ns != null)
+         {
+            sub_classes.add(ns);
+         }
       }
       return sub_classes;
    }
-   
+
    public static String getItemClassUri (DrbCortexItemClass cl)
    {
       return cl.getOntClass().getURI();
    }
-   
-   public static List<String> getAllClasses ()
+
+   public static List<String> getAllClasses()
    {
-      List<String>classes = new ArrayList<String>();
+      List<String> classes = new ArrayList<>();
       DrbCortexModel model;
       try
       {
@@ -277,48 +298,54 @@ public class ProcessingUtils
       {
          return classes;
       }
-      ExtendedIterator it= model.getCortexModel().getOntModel().listClasses();
+      ExtendedIterator it = model.getCortexModel().getOntModel().listClasses();
       while (it.hasNext())
       {
-         OntClass cl = (OntClass)it.next();
+         OntClass cl = (OntClass) it.next();
          String uri = cl.getURI();
-         if (uri!=null)
+         if (uri != null)
+         {
             classes.add(uri);
+         }
       }
       return classes;
    }
 
    /**
     * Check GML Footprint validity
+    *
+    * @param footprint to check
+    * @return {@code true} if valid
     */
-   public static boolean checkGMLFootprint (String footprint)
+   public static boolean checkGMLFootprint(String footprint)
    {
       try
       {
-         Configuration configuration = new GMLConfiguration ();
-         Parser parser = new Parser (configuration);
+         Configuration configuration = new GMLConfiguration();
+         Parser parser = new Parser(configuration);
 
-         Geometry geom =
-               (Geometry) parser.parse (new InputSource (
-                     new StringReader (footprint)));
+         Geometry geom = (Geometry) parser.parse(new InputSource(new StringReader(footprint)));
          if (!geom.isEmpty() && !geom.isValid())
          {
             LOGGER.error("Wrong footprint");
             return false;
          }
       }
-      catch (Exception e)
+      catch (IOException | ParserConfigurationException | SAXException | RuntimeException ex)
       {
-         LOGGER.error("Error in extracted footprint: " + e.getMessage());
+         LOGGER.error("Error in extracted footprint: {}", ex.getMessage());
          return false;
       }
       return true;
    }
-   
+
    /**
     * Check JTS Footprint validity
+    *
+    * @param footprint to check
+    * @return {@code true} if valid
     */
-   public static boolean checkJTSFootprint (String footprint)
+   public static boolean checkJTSFootprint(String footprint)
    {
       try
       {
@@ -332,63 +359,57 @@ public class ProcessingUtils
          }
          return true;
       }
-      catch (Exception e)
+      catch (ParseException | RuntimeException ex)
       {
-         LOGGER.error("JTS Footprint error : " + e.getMessage());
+         LOGGER.error("JTS Footprint error : {}", ex.getMessage());
          return false;
       }
    }
-   
+
    private static final String METADATA_NAMESPACE = "http://www.gael.fr/dhus#";
    private final static String MIME_PLAIN_TEXT = "plain/text";
-   private final static String PROPERTY_METADATA_EXTRACTOR =
-            "metadataExtractor";
+   private final static String PROPERTY_METADATA_EXTRACTOR = "metadataExtractor";
    private final static String MIME_APPLICATION_GML = "application/gml+xml";
-   public static List<MetadataIndex> getIndexesFrom (URL url)
+   public static List<MetadataIndex> getIndexesFrom(URL url)
    {
       java.util.Collection<String> properties = null;
       DrbNode node = null;
       DrbCortexItemClass cl = null;
 
       // Prepare the index structure.
-      List<MetadataIndex> indexes = new ArrayList<MetadataIndex> ();
+      List<MetadataIndex> indexes = new ArrayList<>();
 
       // Prepare the DRb node to be processed
       try
       {
          // First : force loading the model before accessing items.
-         node = ProcessingUtils.getNodeFromPath (url.getPath ());
-         cl = ProcessingUtils.getClassFromNode (node);
-         LOGGER.info("Class \"" + cl.getLabel () + "\" for product " +
-            node.getName ());
+         node = ProcessingUtils.getNodeFromPath(url.getPath());
+         cl = ProcessingUtils.getClassFromNode(node);
+         LOGGER.info("Class \"{}\" for product {}", cl.getLabel(), node.getName());
 
          // Get all values of the metadata properties attached to the item
          // class or any of its super-classes
-         properties =
-            cl.listPropertyStrings (METADATA_NAMESPACE +
-               PROPERTY_METADATA_EXTRACTOR, false);
+         properties = cl.listPropertyStrings(METADATA_NAMESPACE + PROPERTY_METADATA_EXTRACTOR, false);
 
          // Return immediately if no property value were found
          if (properties == null)
          {
-            LOGGER.warn("Item \"" + cl.getLabel () +
-               "\" has no metadata defined.");
+            LOGGER.warn("Item \"{}\" has no metadata defined", cl.getLabel());
             return null;
          }
       }
       catch (IOException e)
       {
-         throw new UnsupportedOperationException (
-            "Error While decoding drb node", e);
+         throw new UnsupportedOperationException("Error While decoding drb node", e);
       }
 
       // Loop among retrieved property values
-      for (String property : properties)
+      for (String property: properties)
       {
          // Filter possible XML markup brackets that could have been encoded
          // in a CDATA section
-         property = property.replaceAll ("&lt;", "<");
-         property = property.replaceAll ("&gt;", ">");
+         property = property.replaceAll("&lt;", "<");
+         property = property.replaceAll("&gt;", ">");
          /*
           * property = property.replaceAll("\n", " "); // Replace eol by blank
           * space property = property.replaceAll(" +", " "); // Remove
@@ -396,70 +417,85 @@ public class ProcessingUtils
           */
 
          // Create a query for the current metadata extractor
-         Query metadataQuery = new Query (property);
+         Query metadataQuery = new Query(property);
 
          // Evaluate the XQuery
-         DrbSequence metadataSequence = metadataQuery.evaluate (node);
+         DrbSequence metadataSequence = metadataQuery.evaluate(node);
 
          // Check that something results from the evaluation: jump to next
          // value otherwise
-         if ( (metadataSequence == null) || (metadataSequence.getLength () < 1))
+         if ((metadataSequence == null) || (metadataSequence.getLength() < 1))
          {
             continue;
          }
 
          // Loop among results
-         for (int iitem = 0; iitem < metadataSequence.getLength (); iitem++)
+         for (int iitem = 0; iitem < metadataSequence.getLength(); iitem++)
          {
             // Get current metadata node
-            DrbNode n = (DrbNode) metadataSequence.getItem (iitem);
+            DrbNode n = (DrbNode) metadataSequence.getItem(iitem);
 
             // Get name
-            DrbAttribute name_att = n.getAttribute ("name");
+            DrbAttribute name_att = n.getAttribute("name");
             Value name_v = null;
-            if (name_att != null) name_v = name_att.getValue ();
+            if (name_att != null)
+            {
+               name_v = name_att.getValue();
+            }
             String name = null;
             if (name_v != null)
-               name = name_v.convertTo (Value.STRING_ID).toString ();
+            {
+               name = name_v.convertTo(Value.STRING_ID).toString();
+            }
 
             // get type
-            DrbAttribute type_att = n.getAttribute ("type");
+            DrbAttribute type_att = n.getAttribute("type");
             Value type_v = null;
             if (type_att != null)
-               type_v = type_att.getValue ();
+            {
+               type_v = type_att.getValue();
+            }
             else
-               type_v = new fr.gael.drb.value.String (MIME_PLAIN_TEXT);
-            String type = type_v.convertTo (Value.STRING_ID).toString ();
+            {
+               type_v = new fr.gael.drb.value.String(MIME_PLAIN_TEXT);
+            }
+            String type = type_v.convertTo(Value.STRING_ID).toString();
 
             // get category
-            DrbAttribute cat_att = n.getAttribute ("category");
+            DrbAttribute cat_att = n.getAttribute("category");
             Value cat_v = null;
             if (cat_att != null)
-               cat_v = cat_att.getValue ();
+            {
+               cat_v = cat_att.getValue();
+            }
             else
-               cat_v = new fr.gael.drb.value.String ("product");
-            String category = cat_v.convertTo (Value.STRING_ID).toString ();
+            {
+               cat_v = new fr.gael.drb.value.String("product");
+            }
+            String category = cat_v.convertTo(Value.STRING_ID).toString();
 
             // get category
-            DrbAttribute qry_att = n.getAttribute ("queryable");
+            DrbAttribute qry_att = n.getAttribute("queryable");
             String queryable = null;
             if (qry_att != null)
             {
-               Value qry_v = qry_att.getValue ();
+               Value qry_v = qry_att.getValue();
                if (qry_v != null)
-                  queryable = qry_v.convertTo (Value.STRING_ID).toString ();
+               {
+                  queryable = qry_v.convertTo(Value.STRING_ID).toString();
+               }
             }
 
             // Get value
             String value = null;
-            if (MIME_APPLICATION_GML.equals (type) && n.hasChild ())
+            if (MIME_APPLICATION_GML.equals(type) && n.hasChild())
             {
-               ByteArrayOutputStream out = new ByteArrayOutputStream ();
-               XmlWriter.writeXML (n.getFirstChild (), out);
-               value = out.toString ();
+               ByteArrayOutputStream out = new ByteArrayOutputStream();
+               XmlWriter.writeXML(n.getFirstChild(), out);
+               value = out.toString();
                try
                {
-                  out.close ();
+                  out.close();
                }
                catch (IOException e)
                {
@@ -469,48 +505,56 @@ public class ProcessingUtils
             else
             // Case of "text/plain"
             {
-               Value value_v = n.getValue ();
+               Value value_v = n.getValue();
                if (value_v != null)
                {
-                  value = value_v.convertTo (Value.STRING_ID).toString ();
-                  value = value.trim ();
+                  value = value_v.convertTo(Value.STRING_ID).toString();
+                  value = value.trim();
                }
             }
 
-            if ( (name != null) && (value != null))
+            if ((name != null) && (value != null))
             {
-               MetadataIndex index = new MetadataIndex ();
-               index.setName (name);
+               String metadateType = null;
                try
                {
-                  index.setType (new MimeType (type).toString ());
+                  metadateType = new MimeType(type).toString();
                }
-               catch (MimeTypeParseException e)
+               catch (MimeTypeParseException ex)
                {
-                  LOGGER.warn(
-                     "Wrong metatdata extractor mime type in class \"" +
-                        cl.getLabel () + "\" for metadata called \"" + name +
-                        "\".", e);
+                  LOGGER.warn("Wrong metatdata extractor mime type in class \"{}\" for metadata called \"{}\"",
+                              cl.getLabel(), name, ex);
                }
-               index.setCategory (category);
-               index.setValue (value);
-               index.setQueryable (queryable);
-               indexes.add (index);
+               MetadataIndex index = MetadataFactory.createMetadataIndex(name, metadateType, category, queryable, value);
+               indexes.add(index);
             }
             else
             {
                String field_name = "";
                if (name != null)
+               {
                   field_name = name;
-               else
-                  if (queryable != null)
-                     field_name = queryable;
-                  else
-                     if (category != null)
-                        field_name = "of category " + category;
+               }
+               else if (queryable != null)
+               {
+                  field_name = queryable;
+               }
+               else if (category != null)
+               {
+                  field_name = "of category " + category;
+               }
 
-               LOGGER.warn("Nothing extracted for field " + field_name);
+               LOGGER.warn("Nothing extracted for field {}", field_name);
             }
+         }
+      }
+      // Debug display the extracted indexes contents
+      if (LOGGER.isDebugEnabled() && !indexes.isEmpty())
+      {
+         for (MetadataIndex mdi: indexes)
+         {
+            LOGGER.debug("- name='{}', category='{}', queryable='{}', type='{}', value='{}'",
+                         mdi.getName(), mdi.getCategory(), mdi.getQueryable(), mdi.getType(), mdi.getValue());
          }
       }
       return indexes;

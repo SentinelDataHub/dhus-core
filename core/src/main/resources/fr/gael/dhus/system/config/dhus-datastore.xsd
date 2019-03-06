@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2016 GAEL Systems
+   Copyright (C) 2016,2017 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -38,7 +38,7 @@
    <xs:complexType name="dataStores">
       <xs:annotation>
          <xs:appinfo>
-            <inheritance:extends>fr.gael.dhus.database.object.config.ConfigurationPart</inheritance:extends>
+            <jxb:class name="DataStores" implClass="org.dhus.store.datastore.config.DataStoreManager" />
          </xs:appinfo>
       </xs:annotation>
       <xs:sequence>
@@ -46,17 +46,44 @@
       </xs:sequence>
    </xs:complexType>
 
-    <xs:complexType name="dataStoreConf" abstract="true">
-        <xs:attribute name="name" type="xs:string" use="required" />
-        <xs:attribute name="readOnly" type="xs:boolean" default="false" />
-    </xs:complexType>
+   <xs:complexType name="dataStoreConf" abstract="true">
+      <xs:sequence>
+         <xs:element name="evictionName" type="xs:string" minOccurs="0" maxOccurs="1"/>
+      </xs:sequence>
+      <xs:attribute name="readOnly" type="xs:boolean" default="false" />
+      <xs:attribute name="priority" type="xs:int" default="100" />
+      <xs:attribute name="maximumSize" type="xs:long" default="-1" />
+      <xs:attribute name="currentSize" type="xs:long" default="0" />
+      <xs:attribute name="autoEviction" type="xs:boolean" default="false" />
+   </xs:complexType>
+
+   <xs:complexType name="namedDataStoreConf" abstract="true">
+      <xs:complexContent>
+         <xs:extension base="dhusDataStore:dataStoreConf">
+            <xs:attribute name="name" type="xs:string" use="required" />
+         </xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
 
    <xs:complexType name="hfsDataStoreConf">
       <xs:complexContent>
-         <xs:extension base="dhusDataStore:dataStoreConf">
+         <xs:extension base="dhusDataStore:namedDataStoreConf">
             <xs:sequence>
                <xs:element name="path" type="xs:string" minOccurs="1" maxOccurs="1" />
-               <xs:element name="maxFileNo" type="xs:int" minOccurs="1" maxOccurs="1" />
+               <xs:element name="maxFileNo" minOccurs="0" maxOccurs="1" default="10">
+                  <xs:simpleType>
+                     <xs:restriction base="xs:int">
+                        <xs:minExclusive value="4"></xs:minExclusive>
+                     </xs:restriction>
+                  </xs:simpleType>
+               </xs:element>
+               <xs:element name="maxItems" minOccurs="0" maxOccurs="1" default="1024">
+                  <xs:simpleType>
+                     <xs:restriction base="xs:int">
+                        <xs:minExclusive value="9"></xs:minExclusive>
+                     </xs:restriction>
+                  </xs:simpleType>
+               </xs:element>
             </xs:sequence>
          </xs:extension>
       </xs:complexContent>
@@ -64,7 +91,7 @@
 
    <xs:complexType name="openStackDataStoreConf">
       <xs:complexContent>
-         <xs:extension base="dhusDataStore:dataStoreConf">
+         <xs:extension base="dhusDataStore:namedDataStoreConf">
             <xs:sequence>
                <xs:element name="provider" type="xs:string" minOccurs="1" maxOccurs="1" />
                <xs:element name="identity" type="xs:string" minOccurs="1" maxOccurs="1" />
@@ -73,6 +100,65 @@
                <xs:element name="container" type="xs:string" minOccurs="1" maxOccurs="1" />
                <xs:element name="region" type="xs:string" minOccurs="1" maxOccurs="1" />
             </xs:sequence>
+         </xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
+
+   <xs:complexType name="remoteDhusDataStoreConf">
+      <xs:complexContent>
+         <xs:extension base="dhusDataStore:namedDataStoreConf">
+            <xs:sequence>
+               <xs:element name="serviceUrl" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="login" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="password" type="xs:string" minOccurs="1" maxOccurs="1" />
+            </xs:sequence>
+         </xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
+
+   <xs:complexType name="gmpDataStoreConf">
+      <xs:complexContent>
+         <xs:extension base="dhusDataStore:namedDataStoreConf">
+            <xs:sequence>
+               <xs:element name="mysqlConnectionInfo" minOccurs="1" maxOccurs="1">
+                  <xs:complexType>
+                     <xs:simpleContent>
+                        <xs:extension base="xs:string">
+                           <xs:attribute name="user"     type="xs:string" use="required" />
+                           <xs:attribute name="password" type="xs:string" use="required" />
+                        </xs:extension>
+                     </xs:simpleContent>
+                  </xs:complexType>
+               </xs:element>
+               <xs:element name="configuration" minOccurs="1" maxOccurs="1">
+                  <xs:complexType>
+                     <xs:attribute name="agentid"  type="xs:string" use="required" />
+                     <xs:attribute name="targetid" type="xs:string" use="required" />
+                  </xs:complexType>
+               </xs:element>
+               <xs:element name="gmpRepoLocation" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="hfsLocation" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="maxQueuedRequest" type="xs:int" minOccurs="0" maxOccurs="1" />
+               <xs:element name="quotas" minOccurs="0" maxOccurs="1">
+                  <xs:complexType>
+                     <xs:attribute name="maxQueryPerUser" default="10">
+                        <xs:simpleType>
+                           <xs:restriction base="xs:int">
+                              <xs:minExclusive value="0" />
+                           </xs:restriction>
+                        </xs:simpleType>
+                     </xs:attribute>
+                     <xs:attribute name="timespan" default="2628000000"><!-- 1 month -->
+                        <xs:simpleType>
+                           <xs:restriction base="xs:long">
+                              <xs:minExclusive value="0" />
+                           </xs:restriction>
+                        </xs:simpleType>
+                     </xs:attribute>
+                  </xs:complexType>
+               </xs:element>
+            </xs:sequence>
+            <xs:attribute name="isMaster" type="xs:boolean" default="false" />
          </xs:extension>
       </xs:complexContent>
    </xs:complexType>

@@ -17,18 +17,6 @@
 			    <ThresholdFilter level="WARN"/>
 			</Filters>
 		</Console>
-		<RollingFile name="RollingFile" fileName="dhus.log"
-			filePattern="dhus-%d{yyyy-MM-dd}.log">
-			<PatternLayout>
-				<Pattern>${pattern}</Pattern>
-			</PatternLayout>
-			<Policies>
-				<TimeBasedTriggeringPolicy interval="1" modulate="true" />
-			</Policies>
-			<Filters>
-			    <ThresholdFilter level="DEBUG"/>
-			</Filters>
-		</RollingFile>
 	</Appenders>
 	<Loggers>
 		<logger name="fr.gael.dhus" level="info"/>
@@ -37,7 +25,6 @@
 		<Root level="info">
 			<AppenderRef ref="stderr" />
 			<AppenderRef ref="stdout" />
-			<AppenderRef ref="RollingFile" />
 		</Root>
 	</Loggers>
 </Configuration>

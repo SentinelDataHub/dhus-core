@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,12 +22,13 @@ package fr.gael.dhus.olingo.v1.entity;
 import fr.gael.dhus.database.object.MetadataIndex;
 import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.User;
-import fr.gael.dhus.datastore.processing.ProcessingUtils;
+import fr.gael.dhus.datastore.Destination;
 import fr.gael.dhus.network.RegulatedInputStream;
 import fr.gael.dhus.network.RegulationException;
 import fr.gael.dhus.network.TrafficDirection;
 import fr.gael.dhus.olingo.Security;
 import fr.gael.dhus.olingo.v1.Expander;
+import fr.gael.dhus.olingo.v1.ExpectedException;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidKeyException;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidMediaException;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidTargetException;
@@ -43,6 +44,7 @@ import fr.gael.dhus.service.ProductService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.util.DownloadActionRecordListener;
 import fr.gael.dhus.util.DownloadStreamCloserListener;
+import fr.gael.dhus.util.UnZip;
 
 import fr.gael.drb.DrbNode;
 import fr.gael.drb.impl.DrbNodeImpl;
@@ -59,17 +61,29 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import org.apache.commons.io.IOUtils;
+
 import org.apache.commons.net.io.CopyStreamAdapter;
 import org.apache.commons.net.io.CopyStreamListener;
 
+import org.apache.olingo.odata2.api.commons.HttpStatusCodes;
 import org.apache.olingo.odata2.api.exception.ODataException;
 import org.apache.olingo.odata2.api.processor.ODataResponse;
 import org.apache.olingo.odata2.api.processor.ODataSingleProcessor;
 import org.apache.olingo.odata2.api.uri.NavigationSegment;
 
+import org.dhus.store.datastore.async.AsyncProduct;
+import org.dhus.store.derived.DerivedProductStore;
+import org.dhus.store.derived.DerivedProductStoreService;
+import org.dhus.store.datastore.remotedhus.RemoteDhusProduct;
+import org.dhus.store.StoreException;
+import org.dhus.store.StoreService;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.DataStoreProduct;
-import org.dhus.store.datastore.DataStoreService;
+import org.dhus.store.quota.QuotaException;
 
 /**
  * A OData representation of a DHuS Product.
@@ -82,8 +96,13 @@ public class Product extends Node implements Closeable
    private static final ProductService PRODUCT_SERVICE =
       ApplicationContextProvider.getBean (ProductService.class);
 
-   private static final DataStoreService DATA_STORE_SERVICE =
-         ApplicationContextProvider.getBean(DataStoreService.class);
+   private static final StoreService STORE_SERVICE =
+         ApplicationContextProvider.getBean(StoreService.class);
+
+   private static final DerivedProductStoreService DERIVED_PRODUCT =
+         ApplicationContextProvider.getBean(DerivedProductStoreService.class);
+
+   private static final Logger LOGGER = LogManager.getLogger();
 
    private DataStoreProduct physical;
    private Map<String, Product> products;
@@ -94,15 +113,34 @@ public class Product extends Node implements Closeable
 
    public static void delete(String uuid, String cause) throws ODataException
    {
+      delete(uuid, cause, false);
+   }
+
+   public static void delete(String uuid, String cause, boolean purge) throws ODataException
+   {
       if (Security.currentUserHasRole(Role.DATA_MANAGER))
       {
-         fr.gael.dhus.database.object.Product p =
-               PRODUCT_SERVICE.systemGetProduct (uuid);
+         fr.gael.dhus.database.object.Product p = PRODUCT_SERVICE.systemGetProduct(uuid);
          if (p == null)
          {
             throw new InvalidKeyException(uuid, Product.class.getSimpleName());
          }
-         PRODUCT_SERVICE.systemDeleteProduct (p.getId (), true, cause);
+         try
+         {
+            long start = System.currentTimeMillis();
+            STORE_SERVICE.deleteProduct(uuid, Destination.TRASH, !purge, cause);
+
+            long totalTime = System.currentTimeMillis() - start;
+            // sysma logs
+            LOGGER.info("Deletion of product '{}' ({} bytes) successful spent {}ms",
+                  p.getIdentifier(),
+                  p.getSize(),
+                  totalTime);
+         }
+         catch (StoreException e)
+         {
+            LOGGER.warn("Cannot delete product {}: {}", uuid, e.getMessage());
+         }
       }
       else
       {
@@ -110,10 +148,38 @@ public class Product extends Node implements Closeable
       }
    }
 
-   public Product(fr.gael.dhus.database.object.Product product)
+   /**
+    * Factory method to create a Product entity from a database entry.
+    * Will either call {@link #Product(fr.gael.dhus.database.object.Product)}
+    * or {@link #Product(fr.gael.dhus.database.object.Product, DataStoreProduct)}
+    * depending on the situation (product is online).
+    *
+    * @param product a non null instance
+    * @return a Product entity
+    */
+   public static Product generateProduct(fr.gael.dhus.database.object.Product product)
+   {
+      try
+      {
+         return new Product(product, STORE_SERVICE.getPhysicalProduct(product.getUuid()));
+      }
+      catch (DataStoreException e)
+      {
+         return new Product(product);
+      }
+   }
+
+   protected Product(fr.gael.dhus.database.object.Product product)
    {
       super(product.getIdentifier () + ".zip");
       this.product = product;
+   }
+
+   protected Product(fr.gael.dhus.database.object.Product product, DataStoreProduct data)
+   {
+      super(data.getName());
+      this.product = product;
+      this.physical = data;
    }
 
    /**
@@ -126,20 +192,6 @@ public class Product extends Node implements Closeable
    @Override
    public fr.gael.dhus.olingo.v1.entity.Class getItemClass ()
    {
-      // Case of ingestion performed before DHuS 0.4.4
-      if (product.getItemClass () == null)
-      {
-         try
-         {
-            return new fr.gael.dhus.olingo.v1.entity.Class (
-               ProcessingUtils.getItemClassUri (ProcessingUtils
-                  .getClassFromProduct (this.product)));
-         }
-         catch (Exception e)
-         {
-            throw new UnsupportedOperationException ("Cannot find product.", e);
-         }
-      }
       return new fr.gael.dhus.olingo.v1.entity.Class (product.getItemClass ());
    }
 
@@ -164,7 +216,7 @@ public class Product extends Node implements Closeable
    @Override
    public Long getContentLength ()
    {
-      return product.getDownloadableSize();
+      return product.getSize();
    }
 
    @Override
@@ -173,8 +225,15 @@ public class Product extends Node implements Closeable
       int number = 0;
       if (this.product != null)
       {
-         if (this.product.getQuicklookFlag ()) number++;
-         if (this.product.getThumbnailFlag ()) number++;
+         String uuid = this.product.getUuid();
+         if (DERIVED_PRODUCT.hasDerivedProduct(uuid, DerivedProductStore.QUICKLOOK_TAG))
+         {
+            number++;
+         }
+         if (DERIVED_PRODUCT.hasDerivedProduct(uuid, DerivedProductStore.THUMBNAIL_TAG))
+         {
+            number++;
+         }
       }
       return number;
    }
@@ -221,6 +280,11 @@ public class Product extends Node implements Closeable
       return ! (product.getDownload ().getChecksums ().isEmpty ());
    }
 
+   public boolean isOnline()
+   {
+      return product.isOnline();
+   }
+
    public String getChecksumAlgorithm ()
    {
       if ( ! (hasChecksum ())) return null;
@@ -250,27 +314,21 @@ public class Product extends Node implements Closeable
    }
 
    // Getters
-   public Map<String, Product> getProducts ()
+   public Map<String, Product> getProducts()
    {
       if (this.products == null)
       {
-         Map<String, Product> products = new LinkedHashMap<String, Product> ();
-         if (this.product.getQuicklookFlag ())
+         Map<String, Product> products = new LinkedHashMap<>();
+         String uuid = this.product.getUuid();
+
+         if (DERIVED_PRODUCT.hasDerivedProduct(uuid, DerivedProductStore.QUICKLOOK_TAG))
          {
-            try
-            {
-               products.put("Quicklook", new QuicklookProduct(product));
-            }
-            catch (DataStoreException e) {}
+            products.put("Quicklook", QuicklookProduct.generateQuickLookProduct(product));
          }
 
-         if (this.product.getThumbnailFlag ())
+         if (DERIVED_PRODUCT.hasDerivedProduct(uuid, DerivedProductStore.THUMBNAIL_TAG))
          {
-            try
-            {
-               products.put("Thumbnail", new ThumbnailProduct(product));
-            }
-            catch (DataStoreException e) {}
+            products.put("Thumbnail", ThumbnailProduct.generateThumbnailProduct(product));
          }
          this.products = products;
       }
@@ -289,10 +347,15 @@ public class Product extends Node implements Closeable
             {
                this.drbNode = data.getImpl(DrbNode.class);
             }
-            // avoid product zip node
-            DrbNode first_child = this.drbNode.getFirstChild();
-            this.nodes = new LinkedHashMap<>();
-            this.nodes.put(first_child.getName(), new Node(first_child));
+
+            DrbNode node = this.drbNode;
+            if (UnZip.hasArchiveExtension(data.getName()) || data instanceof RemoteDhusProduct)
+            {
+               // skip product zip node or remote odata container
+               node = this.drbNode.getFirstChild();
+            }
+
+            this.nodes = Collections.singletonMap(node.getName(), new Node(node));
          }
          catch (DataStoreException | NullPointerException e)
          {
@@ -316,16 +379,6 @@ public class Product extends Node implements Closeable
          }
       }
       return this.attributes;
-   }
-
-   /**
-    * Returns the absolute local path to this product.
-    *
-    * @return path to this product.
-    */
-   public String getDownloadablePath ()
-   {
-      return product.getDownload ().getPath ();
    }
 
    public InputStream getInputStream () throws IOException
@@ -368,6 +421,7 @@ public class Product extends Node implements Closeable
       res.put (ProductEntitySet.CREATION_DATE, getCreationDate ());
       res.put (ProductEntitySet.EVICTION_DATE, getEvictionDate ());
       res.put (ProductEntitySet.CONTENT_GEOMETRY, getGeometry ());
+      res.put(ProductEntitySet.ONLINE, isOnline());
 
       try
       {
@@ -403,6 +457,7 @@ public class Product extends Node implements Closeable
          case ProductEntitySet.INGESTION_DATE: return getIngestionDate();
          case ProductEntitySet.EVICTION_DATE: return getEvictionDate();
          case ProductEntitySet.CONTENT_GEOMETRY: return getGeometry();
+         case ProductEntitySet.ONLINE: return isOnline();
          case ProductEntitySet.LOCAL_PATH:
          try
          {
@@ -444,18 +499,40 @@ public class Product extends Node implements Closeable
    public ODataResponse getEntityMedia(ODataSingleProcessor processor, boolean attach_stream)
          throws ODataException
    {
-      ODataResponse rsp = null;
+      User u = Security.getCurrentUser();
+      String user_name = (u == null ? null : u.getUsername());
+
       try
       {
-         InputStream is = null;
+         if (getPhysicalProduct() instanceof AsyncProduct)
+         {
+            if (attach_stream)
+            {
+               AsyncProduct.class.cast(getPhysicalProduct()).asyncFetchData();
+            }
+            return MediaResponseBuilder.prepareAsyncMediaResponse();
+         }
+      }
+      catch (DataStoreException ex)
+      {
+         Throwable th = ex.getCause();
+         if (th != null
+             && QuotaException.ParallelFetchResquestQuotaException.class.isAssignableFrom(th.getClass()))
+         {
+            throw new ExpectedException(th.getMessage(), HttpStatusCodes.FORBIDDEN);
+         }
+         throw new ExpectedException(ex.getMessage(), HttpStatusCodes.SERVICE_UNAVAILABLE);
+      }
+
+      ODataResponse rsp;
+      InputStream is = null;
+      try
+      {
          if (attach_stream)
          {
             is = new BufferedInputStream(getInputStream());
             if (requiresControl())
             {
-               User u = Security.getCurrentUser();
-               String user_name = (u == null ? null : u.getUsername());
-
                CopyStreamAdapter adapter = new CopyStreamAdapter();
                CopyStreamListener recorder =
                      new DownloadActionRecordListener(product.getUuid(), product.getIdentifier(), u);
@@ -490,10 +567,12 @@ public class Product extends Node implements Closeable
       // user generated errors and not internal problems
       catch (RegulationException e)
       {
+         IOUtils.closeQuietly(is);
          throw new MediaRegulationException(e.getMessage());
       }
       catch (IOException | DataStoreException e)
       {
+         IOUtils.closeQuietly(is);
          throw new InvalidMediaException(e.getMessage());
       }
       return rsp;
@@ -576,8 +655,25 @@ public class Product extends Node implements Closeable
    {
       if (null == this.physical)
       {
-         this.physical = DATA_STORE_SERVICE.get(product.getUuid()).getImpl(DataStoreProduct.class);
+         this.physical = STORE_SERVICE.getPhysicalProduct(product.getUuid());
       }
       return this.physical;
+   }
+
+   /**
+    * Returns product media filename.
+    *
+    * @return data filename or null if media is not found
+    */
+   public String getMediaName()
+   {
+      try
+      {
+         return getPhysicalProduct().getName();
+      }
+      catch (DataStoreException ex)
+      {
+         return null;
+      }
    }
 }

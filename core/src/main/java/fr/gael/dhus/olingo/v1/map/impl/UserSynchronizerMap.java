@@ -19,7 +19,6 @@
  */
 package fr.gael.dhus.olingo.v1.map.impl;
 
-import fr.gael.dhus.database.object.SynchronizerConf;
 import fr.gael.dhus.olingo.v1.entity.UserSynchronizer;
 import fr.gael.dhus.olingo.v1.map.AbstractDelegatingMap;
 import fr.gael.dhus.service.ISynchronizerService;
@@ -45,7 +44,9 @@ public class UserSynchronizerMap extends AbstractDelegatingMap<Long, UserSynchro
    {
       try
       {
-         return new UserSynchronizer(SYNC_SERVICE.getSynchronizerConfById(key));
+         return new UserSynchronizer(
+               SYNC_SERVICE.getSynchronizerConfById(key,
+                     fr.gael.dhus.database.object.config.synchronizer.UserSynchronizer.class));
       }
       catch (ODataException ex)
       {
@@ -56,8 +57,8 @@ public class UserSynchronizerMap extends AbstractDelegatingMap<Long, UserSynchro
    @Override
    protected Iterator<UserSynchronizer> serviceIterator()
    {
-      final Iterator<SynchronizerConf> it =
-            SYNC_SERVICE.getSynchronizerConfs("ODataUserSynchronizer");
+      final Iterator<fr.gael.dhus.database.object.config.synchronizer.UserSynchronizer> it =
+            SYNC_SERVICE.getSynchronizerConfs(fr.gael.dhus.database.object.config.synchronizer.UserSynchronizer.class);
       return new Iterator<UserSynchronizer>()
       {
          @Override

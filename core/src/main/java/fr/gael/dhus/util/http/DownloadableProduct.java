@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -21,6 +21,7 @@ package fr.gael.dhus.util.http;
 
 import fr.gael.dhus.database.object.Product;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.Channels;
@@ -55,7 +56,7 @@ import org.springframework.security.crypto.codec.Hex;
  * Both the Sink and Source channels of a pipe implement
  * {@link java.nio.channels.InterruptibleChannel}, making this class suitable for syncing tasks.
  */
-public class DownloadableProduct extends AbstractProduct
+public class DownloadableProduct extends AbstractProduct implements Closeable
 {
    /** Log. */
    private static final Logger LOGGER = LogManager.getLogger();
@@ -87,8 +88,11 @@ public class DownloadableProduct extends AbstractProduct
    /** `true` if remote supports HTTP ranges. */
    public final boolean canResume;
 
-   /** filename as reported in the Content-Disposition  */
+   /** filename as reported in the Content-Disposition. */
    public final String filename;
+
+   /** Downloading thread. */
+   private volatile Thread downloadThread = null;
 
    /** Downloads the given product (the URL returned by {@link Product#getOrigin()}) using the
     * given HTTP client.
@@ -182,8 +186,8 @@ public class DownloadableProduct extends AbstractProduct
          {
             Pipe pipe = Pipe.open();
             DownloadTask dltask = new DownloadTask(pipe);
-            Thread download_thread = new Thread(dltask, "Product Download");
-            download_thread.start();
+            downloadThread = new Thread(dltask, "Product Download");
+            downloadThread.start();
 
             InputStream is = Channels.newInputStream(pipe.source());
             return cl.cast(is);
@@ -194,6 +198,17 @@ public class DownloadableProduct extends AbstractProduct
          }
       }
       return null;
+   }
+
+   /**
+    * Interrupts the downloading thread.
+    */
+   public void close() throws IOException
+   {
+      if (downloadThread != null)
+      {
+         downloadThread.interrupt();
+      }
    }
 
    /** raise an IOException with the given StatusLine and cause Header (cause may be null). */
@@ -297,12 +312,19 @@ public class DownloadableProduct extends AbstractProduct
                }
             }
 
-            LOGGER.debug("Downloaded '{}' in {} ms", url, System.currentTimeMillis() - delta);
+            LOGGER.info("Product '{}' ({} bytes compressed) successfully downloaded from {} in {} ms", filename, contentLength, url, System.currentTimeMillis() - delta);
             pipe.sink().close();
          }
          catch (Exception e)
          {
-            LOGGER.debug("Download of {} failed", url, e);
+            if (InterruptedException.class.isAssignableFrom(e.getClass()))
+            {
+               LOGGER.debug("Thread downloading {} from {} interrupted", filename, url);
+            }
+            else
+            {
+               LOGGER.error("Download of {} from {} failed", filename, url, e);
+            }
             try
             {
                pipe.source().close(); // Will generate an IOException on the reader side

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -25,6 +25,7 @@ import fr.gael.dhus.olingo.v1.Model;
 import fr.gael.dhus.olingo.v1.entityset.ItemEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.NodeEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.ProductEntitySet;
+
 import org.apache.olingo.odata2.api.edm.EdmTyped;
 import org.apache.olingo.odata2.api.exception.ODataApplicationException;
 import org.apache.olingo.odata2.api.uri.expression.ExceptionVisitExpression;
@@ -63,7 +64,7 @@ public class ProductSQLVisitor extends SQLVisitor
          }
          case ItemEntitySet.CONTENT_LENGTH:
          {
-            member = new Member ("download.size");
+            member = new Member("size");
             break;
          }
          case ProductEntitySet.CREATION_DATE:
@@ -94,6 +95,11 @@ public class ProductSQLVisitor extends SQLVisitor
          case Model.TIME_RANGE_END:
          {
             member = new Member ("contentEnd");
+            break;
+         }
+         case ProductEntitySet.ONLINE:
+         {
+            member = new Member("online");
             break;
          }
 

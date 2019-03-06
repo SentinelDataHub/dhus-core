@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -29,7 +29,6 @@ import org.testng.annotations.Test;
 
 import fr.gael.dhus.database.object.KeyStoreEntry;
 import fr.gael.dhus.database.object.KeyStoreEntry.Key;
-import fr.gael.dhus.datastore.exception.DataStoreLocalArchiveNotExistingException;
 import fr.gael.dhus.util.TestContextLoader;
 
 @ContextConfiguration(
@@ -46,16 +45,16 @@ public class TestKeyStoreService extends AbstractTransactionalTestNGSpringContex
    private KeyStoreService keyStoreService;
 
    @Test
-   public void testCRUD() throws DataStoreLocalArchiveNotExistingException, InterruptedException
+   public void testCRUD() throws InterruptedException
    {
-      Key key = new Key("myStore", "key");
-      KeyStoreEntry kse = new KeyStoreEntry(key, "toto");
-      Key key2 = new Key("myStore", "key2");
+      Key key = new Key("myStore", "key", "tag");
+      KeyStoreEntry kse = new KeyStoreEntry(key, "toto", 0L);
+      Key key2 = new Key("myStore", "key2", "tag");
       keyStoreService.createEntry(kse);
-      Assert.assertEquals(keyStoreService.getEntry("myStore", "key").getValue(), "toto");
+      Assert.assertEquals(keyStoreService.getEntry("myStore", "key", "tag").getValue(), "toto");
       Assert.assertEquals(keyStoreService.getEntry(key).getValue(), "toto");
       Assert.assertEquals(keyStoreService.getEntry(key2), null);
-      Assert.assertEquals(keyStoreService.exists("myStore", "key"), true);
+      Assert.assertEquals(keyStoreService.exists("myStore", "key", "tag"), true);
       Assert.assertEquals(keyStoreService.exists(key), true);
       Assert.assertEquals(keyStoreService.exists(key2), false);
       kse.setValue("toto2");
@@ -68,11 +67,11 @@ public class TestKeyStoreService extends AbstractTransactionalTestNGSpringContex
    @Test(expectedExceptions = {DuplicateKeyException.class})
    public void testDoubleCreate()
    {
-      Key key = new Key("myStore", "key");
-      KeyStoreEntry kse = new KeyStoreEntry(key, "toto");
+      Key key = new Key("myStore", "key", "tag");
+      KeyStoreEntry kse = new KeyStoreEntry(key, "toto", 0L);
       keyStoreService.createEntry(kse);
       Assert.assertEquals(keyStoreService.getEntry(key).getValue(), "toto");
-      KeyStoreEntry kse2 = new KeyStoreEntry(key, "toto3");
+      KeyStoreEntry kse2 = new KeyStoreEntry(key, "toto3", 0L);
       keyStoreService.createEntry(kse2);
    }
 }

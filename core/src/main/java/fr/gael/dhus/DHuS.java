@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,43 +19,40 @@
  */
 package fr.gael.dhus;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.Scanner;
-import java.util.TimeZone;
-
 import fr.gael.dhus.database.DatabasePostInit;
-import fr.gael.dhus.database.object.DataStoreConfiguration;
-import fr.gael.dhus.database.object.config.system.IncomingConfiguration;
 import fr.gael.dhus.search.SolrDao;
 import fr.gael.dhus.server.http.TomcatException;
 import fr.gael.dhus.server.http.TomcatServer;
 import fr.gael.dhus.server.http.webapp.WebApplication;
-import fr.gael.dhus.service.DataStoreConfService;
 import fr.gael.dhus.service.ISynchronizerService;
 import fr.gael.dhus.service.SystemService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.system.config.ConfigurationException;
 import fr.gael.dhus.system.config.ConfigurationManager;
+import fr.gael.dhus.util.UncaughtExceptionHandler;
 
 import fr.gael.drb.DrbItem;
 import fr.gael.drb.impl.DrbFactoryResolver;
 import fr.gael.drbx.cortex.DrbCortexMetadataResolver;
 import fr.gael.drbx.cortex.DrbCortexModel;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.Map;
+import java.util.Scanner;
+import java.util.TimeZone;
+
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.io.IoBuilder;
+
 import org.dhus.store.datastore.DataStoreFactory;
-import org.dhus.store.datastore.DataStoreService;
+import org.dhus.store.datastore.DataStoreManager;
 import org.dhus.store.datastore.config.DataStoreConf;
-import org.dhus.store.datastore.config.HfsDataStoreConf;
 
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
-
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.io.IoBuilder;
 
 /**
  * DHuS Main class.
@@ -73,11 +70,11 @@ public class DHuS
    /** Apache Tomcat: HTTP server, servlet container, JSP processor, ... */
    private static TomcatServer server;
 
-   //** FTP server. */
-   //private static FtpServer ftp;
-
    static
    {
+      // Overriding default BusFactory to remove the ClientAbortException stacktrace
+      System.setProperty("org.apache.cxf.bus.factory","fr.gael.dhus.util.log.ClientAbortRemovalBusFactory");
+
       // Sets up the JUL --> Log4J brigde
       System.setProperty("java.util.logging.manager", "org.apache.logging.log4j.jul.LogManager");
       LOGGER = LogManager.getFormatterLogger(DHuS.class);
@@ -121,21 +118,27 @@ public class DHuS
          System.exit (1);
       }
 
-      Runtime.getRuntime ().addShutdownHook (new Thread (new Runnable ()
+      Runtime.getRuntime().addShutdownHook(new Thread(new Runnable()
       {
          @Override
-         public void run ()
+         public void run()
          {
-            if ((server != null) && server.isRunning ())
+            ConfigurationManager cfg = ApplicationContextProvider.getBean(ConfigurationManager.class);
+            if (cfg != null)
             {
                try
                {
-                  server.stop ();
+                  cfg.saveConfiguration();
                }
-               catch (TomcatException e)
+               catch (ConfigurationException e) {}
+            }
+            if ((server != null) && server.isRunning())
+            {
+               try
                {
-                  e.printStackTrace ();
+                  server.stop();
                }
+               catch (TomcatException e) {}
             }
          }
       }));
@@ -163,62 +166,34 @@ public class DHuS
       //logger.info (new Message(MessageType.SYSTEM,
       //"Loading Data Hub Service..."));
 
+      ClassPathXmlApplicationContext migrationContext =
+            new ClassPathXmlApplicationContext("classpath:fr/gael/dhus/spring/dhus-core-migration.xml");
+      migrationContext.close();
+
       ClassPathXmlApplicationContext context
             = new ClassPathXmlApplicationContext (
                   "classpath:fr/gael/dhus/spring/dhus-core-context.xml");
       context.registerShutdownHook ();
 
-      // Loading DataStores defined in user configuration and database
       ConfigurationManager config = context.getBean(ConfigurationManager.class);
-      List<DataStoreConf> datastores = config.getDataStoresConf();
-      DataStoreService ds_service = context.getBean(DataStoreService.class);
-      DataStoreConfService dsc_service = context.getBean(DataStoreConfService.class);
 
-      for (DataStoreConfiguration conf: dsc_service.getDataStoreConfigurations())
-      {
-         ds_service.add(DataStoreFactory.createDataStore(conf));
-      }
-      for (DataStoreConf conf : datastores)
-      {
-         ds_service.add(DataStoreFactory.createDataStore(conf));
-      }
-
-      // Add old incoming to HFS datastore
-      IncomingConfiguration old_conf = config.getArchiveConfiguration().getIncomingConfiguration();
-      String incoming_path = old_conf.getPath();
-      if (!incoming_path.trim().isEmpty())
-      {
-         if (ds_service.list().isEmpty())
-         {
-            // Incoming Adapter read/write
-            HfsDataStoreConf ds_incoming = new HfsDataStoreConf();
-            ds_incoming.setName("OldIncomingAdapter");
-            ds_incoming.setReadOnly(false);
-            ds_incoming.setPath(incoming_path);
-            ds_incoming.setMaxFileNo(old_conf.getMaxFileNo());
-            ds_service.add(DataStoreFactory.createDataStore(ds_incoming));
-            // Old incoming read only
-            ds_service.add(DataStoreFactory.getOldIncomingDataStore());
-         }
-         else
-         {
-            // Old incoming is read only if there is at least one other datastore
-            ds_service.add(DataStoreFactory.getOldIncomingDataStore());
-         }
-      }
-
-      // Registers ContextClosedEvent listeners to properly save states before
-      // the Spring context is destroyed.
-      ApplicationListener sync_sv = context.getBean (ISynchronizerService.class);
-      context.addApplicationListener (sync_sv);
-
-      // Initialize DHuS loggers
-      //jmsAppender.cleanWaitingLogs ();
-      //logger.info (new Message(MessageType.SYSTEM, "DHuS Started"));
       try
       {
-         //ftp = xml.getBean (FtpServer.class);
-         //ftp.start ();
+         // Adding DataStores to the manager
+         DataStoreManager ds_manager = context.getBean(DataStoreManager.class);
+         for (DataStoreConf conf: config.getDataStoreManager().getAllDataStoreConfigurations())
+         {
+            ds_manager.add(DataStoreFactory.createDataStore(conf));
+         }
+
+         // Registers ContextClosedEvent listeners to properly save states before
+         // the Spring context is destroyed.
+         ApplicationListener sync_sv = context.getBean (ISynchronizerService.class);
+         context.addApplicationListener (sync_sv);
+
+         // Initialize DHuS loggers
+         //jmsAppender.cleanWaitingLogs ();
+         //logger.info (new Message(MessageType.SYSTEM, "DHuS Started"));
 
          server = ApplicationContextProvider.getBean (TomcatServer.class);
          server.init ();
@@ -238,7 +213,7 @@ public class DHuS
                context.getBeansOfType (WebApplication.class);
          for (String beanName: webapps.keySet ())
          {
-            server.install (webapps.get (beanName));
+            server.install(webapps.get(beanName));
          }
 
          context.getBean(DatabasePostInit.class).init();
@@ -256,7 +231,6 @@ public class DHuS
       {
          LOGGER.error ("Cannot start system.", e);
          //logger.error (new Message(MessageType.SYSTEM, "Cannot start DHuS."), e);
-         //ftp.stop ();
          if (context != null) context.close ();
          System.exit (1);
       }
@@ -269,7 +243,6 @@ public class DHuS
    public static void stop (int exit_code)
    {
       //logger.info (new Message(MessageType.SYSTEM, "DHuS Shutdown "));
-      //ftp.stop ();
       System.exit (exit_code);
    }
 
@@ -307,6 +280,8 @@ public class DHuS
     */
    public static void main(String[] args)
    {
+      Thread.setDefaultUncaughtExceptionHandler(UncaughtExceptionHandler.INSTANCE);
+      Thread.currentThread().setUncaughtExceptionHandler(UncaughtExceptionHandler.INSTANCE);
       boolean printVersion = false;
       if (args.length != 0)
       {

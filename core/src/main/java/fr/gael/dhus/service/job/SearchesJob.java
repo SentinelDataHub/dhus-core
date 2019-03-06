@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,7 +19,6 @@
  */
 package fr.gael.dhus.service.job;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -94,7 +93,7 @@ public class SearchesJob extends AbstractJob
          return;
       }
       Map <String,String>cids= new HashMap<String, String> ();
-      for (User user:userDao.readNotDeleted ())
+      for (User user:userDao.readNotAdmin ())
       {
          List<Search>searches = userDao.getUserSearches (user);
          if (searches == null || (searches.size ()==0)) 
@@ -231,32 +230,8 @@ public class SearchesJob extends AbstractJob
                         .getExternalUrl () + "odata/v1/Products('" +
                         product.getUuid () + "')";
                   
-                  // EMBEDED THUMBNAIL
                   String cid=null;
-                  if (product.getThumbnailFlag ())
-                  {
-                     File thumbnail = new File (product.getThumbnailPath ());
-                     String thumbname = thumbnail.getName ();
-                     if (cids.containsKey (thumbname))
-                     {
-                        cid=cids.get (thumbname);
-                     }
-                     else
-                     {
-                        try
-                        {
-                           cid = he.embed (thumbnail);
-                           cids.put (thumbname, cid);
-                        }
-                        catch (Exception e)
-                        {
-                           LOGGER.warn("Cannot embed image \"" + purl +
-                                 "/Products('Quicklook')/$value\" :"+
-                                 e.getMessage ());
-                           cid=null;
-                        }
-                     }
-                  }
+                 
                   boolean downloadRight = user.getRoles ().contains (
                         Role.DOWNLOAD);
                   String link = downloadRight?"(<a target=\"_blank\" href=\"" +
@@ -267,17 +242,6 @@ public class SearchesJob extends AbstractJob
                         "solid #205887;\"><a target=\"_blank\" href=\"" +
                         purl + "/$value\">" + product.getIdentifier () +
                         "</a> "+link+"</td>\n</tr>\n";
-                  if (cid != null)
-                  {
-                     message += "   <tr><td rowspan=\"8\" style=\"" +
-                           "text-align: center; vertical-align: middle;" +
-                           " border-left: 1px solid #205887;\">" +
-                           "<a target=\"_blank\" href=\"" + purl +
-                           "/Products('Quicklook')/$value\"><img src=cid:" +
-                           cid  + " style=\"max-height: 64px; max-width:" +
-                           " 64px;\"></a></td>\n";
-                  }
-                                    
                   // Displays metadata
                   List<MetadataIndex>indexes = new ArrayList<> (
                         productService.getIndexes (product.getId ()));

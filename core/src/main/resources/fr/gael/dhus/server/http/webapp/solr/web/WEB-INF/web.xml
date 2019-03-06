@@ -40,6 +40,7 @@
          version="2.5"
          metadata-complete="true">
 
+  <distributable/>
 
   <!-- Uncomment if you are trying to use a Resin version before 3.0.19.
     Their XML implementation isn't entirely compatible with Xerces.

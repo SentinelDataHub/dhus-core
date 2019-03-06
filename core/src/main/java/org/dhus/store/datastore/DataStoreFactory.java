@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,75 +19,132 @@
  */
 package org.dhus.store.datastore;
 
-import fr.gael.dhus.database.object.DataStoreConfiguration;
-import fr.gael.dhus.database.object.OpenstackDataStoreConf;
+import fr.gael.dhus.service.SecurityService;
+import fr.gael.dhus.service.StoreQuotaService;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
+
+import java.io.IOException;
+import java.net.URISyntaxException;
+
+import org.apache.olingo.odata2.api.exception.ODataException;
+import org.dhus.store.datastore.async.gmp.GmpDataStore;
 import org.dhus.store.datastore.config.DataStoreConf;
+import org.dhus.store.datastore.config.RemoteDhusDataStoreConf;
+import org.dhus.store.datastore.config.GmpDataStoreConf;
 import org.dhus.store.datastore.config.HfsDataStoreConf;
+import org.dhus.store.datastore.config.NamedDataStoreConf;
 import org.dhus.store.datastore.config.OpenStackDataStoreConf;
 import org.dhus.store.datastore.hfs.HfsDataStore;
 import org.dhus.store.datastore.hfs.HfsManager;
-import org.dhus.store.datastore.hfs.OldIncomingDataStore;
 import org.dhus.store.datastore.openstack.OpenStackDataStore;
+import org.dhus.store.datastore.remotedhus.RemoteDhusDataStore;
+import org.dhus.store.quota.FetchLimiterAsyncDataSource;
 
 final public class DataStoreFactory
 {
-   public static DataStore createDataStore(DataStoreConf configuration)
+   public static DataStore createDataStore(DataStoreConf configuration) throws InvalidConfigurationException
    {
-      String name = configuration.getName();
       boolean read_only = configuration.isReadOnly();
+      int priority = configuration.getPriority();
+      long maximumSize = configuration.getMaximumSize();
+      long currentSize = configuration.getCurrentSize();
+      boolean autoEviction = configuration.isAutoEviction();
 
-      if (configuration instanceof HfsDataStoreConf)
+      if (configuration instanceof NamedDataStoreConf)
       {
-         HfsDataStoreConf conf = (HfsDataStoreConf) configuration;
-         String path = conf.getPath();
-         int file_no = conf.getMaxFileNo();
+         NamedDataStoreConf n_conf = NamedDataStoreConf.class.cast(configuration);
+         String name = n_conf.getName();
 
-         return new HfsDataStore(name, new HfsManager(path, file_no), read_only);
+         if (configuration instanceof HfsDataStoreConf)
+         {
+            HfsDataStoreConf conf = (HfsDataStoreConf) configuration;
+
+            return new HfsDataStore(
+                  name,
+                  new HfsManager(conf.getPath(), conf.getMaxFileNo(), conf.getMaxItems()),
+                  read_only,
+                  priority,
+                  maximumSize,
+                  currentSize,
+                  autoEviction);
+         }
+
+         if (configuration instanceof OpenStackDataStoreConf)
+         {
+            OpenStackDataStoreConf conf = (OpenStackDataStoreConf) configuration;
+            return new OpenStackDataStore(
+                  name,
+                  conf.getProvider(),
+                  conf.getIdentity(),
+                  conf.getCredential(),
+                  conf.getUrl(),
+                  conf.getContainer(),
+                  conf.getRegion(),
+                  read_only,
+                  priority,
+                  maximumSize,
+                  currentSize,
+                  autoEviction);
+         }
+
+         if (configuration instanceof GmpDataStoreConf)
+         {
+            GmpDataStoreConf conf = GmpDataStoreConf.class.cast(configuration);
+            GmpDataStore gmpDs;
+            try
+            {
+               gmpDs = GmpDataStore.make(conf);
+            }
+            catch (DataStoreException e)
+            {
+               throw new InvalidConfigurationException(e.getMessage(), e);
+            }
+            if (conf.getQuotas() != null)
+            {
+               SecurityService secuSvc = ApplicationContextProvider.getBean(SecurityService.class);
+               StoreQuotaService quotaSvc = ApplicationContextProvider.getBean(StoreQuotaService.class);
+               int maxQPU = conf.getQuotas().getMaxQueryPerUser();
+               long timespan = conf.getQuotas().getTimespan();
+               return new FetchLimiterAsyncDataSource<GmpDataStore>(gmpDs, secuSvc, quotaSvc, maxQPU, timespan);
+            }
+            return gmpDs;
+         }
+
+         if(configuration instanceof RemoteDhusDataStoreConf)
+         {
+            RemoteDhusDataStoreConf dhusDataStoreConf = (RemoteDhusDataStoreConf) configuration;
+            try
+            {
+               // always read only
+               // no auto eviction or size management supported
+               return new RemoteDhusDataStore(
+                     dhusDataStoreConf.getName(),
+                     dhusDataStoreConf.getServiceUrl(),
+                     dhusDataStoreConf.getLogin(),
+                     dhusDataStoreConf.getPassword(),
+                     dhusDataStoreConf.getPriority());
+            }
+            catch (URISyntaxException | IOException | ODataException e)
+            {
+               throw new InvalidConfigurationException(e.getMessage(), e);
+            }
+         }
       }
-
-      if (configuration instanceof OpenStackDataStoreConf)
-      {
-         OpenStackDataStoreConf conf = (OpenStackDataStoreConf) configuration;
-         String provider = conf.getProvider();
-         String id = conf.getIdentity();
-         String pwd = conf.getCredential();
-         String url = conf.getUrl();
-         String container = conf.getContainer();
-         String region = conf.getRegion();
-         return new OpenStackDataStore(name, provider, id, pwd, url, container, region, read_only);
-      }
-
-      throw new IllegalArgumentException("Invalid or unsupported dataStore configuration");
+      throw new InvalidConfigurationException("Invalid or unsupported dataStore configuration");
    }
 
-   public static DataStore getOldIncomingDataStore()
+   public static class InvalidConfigurationException extends Exception
    {
-      return new OldIncomingDataStore();
-   }
+      private static final long serialVersionUID = 1L;
 
-   /**
-    * Creates a datastore from the given configuration.
-    *
-    * @param configuration datastore configuration
-    * @return a datastore or null any error happened
-    */
-   public static DataStore createDataStore(DataStoreConfiguration configuration)
-   {
-      if (configuration instanceof fr.gael.dhus.database.object.HfsDataStoreConf)
+      public InvalidConfigurationException(String msg)
       {
-         fr.gael.dhus.database.object.HfsDataStoreConf conf =
-               (fr.gael.dhus.database.object.HfsDataStoreConf) configuration;
-         return new HfsDataStore(conf.getName(), new HfsManager(conf.getPath(),
-               conf.getMaxFileDepth()), conf.isReadOnly());
+         super(msg);
       }
-      else if (configuration instanceof OpenstackDataStoreConf)
+
+      public InvalidConfigurationException(String msg, Throwable e)
       {
-         OpenstackDataStoreConf conf = (OpenstackDataStoreConf) configuration;
-         return new OpenStackDataStore(conf.getName(), conf.getProvider(),
-               conf.getIdentity(), conf.getCredential(),
-               conf.getUrl().toString(), conf.getContainer(),
-               conf.getRegion(), conf.isReadOnly());
+         super(msg, e);
       }
-      return null;
    }
 }

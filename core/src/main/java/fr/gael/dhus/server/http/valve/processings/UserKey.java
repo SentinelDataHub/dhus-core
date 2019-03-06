@@ -19,10 +19,13 @@
  */
 package fr.gael.dhus.server.http.valve.processings;
 
+import java.io.Serializable;
+
 import fr.gael.dhus.server.http.valve.processings.ProcessingValve.UserSelection;
 
-public class UserKey
+public class UserKey implements Serializable
 {
+   private static final long serialVersionUID = 1L;
    ProcessingInformation pi;
    UserSelection[] selection;
 

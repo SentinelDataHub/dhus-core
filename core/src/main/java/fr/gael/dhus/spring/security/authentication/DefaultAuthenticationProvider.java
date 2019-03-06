@@ -72,6 +72,7 @@ public class DefaultAuthenticationProvider implements AuthenticationProvider
          ip = ((WebAuthenticationDetails)authentication.getDetails ())
                .getRemoteAddress ();
       }
+
       if (authentication.getDetails() instanceof ProxyWebAuthenticationDetails)
       {
          String proxyAddress = ((ProxyWebAuthenticationDetails) authentication.getDetails()).getProxyAddress();
@@ -85,7 +86,7 @@ public class DefaultAuthenticationProvider implements AuthenticationProvider
             authentication.getName(), (proxy != null ? ip + proxy : ip));
 
       User user = userService.getUserNoCheck (username);
-      if (user == null || user.isDeleted ())
+      if (user == null)
       {
          throw new BadCredentialsException (errorMessage);
       }
@@ -127,7 +128,7 @@ public class DefaultAuthenticationProvider implements AuthenticationProvider
       }
       
       LOGGER.info ("Connection success for '" + username + "' from " + ip);
-      return new ValidityAuthentication (user, user.getAuthorities ());
+      return new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
    }
 
    @Override

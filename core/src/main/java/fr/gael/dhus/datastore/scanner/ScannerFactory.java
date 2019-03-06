@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,6 +19,20 @@
  */
 package fr.gael.dhus.datastore.scanner;
 
+import com.hp.hpl.jena.ontology.OntClass;
+import com.hp.hpl.jena.ontology.OntProperty;
+import com.hp.hpl.jena.rdf.model.Statement;
+import com.hp.hpl.jena.rdf.model.StmtIterator;
+import com.hp.hpl.jena.util.iterator.ExtendedIterator;
+
+import fr.gael.dhus.database.object.config.scanner.ScannerInfo;
+import fr.gael.dhus.database.object.config.scanner.ScannerManager;
+import fr.gael.dhus.datastore.scanner.ScannerException.ScannerNotFoundException;
+import fr.gael.dhus.datastore.scanner.ScannerException.ScannerAlreadyRunningException;
+import fr.gael.dhus.system.config.ConfigurationManager;
+import fr.gael.drbx.cortex.DrbCortexItemClass;
+import fr.gael.drbx.cortex.DrbCortexModel;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -30,21 +44,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.hp.hpl.jena.ontology.OntClass;
-import com.hp.hpl.jena.ontology.OntProperty;
-import com.hp.hpl.jena.rdf.model.Statement;
-import com.hp.hpl.jena.rdf.model.StmtIterator;
-import com.hp.hpl.jena.util.iterator.ExtendedIterator;
-import fr.gael.dhus.database.object.Collection;
-import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.database.object.User;
-import fr.gael.dhus.service.FileScannerService;
-import fr.gael.dhus.service.ProductService;
-import fr.gael.drbx.cortex.DrbCortexItemClass;
-import fr.gael.drbx.cortex.DrbCortexModel;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
 import org.apache.olingo.odata2.api.exception.ODataException;
+
+import org.dhus.store.ingestion.IngestibleRawProduct;
+import org.dhus.store.ingestion.ProcessingManager;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -56,14 +63,12 @@ public class ScannerFactory
 {
    private static final Logger LOGGER = LogManager.getLogger(ScannerFactory.class);
 
-   @Autowired
-   private ProductService productService;
+   public static final SimpleDateFormat SDF = new SimpleDateFormat("EEEE dd MMMM yyyy - HH:mm:ss", Locale.ENGLISH);
 
    @Autowired
-   private FileScannerService fs_service;
+   private ConfigurationManager configurationManager;
 
-   private ConcurrentHashMap<Long, Scanner> runningScanners =
-         new ConcurrentHashMap<> ();
+   private final ConcurrentHashMap<Long, Scanner> RUNNING_SCANNERS = new ConcurrentHashMap<>();
 
    private String[] itemClasses;
 
@@ -225,63 +230,74 @@ public class ScannerFactory
    }
 
    /**
-    * Process passed file scanner attached to a the passed user within
-    * a separate thread. If the requested scanner is already running (
-    * from schedule or UI), it will not restart.
+    * Process passed file scanner in a separate thread.
+    * If the requested scanner is already running (from schedule or UI), it will not restart.
     *
     * @param scan_id
-    * @param user
-    * @throws ScannerException when scanner cannot be started.
+    * @throws ScannerException when scanner cannot be started
     */
-   public void processScan (final Long scan_id, final User user)
-         throws ScannerException
+   public void processScan(final Long scan_id) throws ScannerException
    {
-      SimpleDateFormat sdf = new SimpleDateFormat (
-            "EEEE dd MMMM yyyy - HH:mm:ss", Locale.ENGLISH);
-
       // Synchronize with runningScanner instance to avoid 2 simultaneous
       // scanners executions.
       // Running scanner hash table should contains the scanner, but during the
       // transition between scanner the status settings and the scanner 
       // initialization, runningScanner[scan_id] could contains null to avoid 
       // the same scanner being executed twice.
-      synchronized (runningScanners)
+      synchronized (RUNNING_SCANNERS)
       {
-         if (runningScanners.containsKey (scan_id))
+         if (RUNNING_SCANNERS.containsKey(scan_id))
          {
-            throw new ScannerException (
-                  "Scanner #" + scan_id + " already running.");
+            throw new ScannerAlreadyRunningException(scan_id);
          }
-         runningScanners.put (scan_id, new UninitilizedScanner ());
+         RUNNING_SCANNERS.put(scan_id, new UninitilizedScanner());
       }
 
-      fr.gael.dhus.database.object.FileScanner fs =
-            fs_service.getFileScanner (scan_id);
-      fs.setStatus (fr.gael.dhus.database.object.FileScanner.STATUS_RUNNING);
-      fs.setStatusMessage ("Started on " + sdf.format (new Date ()));
-      fs_service.updateFileScanner (fs);
+      ScannerManager scannerManager = configurationManager.getScannerManager();
+      ScannerInfo scannerInfo = scannerManager.get(scan_id);
+
+      if(scannerInfo == null)
+      {
+         throw new ScannerNotFoundException(scan_id);
+      }
+
+      scannerInfo.setStatus(ScannerManager.STATUS_RUNNING);
+      scannerInfo.setStatusMessage("Started on " + SDF.format(new Date()));
+      scannerManager.update(scannerInfo, false);
 
       // prepare scan
-      ScannerListener listener = new ScannerListener ();
-      Scanner scanner = getUploadScanner (fs.getUrl (), fs.getUsername (),
-            fs.getPassword (), fs.getPattern ());
-      scanner.getScanList ().addListener (listener);
-      Hook hook = new Hook (fs);
-      Runtime.getRuntime ().addShutdownHook (hook);
+      ScannerListener listener = new ScannerListener();
+      Scanner scanner = getUploadScanner(scannerInfo.getUrl(),
+            scannerInfo.getUsername(),
+            scannerInfo.getPassword(),
+            scannerInfo.getPattern());
+      scanner.getScanList().addListener(listener);
+      Hook hook = new Hook(scannerInfo);
+      Runtime.getRuntime().addShutdownHook(hook);
+
+      // replace UninitilizedScanner with actual scanner in runningScanners map so it can be stopped
+      RUNNING_SCANNERS.put(scan_id, scanner);
 
       // perform scan
-      runningScanners.put(scan_id, scanner);
       try
       {
          scanner.scan ();
       }
       catch (InterruptedException e)
       {
-         fs.setStatus (fr.gael.dhus.database.object.FileScanner.STATUS_OK);
-         fs.setStatusMessage (
-               "Scanner stopped by user on " + sdf.format (new Date ()));
-         fs_service.updateFileScanner (fs);
-         LOGGER.warn ("Scanner stop by a user");
+         scannerInfo.setStatus(ScannerManager.STATUS_OK);
+         scannerInfo.setStatusMessage("Scanner stopped by user on " + SDF.format(new Date()));
+         scannerManager.update(scannerInfo, false);
+         LOGGER.warn("Scanner #{} stop by a user", scan_id);
+         return;
+      }
+      catch (UnsupportedOperationException e)
+      {
+         scannerInfo.setStatus(ScannerManager.STATUS_ERROR);
+         scannerInfo.setStatusMessage("There was an error during Scanner execution :'" + e.getMessage() + "'");
+         scannerManager.update(scannerInfo, false);
+         LOGGER.error("Scanner #{}: There was an error during Scanner execution.", scan_id, e);
+         RUNNING_SCANNERS.remove(scan_id);
          return;
       }
 
@@ -289,18 +305,21 @@ public class ScannerFactory
       List<URL> waiting_product = listener.newlyProducts();
       if (waiting_product.isEmpty())
       {
-         runningScanners.remove(scan_id);
+         scannerInfo.setStatus(ScannerManager.STATUS_OK);
+         scannerInfo.setStatusMessage("No products scanned.");
+         scannerManager.update(scannerInfo, false);
+         RUNNING_SCANNERS.remove(scan_id);
          LOGGER.info("Scanner #{}: No products scanned.", scan_id);
          return;
       }
-      List<Collection> collections = fs_service.getScannerCollection(fs);
-      FileScannerWrapper wrapper = new FileScannerWrapper (fs)
+      List<String> collectionNames = scannerInfo.getCollectionList();
+      FileScannerWrapper wrapper = new FileScannerWrapper(scannerInfo)
       {
          @Override
          protected synchronized void processingsDone (String end_message)
          {
             super.processingsDone (end_message);
-            runningScanners.remove (scan_id);
+            RUNNING_SCANNERS.remove(scan_id);
          }
       };
       wrapper.setTotalProcessed (waiting_product.size ());
@@ -311,54 +330,55 @@ public class ScannerFactory
       {
          try
          {
-            Product p = productService.addProduct (url, user, url.toString ());
-            productService.processProduct (
-                  p, user, collections, scanner, wrapper);
+            ProcessingManager.processProduct(new IngestibleRawProduct(url), collectionNames, scanner, wrapper);
          }
          catch (RuntimeException e)
          {
             LOGGER.error("Unable to start ingestion.", e);
-            fs.setStatus(fr.gael.dhus.database.object.FileScanner.STATUS_ERROR);
-            fs.setStatusMessage (e.getMessage ());
-            fs_service.updateFileScanner (fs);
-            runningScanners.remove (scan_id);
+            scannerInfo.setStatus(ScannerManager.STATUS_ERROR);
+            scannerInfo.setStatusMessage(e.getMessage());
+            scannerManager.update(scannerInfo, false);
+            RUNNING_SCANNERS.remove(scan_id);
          }
       }
    }
 
-   public void stopScan (final Long scan_id)
-            throws ScannerException
+   /**
+    * @param scan_id ID of scanner to stop
+    * @return {@code false} if could not stop (scanner is not initialised)
+    */
+   public boolean stopScan(final Long scan_id)
    {
       Scanner scanner = null;
       // Thread-safe retrieve the scanner and remove it from the list.
-      synchronized (runningScanners)
+      synchronized (RUNNING_SCANNERS)
       {
-         scanner = runningScanners.get (scan_id);
+         scanner = RUNNING_SCANNERS.get(scan_id);
          if (scanner == null)
          {
             LOGGER.warn ("Scanner already stopped.");
-            return;
+            return true;
          }
          if (scanner instanceof UninitilizedScanner)
          {
             LOGGER.warn ("Scanner not initialized (retry stop later).");
-            return;
+            return false;
          }
-         runningScanners.remove(scan_id);
+         RUNNING_SCANNERS.remove(scan_id);
       }
 
-      fr.gael.dhus.database.object.FileScanner fileScanner =
-            fs_service.getFileScanner (scan_id);
-      if (fileScanner != null)
+      ScannerInfo scannerInfo = configurationManager.getScannerManager().get(scan_id);
+      if (scannerInfo != null)
       {
          // Just update the message
-         fileScanner.setStatusMessage (fileScanner.getStatusMessage () +
-            "<b>Interrupted</b>: waiting ongoing processings ends...<br>\n");
-         fs_service.updateFileScanner (fileScanner);
+         scannerInfo.setStatusMessage(scannerInfo.getStatusMessage()
+               + "Interrupted: waiting ongoing processings ends...");
+         configurationManager.getScannerManager().update(scannerInfo, false);
       }
 
       LOGGER.info ("Scanner stopped.");
       scanner.stop ();
+      return true;
    }
 
    /**
@@ -367,23 +387,21 @@ public class ScannerFactory
     */
    class Hook extends Thread
    {
-      private fr.gael.dhus.database.object.FileScanner scanner;
-      public Hook (fr.gael.dhus.database.object.FileScanner scanner)
+      private final ScannerInfo scanner;
+      public Hook(ScannerInfo scanner)
       {
          this.scanner = scanner;
       }
 
+      @Override
       public void run()
       {
-         scanner.setStatus (
-            fr.gael.dhus.database.object.FileScanner.STATUS_ERROR);
-         scanner.setStatusMessage (
-            scanner.getStatusMessage () +
-            "Scanner interrupted because DHuS stopped.");
-         fs_service.updateFileScanner (scanner);
+         scanner.setStatus(ScannerManager.STATUS_ERROR);
+         scanner.setStatusMessage(scanner.getStatusMessage() + "Scanner interrupted because DHuS stopped.");
+         configurationManager.getScannerManager().update(scanner, false);
       }
    }
-   
+
    /**
     * An internal scanner implementation to manage the scanner initialization 
     * transition.

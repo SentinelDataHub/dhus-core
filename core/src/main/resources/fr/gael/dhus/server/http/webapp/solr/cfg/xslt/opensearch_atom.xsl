@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2013,2014,2015 GAEL Systems
+   Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -26,17 +26,36 @@
 		xmlns:java="http://xml.apache.org/xslt/java"
       exclude-result-prefixes="java">
     <xsl:output method="xml" encoding="utf-8" indent="yes" media-type="application/atom+xml;charset=UTF-8" />
-    <xsl:template match="/">
-        <xsl:variable name="searchTerms" select="response/lst[@name='responseHeader']/lst[@name='params']/str[@name='q']" />
-        <xsl:variable name="totalHits" select="response/result/@numFound" />
-        <xsl:variable name="searchTimeSecs" select="number(response/lst[@name='responseHeader']/int[@name='QTime']) div 1000.0" />
-        <xsl:variable name="dhusLongname" select="response/lst[@name='responseHeader']/lst[@name='params']/str[@name='dhusLongName']" />
-        <xsl:variable name="originalQuery" select="response/lst[@name='responseHeader']/lst[@name='params']/str[@name='originalQuery']" />
-        <xsl:variable name="dhusServer" select="response/lst[@name='responseHeader']/lst[@name='params']/str[@name='dhusServer']" />
+    <!-- This template matches root element not having a <result> child (error) -->
+    <xsl:template match="/response[not(result)]">
+       <xsl:variable name="errorMessage" select="lst[@name='error']/str[@name='msg']" />
+       <xsl:variable name="errorCode"    select="lst[@name='error']/int[@name='code']" />
+       <feed xmlns="http://www.w3.org/2005/Atom" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+          <error>
+            <code><xsl:value-of select="$errorCode" /></code>
+            <message><xsl:value-of select="$errorMessage" /></message>
+          </error>
+       </feed>
+    </xsl:template>
+
+    <!-- This template matches root element having a <result> child -->
+    <xsl:template match="/response[result]">
+        <xsl:variable name="searchTerms" select="lst[@name='responseHeader']/lst[@name='params']/str[@name='q']" />
+        <xsl:variable name="totalHits" select="result/@numFound" />
+        <xsl:variable name="searchTimeSecs" select="number(lst[@name='responseHeader']/int[@name='QTime']) div 1000.0" />
+        <xsl:variable name="dhusLongname" select="lst[@name='responseHeader']/lst[@name='params']/str[@name='dhusLongName']" />
+        <xsl:variable name="originalQuery" select="lst[@name='responseHeader']/lst[@name='params']/str[@name='originalQuery']" />
+        <xsl:variable name="dhusServer" select="lst[@name='responseHeader']/lst[@name='params']/str[@name='dhusServer']" />
+        <xsl:variable name="format">
+            <xsl:if test="lst[@name='responseHeader']/lst[@name='params']/str[@name='format']">
+                <xsl:value-of select="concat('&amp;format=', lst[@name='responseHeader']/lst[@name='params']/str[@name='format'])" />
+            </xsl:if>
+        </xsl:variable>
+        <xsl:variable name="type" select="lst[@name='responseHeader']/lst[@name='params']/str[@name='type']" />
         <xsl:variable name="start">
             <xsl:choose>
-                <xsl:when test="response/lst[@name='responseHeader']/lst[@name='params']/str[@name='start'] != ''">
-                    <xsl:value-of select="response/lst[@name='responseHeader']/lst[@name='params']/str[@name='start']" />
+                <xsl:when test="lst[@name='responseHeader']/lst[@name='params']/str[@name='start'] != ''">
+                    <xsl:value-of select="lst[@name='responseHeader']/lst[@name='params']/str[@name='start']" />
                 </xsl:when>
                 <xsl:otherwise>
                     <xsl:value-of select="0" />
@@ -45,8 +64,8 @@
         </xsl:variable>
         <xsl:variable name="rows">
             <xsl:choose>
-                <xsl:when test="response/lst[@name='responseHeader']/lst[@name='params']/str[@name='rows'] != ''">
-                    <xsl:value-of select="response/lst[@name='responseHeader']/lst[@name='params']/str[@name='rows']" />
+                <xsl:when test="lst[@name='responseHeader']/lst[@name='params']/str[@name='rows'] != ''">
+                    <xsl:value-of select="lst[@name='responseHeader']/lst[@name='params']/str[@name='rows']" />
                 </xsl:when>
                 <xsl:otherwise>
                     <xsl:value-of select="10" />
@@ -54,7 +73,7 @@
             </xsl:choose>
         </xsl:variable>
         <xsl:variable name="orderby">
-            <xsl:if test="response/lst[@name='responseHeader']/lst[@name='params']/str[@name='orderby']">
+            <xsl:if test="lst[@name='responseHeader']/lst[@name='params']/str[@name='orderby']">
                 <xsl:value-of select="concat('&amp;orderby=', response/lst[@name='responseHeader']/lst[@name='params']/str[@name='orderby'])" />
             </xsl:if>
         </xsl:variable>
@@ -88,41 +107,32 @@
                 You should use XPath 2.0 functions to "escape-uri" these link href state transitions.
                 See http://wiki.apache.org/solr/XsltResponseWriter for help on switching to XPath 2.0
             -->
-            <link rel="self" type="application/atom+xml"
-                href="{$dhusServer}search?q={$originalQuery}&amp;start={$start}&amp;rows={$rows}{$orderby}" />
-            <link rel="first" type="application/atom+xml"
-                href="{$dhusServer}search?q={$originalQuery}&amp;start=0&amp;rows={$rows}{$orderby}" />
+            <link rel="self" type="{$type}"
+                href="{$dhusServer}search?q={$originalQuery}&amp;start={$start}&amp;rows={$rows}{$orderby}{$format}" />
+            <link rel="first" type="{$type}"
+                href="{$dhusServer}search?q={$originalQuery}&amp;start=0&amp;rows={$rows}{$orderby}{$format}" />
             <xsl:choose>
                 <xsl:when test="number($start) &gt; number($rows)">
                     <xsl:variable name="previous" select="(number($currentPage) - 1) * number($rows)" />
-                    <link rel="previous" type="application/atom+xml"
-                        href="{$dhusServer}search?q={$originalQuery}&amp;start={$previous}&amp;rows={$rows}{$orderby}" />
+                    <link rel="previous" type="{$type}"
+                        href="{$dhusServer}search?q={$originalQuery}&amp;start={$previous}&amp;rows={$rows}{$orderby}{$format}" />
                 </xsl:when>
             </xsl:choose>
             <xsl:choose>
                 <xsl:when test="number($totalHits) &gt; number($rows) and (number($totalHits) - number($start)) &gt; number($rows)">
                     <xsl:variable name="next" select="(number($currentPage) + 1) * number($rows)" />
-                    <link rel="next" type="application/atom+xml"
-                        href="{$dhusServer}search?q={$originalQuery}&amp;start={$next}&amp;rows={$rows}{$orderby}" />
+                    <link rel="next" type="{$type}"
+                        href="{$dhusServer}search?q={$originalQuery}&amp;start={$next}&amp;rows={$rows}{$orderby}{$format}" />
                 </xsl:when>
             </xsl:choose>
-            <link rel="last" type="application/atom+xml"
-                href="{$dhusServer}search?q={$originalQuery}&amp;start={number($totalHits) - 1}&amp;rows={$rows}{$orderby}" />
+            <link rel="last" type="{$type}"
+                href="{$dhusServer}search?q={$originalQuery}&amp;start={number($totalHits) - 1}&amp;rows={$rows}{$orderby}{$format}" />
             <!-- autodiscovery tag -->
             <link rel="search" type="application/opensearchdescription+xml"
                 href="opensearch_description.xml" />
-            <xsl:for-each select="response/result/doc">
+            <xsl:for-each select="result/doc">
                 <xsl:variable name="id" select="long[@name='id']" />
-                <xsl:variable name="uuid">
-                    <xsl:choose>
-                        <xsl:when test="str[@name='uuid'] != ''">
-                            <xsl:value-of select="str[@name='uuid']" />
-                        </xsl:when>
-                        <xsl:otherwise>
-                            <xsl:value-of select="java:fr.gael.dhus.search.SolrUtils.getUuidFromId(number($id))" />
-                        </xsl:otherwise>
-                    </xsl:choose>
-                </xsl:variable>
+                <xsl:variable name="uuid" select="str[@name='uuid']" />
                 <entry>
                     <title>
                         <xsl:value-of select="str[@name='identifier']" />
@@ -154,6 +164,7 @@
                     </summary>
                     <xsl:copy-of select="date" />
                     <xsl:copy-of select="int[@name != 'id' and @name != '_version_']" />
+                    <xsl:copy-of select="double" />
                     <xsl:copy-of select="str[@name != 'contents' and @name != 'path' and @name != 'user']" />
                 </entry>
             </xsl:for-each>

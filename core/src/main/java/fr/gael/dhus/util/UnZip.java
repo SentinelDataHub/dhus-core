@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -110,14 +110,34 @@ public class UnZip
       fis.close ();
    }
 
-   public static boolean supported (String file)
+   /**
+    * Checks whether the given filename ends with the extension of a known archive file format
+    * (.zip, .tar, .tgz, .tar.gz).
+    *
+    * @param filename to check
+    * @return true if filename ends with one of the supported extensions
+    */
+   public static boolean hasArchiveExtension(String filename)
+   {
+      return filename.toLowerCase().endsWith(".zip")
+          || filename.toLowerCase().endsWith(".tar")
+          || filename.toLowerCase().endsWith(".tgz")
+          || filename.toLowerCase().endsWith(".tar.gz");
+   }
+
+   /**
+    * Checks this existence of a file at the give path and whether this file is a zip.
+    * @param path
+    * @return
+    */
+   public static boolean supported (String path)
    {
       boolean is_supported =
-            file.toLowerCase ().endsWith (".zip")/* ||
+            path.toLowerCase ().endsWith (".zip")/* ||
           file.toLowerCase ().endsWith (".tar") ||
           file.toLowerCase ().endsWith (".tgz") ||
           file.toLowerCase ().endsWith (".tar.gz")*/;
-      File fileObject = new File (file);
+      File fileObject = new File (path);
       is_supported &= fileObject.exists () && fileObject.isFile ();
       return is_supported;
    }

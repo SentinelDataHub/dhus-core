@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,7 +19,10 @@
  */
 package fr.gael.dhus.service.job;
 
-import java.util.Date;
+import fr.gael.dhus.DHuS;
+import fr.gael.dhus.database.dao.interfaces.DaoUtils;
+import fr.gael.dhus.service.SearchService;
+import fr.gael.dhus.system.config.ConfigurationManager;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -30,87 +33,60 @@ import org.quartz.JobExecutionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import fr.gael.dhus.DHuS;
-import fr.gael.dhus.database.dao.interfaces.DaoUtils;
-import fr.gael.dhus.datastore.IncomingManager;
-import fr.gael.dhus.service.ProductService;
-import fr.gael.dhus.service.SearchService;
-import fr.gael.dhus.system.config.ConfigurationManager;
-
 /**
  * Autowired by {@link AutowiringJobFactory}
  */
 @Component
 public class SystemCheckJob extends AbstractJob
 {
-   private static final Logger LOGGER = LogManager.getLogger(SystemCheckJob.class);
-   private static boolean running = false; 
-   
-   @Autowired
-   private ProductService productService;
-   
+   private static final Logger LOGGER = LogManager.getLogger();
+   private static boolean running = false;
+
    @Autowired
    private SearchService searchService;
 
    @Autowired
    private ConfigurationManager configurationManager;
-   
-   @Autowired
-   private IncomingManager incomingManager;
-   
+
    @Override
-   public String getCronExpression ()
+   public String getCronExpression()
    {
-      return configurationManager.getSystemCheckCronConfiguration ().
-         getSchedule ();
+      return configurationManager.getSystemCheckCronConfiguration().getSchedule();
    }
 
    @Override
-   protected void executeInternal (JobExecutionContext arg0)
-      throws JobExecutionException
+   protected void executeInternal(JobExecutionContext arg0)
+         throws JobExecutionException
    {
-      if (!configurationManager.getSystemCheckCronConfiguration ().isActive ())
+      if (!configurationManager.getSystemCheckCronConfiguration().isActive())
+      {
          return;
+      }
       LOGGER.info("SCHEDULER : Check system consistency.");
-      if (!DHuS.isStarted ())
+      if (!DHuS.isStarted())
       {
          LOGGER.warn("SCHEDULER : Not run while system not fully initialized.");
          return;
       }
       if (!running)
       {
-         running=true;
+         running = true;
          try
-         {   
-            long time_start = System.currentTimeMillis ();
-            LOGGER.info("Control of Database coherence...");
-            long start = new Date ().getTime ();
-            productService.checkDBProducts ();
-            LOGGER.info("Control of Database coherence spent " +
-                     (new Date ().getTime ()-start) + " ms");
-
+         {
             LOGGER.info("Control of Indexes coherence...");
-            start = new Date ().getTime ();
+            long start = System.currentTimeMillis();
             searchService.checkIndex();
-            LOGGER.info("Control of Indexes coherence spent " +
-                     (new Date ().getTime ()-start) + " ms");
-
-            LOGGER.info("Control of incoming folder coherence...");
-            start = new Date ().getTime ();
-            incomingManager.checkIncomming ();
-            LOGGER.info("Control of incoming folder coherence spent " +
-                     (new Date ().getTime ()-start) + " ms");
+            LOGGER.info("Control of Indexes coherence spent {} ms", (System.currentTimeMillis() - start));
 
             LOGGER.info("Optimizing database...");
-            DaoUtils.optimize ();
-            
-            LOGGER.info("SCHEDULER : Check system consistency done - " +
-               (System.currentTimeMillis ()-time_start) + "ms");
+            DaoUtils.optimize();
+
+            LOGGER.info("SCHEDULER : Check system consistency done - {}ms", (System.currentTimeMillis() - start));
 
          }
          finally
          {
-            running=false;
+            running = false;
          }
       }
    }

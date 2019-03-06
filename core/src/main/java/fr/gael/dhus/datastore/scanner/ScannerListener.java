@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016 GAEL Systems
+ * Copyright (C) 2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -39,11 +39,6 @@ public class ScannerListener implements AsynchronousLinkedList.Listener<URLExt>
 {
    private static final Logger LOGGER = LogManager.getLogger();
 
-   private static final String LOG_PATTERN = "Product at '{}' is {}";
-   private static final String WAITING_INGESTION = "waiting for ingestion.";
-   private static final String INGESTED = "already ingested";
-   private static final String SCHEDULED = "already scheduled";
-
    private final List<URL> notIngestedProductList = new LinkedList<>();
 
    /**
@@ -60,12 +55,12 @@ public class ScannerListener implements AsynchronousLinkedList.Listener<URLExt>
       Product p = productService.getProductByOrigin(url.toString());
       if (p == null)
       {
-         LOGGER.info(LOG_PATTERN, url, WAITING_INGESTION);
+         LOGGER.info("Product at '{}' is waiting for ingestion", url);
          return false;
       }
       else
       {
-         LOGGER.info(LOG_PATTERN, url, p.getProcessed() ? INGESTED : SCHEDULED);
+         LOGGER.info("Product at '{}' is already ingested", url);
          return true;
       }
    }

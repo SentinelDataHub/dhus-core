@@ -20,24 +20,24 @@
 
 package fr.gael.dhus.datastore.scanner;
 
+import fr.gael.dhus.database.object.config.scanner.ScannerInfo;
+import fr.gael.dhus.database.object.config.scanner.ScannerManager;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.system.config.ConfigurationManager;
+
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import fr.gael.dhus.service.FileScannerService;
-import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
-
-import fr.gael.dhus.database.object.FileScanner;
-import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import org.apache.logging.log4j.Logger;
 
 public class FileScannerWrapper
 {
    private static final Logger LOGGER = LogManager.getLogger(FileScannerWrapper.class);
 
-   final Long fs_id;
+   final Long scannerId;
    final AtomicInteger startCounter;
    final AtomicInteger endCounter;
    final AtomicInteger errorCounter;
@@ -47,7 +47,7 @@ public class FileScannerWrapper
    String scannerMessage;
    String processingErrors = "";
 
-   public FileScannerWrapper (final FileScanner persistent_scanner)
+   public FileScannerWrapper(final ScannerInfo persistent_scanner)
    {
       this.startCounter = new AtomicInteger (0);
       this.endCounter = new AtomicInteger (0);
@@ -55,26 +55,22 @@ public class FileScannerWrapper
       this.cancelCount = new AtomicInteger (0);
       this.totalProcessed = new AtomicInteger (0);
 
-      this.fs_id = persistent_scanner.getId ();
+      this.scannerId = persistent_scanner.getId();
    }
 
    /**
     * Case of error during processing: informations are accumulated to be
     * displayed to the user.
     */
-   public synchronized void error (Product p, Throwable e)
+   public synchronized void error (String origin, Throwable e)
    {
       if ((e!=null) && (e.getMessage ()!=null))
       {
          String message = "";
-         if (p != null)
+         if (origin!=null)
          {
-            String o = p.getOrigin ();
-            if (o!=null)
-            {
-               String file=o.substring (o.lastIndexOf ("/")+1, o.length ());
-               message="(" + file + ")";
-            }
+            String file=origin.substring (origin.lastIndexOf ("/")+1, origin.length ());
+            message="(" + file + ")";
          }
          processingErrors +=e.getMessage () + message + "<br>\n";
       }
@@ -84,7 +80,7 @@ public class FileScannerWrapper
       // necessary to run it manually.
       if (isCompleted())
       {
-         scannerStatus = FileScanner.STATUS_ERROR;
+         scannerStatus = ScannerManager.STATUS_ERROR;
          processingsDone(null);
       }
    }
@@ -96,7 +92,7 @@ public class FileScannerWrapper
    public synchronized void fatalError (Throwable e)
    {
       // Force the scanner status to ERROR.
-      scannerStatus = fr.gael.dhus.database.object.FileScanner.STATUS_ERROR;
+      scannerStatus = ScannerManager.STATUS_ERROR;
       processingsDone(e.getMessage ());
    }
 
@@ -122,7 +118,7 @@ public class FileScannerWrapper
       // passed/non-passed number of products.
       if (isCompleted())
       {
-         this.scannerStatus = FileScanner.STATUS_OK;
+         this.scannerStatus = ScannerManager.STATUS_OK;
          processingsDone(null);
       }
    }
@@ -175,17 +171,16 @@ public class FileScannerWrapper
          processing_message += ended_message + "<br>\n";
       }
 
-      FileScannerService fs_service =
-         ApplicationContextProvider.getBean (FileScannerService.class);
-      if (fs_id != null)
+      ScannerManager scannerManager = ApplicationContextProvider.getBean(ConfigurationManager.class)
+            .getScannerManager();
+      if (scannerId != null)
       {
          // Set the scanner info
-         FileScanner persistentScanner = fs_service.getFileScanner (fs_id);
-         persistentScanner.setStatus (scannerStatus);
-         persistentScanner.setStatusMessage (truncateMessageForDB(
-            persistentScanner.getStatusMessage () + scannerMessage +
-            "<br>\n" + processing_message));
-         fs_service.updateFileScanner (persistentScanner);
+         ScannerInfo persistentScanner = scannerManager.get(scannerId);
+         persistentScanner.setStatus(scannerStatus);
+         persistentScanner.setStatusMessage(
+               persistentScanner.getStatusMessage() + scannerMessage + "<br>\n" + processing_message);
+         scannerManager.update(persistentScanner, false);
       }
       logStatus();
    }
@@ -216,21 +211,6 @@ public class FileScannerWrapper
    }
 
    /**
-    * Database status message length is limited to 4096
-    * @since 0.4.0
-    * @param message to truncate
-    * @return truncated message
-    */
-   private String truncateMessageForDB (String message)
-   {
-      if (message.length ()>4096)
-      {
-         return message.substring (0, 4090)+"...";
-      }
-      return message;
-   }
-
-   /**
     * Checks if ingestions of the associated scanner are done.
     *
     * @return true if all ingestions are done, otherwise false
@@ -246,13 +226,13 @@ public class FileScannerWrapper
     *
     * @param product ingestion target
     */
-   public synchronized void cancelProcess(Product product)
+   public synchronized void cancelProcess(String origin)
    {
       cancelCount.incrementAndGet();
-      LOGGER.info("Ingestion cancelled for product located in '{}'", product.getPath());
+      LOGGER.info("Ingestion cancelled for product located at '{}'", origin);
       if (isCompleted())
       {
-         this.scannerStatus = FileScanner.STATUS_OK;
+         this.scannerStatus = ScannerManager.STATUS_OK;
          processingsDone("Scanner stopped");
       }
    }

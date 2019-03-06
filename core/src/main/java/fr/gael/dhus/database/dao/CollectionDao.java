@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,29 +19,28 @@
  */
 package fr.gael.dhus.database.dao;
 
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-
 import fr.gael.dhus.database.dao.interfaces.CollectionProductListener;
 import fr.gael.dhus.database.dao.interfaces.DaoEvent;
 import fr.gael.dhus.database.dao.interfaces.DaoListener;
 import fr.gael.dhus.database.dao.interfaces.HibernateDao;
 import fr.gael.dhus.database.object.Collection;
 import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.system.config.ConfigurationManager;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import org.hibernate.Hibernate;
+import org.hibernate.Query;
+import org.hibernate.type.StandardBasicTypes;
+
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.support.DataAccessUtils;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -58,36 +57,7 @@ public class CollectionDao extends HibernateDao<Collection, String>
    private ProductDao productDao;
 
    @Autowired
-   private UserDao userDao;
-
-   @Autowired
-   private FileScannerDao fileScannerDao;
-
-   @Autowired
    private ConfigurationManager cfgManager;
-
-   /**
-    * Counts collections whose the given user is authorized.
-    * @param user the given user.
-    * @return number of authorized collection for user.
-    */
-   public int count (User user)
-   {
-      String userString = "";
-      // Bypass for Data Right Managers. They can see all products and
-      // collections.
-      if ( !cfgManager.isDataPublic () && (user != null) &&
-         !user.getRoles ().contains (Role.DATA_MANAGER))
-      {
-         userString =
-            "WHERE ('" + user.getUUID () + "' in elements(authorizedUsers) OR '" +
-                     userDao.getPublicData ().getUUID () +
-                     "' in elements(authorizedUsers))";
-      }
-
-      return DataAccessUtils
-         .intResult (find ("select count(*) FROM Collection " + userString));
-   }
 
    /**
     * Delete the given collection and move all products contains in it are not
@@ -98,7 +68,7 @@ public class CollectionDao extends HibernateDao<Collection, String>
    public void delete (final Collection collection)
    {
       // remove references
-      fileScannerDao.deleteCollectionReferences (collection);
+      cfgManager.getScannerManager().deleteCollectionReferences(collection.getName());
       // delete collection
       super.delete (collection);
    }
@@ -114,30 +84,6 @@ public class CollectionDao extends HibernateDao<Collection, String>
       {
          delete (collection);
       }
-   }
-
-   /**
-    * Creates a new persistent collection.
-    * <p>The creator of this collection has directly rights on it.</p>
-    * @param collection collection to create.
-    * @param user creator of this collection.
-    * @return the created collection.
-    */
-   public Collection create (Collection collection, User user)
-   {
-      Set<User> users = collection.getAuthorizedUsers ();
-
-      if (cfgManager.isDataPublic ())
-      {
-         users.add (userDao.getPublicData ());
-      }
-
-      if (user != null)
-      {
-         users.add (user);
-      }
-
-      return super.create (collection);
    }
 
    /**
@@ -203,12 +149,15 @@ public class CollectionDao extends HibernateDao<Collection, String>
    @SuppressWarnings ("unchecked")
    public List<Collection> getCollectionsOfProduct (final Long product_id)
    {
-      return (List<Collection>) getHibernateTemplate ().find (
-         "select c " +
-         "from Collection c left outer join c.products p " +
-         "where p.id = ? ORDER BY c.name", product_id);
+      return getHibernateTemplate().execute(session -> {
+         String hql = "select c from Collection c "
+                    + "left outer join c.products p where p.id = ? ORDER BY c.name";
+         Query query = session.createQuery(hql);
+         query.setFetchSize(10_000);
+         query.setParameter(0, product_id, StandardBasicTypes.LONG);
+         return (List<Collection>) query.list();
+      });
    }
-
 
    /**
     * Retrieves all product id from a given collection
@@ -259,61 +208,47 @@ public class CollectionDao extends HibernateDao<Collection, String>
    }
 
    /**
-    * Returns collections whose the given user is authorized.
-    * @param user_id id of the given user.
-    * @return All id of authorized collections.
+    * @return UUIDs of all collections
     */
-   @SuppressWarnings ("unchecked")
-   public List<String> getAuthorizedCollections (String user_uuid)
+   @SuppressWarnings("unchecked")
+   public List<String> getCollectionsUUID()
    {
-      String restiction_query =
-            " c WHERE ('" + user_uuid + "' in elements(c.authorizedUsers) OR '" +
-                  userDao.getPublicData ().getUUID () +
-                  "' in elements(c.authorizedUsers))";
-
-      if (cfgManager.isDataPublic ()) restiction_query = "";
-
-      return (List<String>) find ("select uuid FROM " + entityClass.getName () +
-         restiction_query);
-   }
-
-   @SuppressWarnings ("unchecked")
-   public List<User> getAuthorizedUsers (final Collection collection)
-   {
-      String hql =
-            "SELECT users FROM fr.gael.dhus.database.object.Collection c " +
-                  "LEFT OUTER JOIN c.authorizedUsers users WHERE c.uuid like ?";
-      return (List<User>) getHibernateTemplate ().find (hql,
-            collection.getUUID ());
+      return (List<String>) find("select uuid FROM " + entityClass.getName());
    }
 
    public String getCollectionUUIDByName(final String collection_name)
    {
-      String hql =
-            "SELECT uuid FROM " + entityClass.getName () + " WHERE name = ?";
-      List<?> result = getHibernateTemplate ().find (hql, collection_name);
-
-      if (result.isEmpty ())
-         return null;
-      return (String) result.get (0);
+      return getHibernateTemplate().execute(session -> {
+         String hql = "SELECT uuid FROM " + entityClass.getName() + " WHERE name=?";
+         Query query = session.createQuery(hql);
+         query.setReadOnly(true);
+         query.setParameter(0, collection_name, StandardBasicTypes.STRING);
+         return (String) query.uniqueResult();
+      });
    }
 
-
-   public boolean hasAccessToCollection (final String cid, final String uid)
+   public Collection getByName(final String name)
    {
-      if (cid == null || uid == null)
-         return false;
+      Collection collection = getHibernateTemplate().execute(session -> {
+         String hql = "From Collection c where c.name=?";
+         Query query = session.createQuery(hql);
+         query.setParameter(0, name, StandardBasicTypes.STRING);
+         return (Collection) query.uniqueResult();
+      });
 
-      Collection collection = read (cid);
-      User user = userDao.read (uid);
-      
-      if (collection == null || user == null)
-         return false;
+      // First without `lower()` to save time
+      if (collection == null)
+      {
+         collection = getHibernateTemplate().execute(session -> {
+            String hql = "From Collection c where LOWER(c.name)=?";
+            Query query = session.createQuery(hql);
+            query.setParameter(0, name.toLowerCase(), StandardBasicTypes.STRING);
+            List list = query.list();
 
-      if (user.getRoles ().contains (Role.DATA_MANAGER))
-         return true;
-      
-      return collection.getAuthorizedUsers().contains(user);
+            return (Collection) (list.isEmpty() ? null : list.get(0));
+         });
+      }
+      return collection;
    }
 
    public Iterator<Collection> getAllCollections ()

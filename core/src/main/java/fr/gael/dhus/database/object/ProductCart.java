@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,6 +19,7 @@
  */
 package fr.gael.dhus.database.object;
 
+import java.io.Serializable;
 import java.util.Set;
 import java.util.UUID;
 
@@ -37,8 +38,10 @@ import javax.persistence.Table;
  */
 @Entity
 @Table (name = "PRODUCTCARTS")
-public class ProductCart
+public class ProductCart implements Serializable
 {
+   private static final long serialVersionUID = 1L;
+
    @Id
    @Column (name = "UUID", nullable = false)
    private String uuid = UUID.randomUUID ().toString ();

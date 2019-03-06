@@ -6,7 +6,6 @@ import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.Product.Download;
 
 import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.Date;
 import java.util.Random;
 import java.util.UUID;
@@ -53,11 +52,8 @@ public class PerformanceTest extends AbstractTestNGSpringContextTests
          p.setIdentifier ("product #" + i);
          p.setLocked (false);
          p.setOrigin ("orign " + i % 32);
-         p.setPath (new URL ("file:///home/lambert/dhusTestPerf/product" + i));
-         p.setProcessed (true);
          p.setSize (new Long(i * 100));
          p.setDownload (download);
-         p.setDownloadablePath ("dowloadablePath_" + i);
          p.setUuid (UUID.randomUUID ().toString ());
 
 //         for (int j = 0; j < indexNumberPerProduct; j++)
@@ -73,11 +69,11 @@ public class PerformanceTest extends AbstractTestNGSpringContextTests
 //            mi.setQueryable ("testField#" + j);
 //            p.getIndexes ().add (miDao.create (mi));
 //         }
-         
+
          pdao.create (p);
       }
    }
-   
+
    @Test
    public void TestMessage1 ()
    {

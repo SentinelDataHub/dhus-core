@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -23,15 +23,21 @@ import fr.gael.dhus.database.dao.interfaces.HibernateDao;
 import fr.gael.dhus.database.object.KeyStoreEntry;
 import fr.gael.dhus.database.object.KeyStoreEntry.Key;
 
-import org.hibernate.Criteria;
-import org.hibernate.HibernateException;
-import org.hibernate.Session;
-import org.hibernate.criterion.Restrictions;
-import org.springframework.orm.hibernate3.HibernateCallback;
-import org.springframework.stereotype.Repository;
-
 import java.sql.SQLException;
 import java.util.List;
+
+import org.dhus.store.datastore.DataStore;
+
+import org.hibernate.Criteria;
+import org.hibernate.HibernateException;
+import org.hibernate.ScrollMode;
+import org.hibernate.ScrollableResults;
+import org.hibernate.Session;
+import org.hibernate.criterion.Order;
+import org.hibernate.criterion.Restrictions;
+
+import org.springframework.orm.hibernate3.HibernateCallback;
+import org.springframework.stereotype.Repository;
 
 @Repository
 public class KeyStoreEntryDao extends HibernateDao<KeyStoreEntry, Key>
@@ -56,6 +62,66 @@ public class KeyStoreEntryDao extends HibernateDao<KeyStoreEntry, Key>
                return null;
             }
             return ((KeyStoreEntry) results.get(0)).getEntryKey();
+         }
+      });
+   }
+
+   /**
+    * Retrieves entries of a keyStore, oldest first.
+    * @param keyStoreName the name of the keyStore
+    * @return a ScrollableResult of entries
+    */
+   public ScrollableResults readOldestEntries(final String keyStoreName)
+   {
+      return getHibernateTemplate().execute(new HibernateCallback<ScrollableResults>()
+      {
+         @Override
+         public ScrollableResults doInHibernate(Session session)
+               throws HibernateException, SQLException
+         {
+            Criteria criteria = session.createCriteria(entityClass);
+            criteria.add(Restrictions.eq("key.keyStore", keyStoreName));
+            criteria.addOrder(Order.asc("insertionDate"));
+            return criteria.scroll(ScrollMode.FORWARD_ONLY);
+         }
+      });
+   }
+
+   public List<KeyStoreEntry> getByUuid(final String uuid)
+   {
+      return getHibernateTemplate().execute(new HibernateCallback<List<KeyStoreEntry>>()
+      {
+         @Override
+         public List<KeyStoreEntry> doInHibernate(Session session) throws HibernateException, SQLException
+         {
+            Criteria criteria = session.createCriteria(entityClass);
+            criteria.add(Restrictions.eq("key.entryKey", uuid));
+            return criteria.list();  
+         }
+      });
+   }
+
+   public List<KeyStoreEntry> getUnalteredProductEntries(final String keyStoreName, Integer skip, Integer top)
+   {
+      return getHibernateTemplate().execute(new HibernateCallback<List<KeyStoreEntry>>()
+      {
+         @Override
+         public List<KeyStoreEntry> doInHibernate(Session session) throws HibernateException, SQLException
+         {
+            Criteria criteria = session.createCriteria(entityClass);
+            criteria.add(Restrictions.eq("key.keyStore", keyStoreName));
+            criteria.add(Restrictions.eq("key.tag", DataStore.UNALTERED_PRODUCT_TAG));
+
+            if(skip != null)
+            {
+               criteria.setFirstResult(skip);
+            }
+            if (top != null)
+            {
+               criteria.setMaxResults(top);
+            }
+
+            return criteria.list();
          }
       });
    }

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013-2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -25,6 +25,7 @@ import java.util.List;
 import org.hibernate.HibernateException;
 import org.hibernate.Query;
 import org.hibernate.Session;
+import org.hibernate.type.StandardBasicTypes;
 import org.springframework.orm.hibernate3.HibernateCallback;
 import org.springframework.stereotype.Repository;
 
@@ -51,14 +52,14 @@ public class SearchDao extends HibernateDao<Search, String>
                      + "LEFT OUTER JOIN p.searches s "
                      + "WHERE u.uuid like ? ORDER BY s.value";
                Query query = session.createQuery (hql).setReadOnly (true);
-               query.setString (0, user.getUUID ());
+               query.setParameter(0, user.getUUID(), StandardBasicTypes.STRING);
                query.setFirstResult (skip);
                query.setMaxResults (top);
                return (List<Search>) query.list ();
             }
          });
    }
-   
+
    @Override
    public void delete (final Search search)
    {
@@ -70,7 +71,7 @@ public class SearchDao extends HibernateDao<Search, String>
          {
             String sql = "DELETE FROM SEARCH_PREFERENCES WHERE SEARCHES_UUID = ?";
             Query query = session.createSQLQuery (sql);
-            query.setString (0, search.getUUID ());
+            query.setParameter(0, search.getUUID(), StandardBasicTypes.STRING);
             query.executeUpdate ();
             return null;
          }

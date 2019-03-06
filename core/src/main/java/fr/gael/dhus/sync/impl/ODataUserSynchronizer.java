@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,9 +20,9 @@
 package fr.gael.dhus.sync.impl;
 
 import fr.gael.dhus.database.object.Role;
-import fr.gael.dhus.database.object.SynchronizerConf;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.database.object.User.PasswordEncryption;
+import fr.gael.dhus.database.object.config.synchronizer.UserSynchronizer;
 import fr.gael.dhus.database.object.restriction.LockedAccessRestriction;
 import fr.gael.dhus.olingo.ODataClient;
 import fr.gael.dhus.olingo.v1.entityset.SystemRoleEntitySet;
@@ -31,7 +31,6 @@ import fr.gael.dhus.service.ISynchronizerService;
 import fr.gael.dhus.service.UserService;
 import fr.gael.dhus.service.exception.RequiredFieldMissingException;
 import fr.gael.dhus.service.exception.RootNotModifiableException;
-import fr.gael.dhus.service.exception.UsernameBadCharacterException;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.sync.Synchronizer;
 
@@ -97,18 +96,18 @@ public class ODataUserSynchronizer extends Synchronizer
    /**
     * Creates a new UserSynchronizer.
     *
-    * @param sc configuration for this synchronizer.
+    * @param userSynchronizer configuration for this synchronizer.
     *
     * @throws java.io.IOException
     * @throws org.apache.olingo.odata2.api.exception.ODataException
     */
-   public ODataUserSynchronizer(SynchronizerConf sc) throws IOException, ODataException
+   public ODataUserSynchronizer(UserSynchronizer userSynchronizer) throws IOException, ODataException
    {
-      super(sc);
+      super(userSynchronizer);
       // Checks if required configuration is set
-      String urilit = sc.getConfig("service_uri");
-      serviceUser = sc.getConfig("service_username");
-      servicePass = sc.getConfig("service_password");
+      String urilit = userSynchronizer.getServiceUrl();
+      serviceUser = userSynchronizer.getServiceLogin();
+      servicePass = userSynchronizer.getServicePassword();
 
       if (urilit == null || urilit.isEmpty())
       {
@@ -124,35 +123,13 @@ public class ODataUserSynchronizer extends Synchronizer
          throw new IllegalStateException("`service_uri` is malformed");
       }
 
-      String skip = sc.getConfig("skip");
-      if (skip != null && !skip.isEmpty())
-      {
-         this.skip = Integer.parseInt(skip);
-      }
-      else
-      {
-         this.skip = 0;
-      }
+      Integer skip = userSynchronizer.getSkip();
+      this.skip = skip != null ? skip : 0;
 
-      String page_size = sc.getConfig("page_size");
-      if (page_size != null && !page_size.isEmpty())
-      {
-         pageSize = Integer.decode(page_size);
-      }
-      else
-      {
-         pageSize = 500;
-      }
+      pageSize = userSynchronizer.getPageSize();
 
-      String cfgForce = sc.getConfig("force");
-      if (cfgForce != null && !cfgForce.isEmpty())
-      {
-         force = Boolean.parseBoolean (cfgForce);
-      }
-      else
-      {
-         force = false;
-      }
+      Boolean cfgForce = userSynchronizer.isForce();
+      force = cfgForce != null ? cfgForce : false;
    }
 
    /** Prints log line prefixed with the sync ID. */
@@ -182,7 +159,7 @@ public class ODataUserSynchronizer extends Synchronizer
    public boolean synchronize() throws InterruptedException
    {
       log(Level.INFO, "started");
-      int created = 0, updated = 0;
+      int created = 0, updated = 0, skipped = 0;
       try
       {
          // Makes query parameters
@@ -398,9 +375,11 @@ public class ODataUserSynchronizer extends Synchronizer
                }
             }
             catch (RootNotModifiableException e) { } // Ignored exception
-            catch (RequiredFieldMissingException | UsernameBadCharacterException ex)
+            catch (RequiredFieldMissingException | RuntimeException e)
             {
-               log(Level.ERROR, "Cannot create user '" + username + "'", ex);
+               // The user service throws runtime exceptions, which is bad practice
+               skipped++;
+               log(Level.ERROR, "Cannot create/update user '" + username + "', skipping it", e);
             }
             catch (IOException | ODataException ex)
             {
@@ -428,10 +407,11 @@ public class ODataUserSynchronizer extends Synchronizer
          StringBuilder sb = new StringBuilder("done:    ");
          sb.append(created).append(" new Users,    ");
          sb.append(updated).append(" updated Users,    ");
+         sb.append(skipped).append(" skipped Users,    ");
          sb.append("    from ").append(this.client.getServiceRoot());
          log(Level.INFO, sb.toString());
 
-         this.syncConf.setConfig("skip", String.valueOf(skip));
+         ((UserSynchronizer)this.syncConf).setSkip(skip);
          SYNC_SERVICE.saveSynchronizer(this);
       }
       return false;
@@ -440,7 +420,7 @@ public class ODataUserSynchronizer extends Synchronizer
    @Override
    public String toString()
    {
-      return "OData User Synchronizer on " + syncConf.getConfig("service_uri");
+      return "OData User Synchronizer on " + syncConf.getServiceUrl();
    }
 
 }

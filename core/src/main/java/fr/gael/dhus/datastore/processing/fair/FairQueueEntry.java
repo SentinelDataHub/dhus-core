@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,20 +20,9 @@
 package fr.gael.dhus.datastore.processing.fair;
 
 /**
- * An implementation of {@link Runnable} adding a key to be handled by 
- * {@link FairQueue}.
+ * An interface for elements handled by {@link FairQueue}.
  */
-public abstract class FairQueueEntry
+public interface FairQueueEntry
 {
-   private final Object listKey;
-   
-   public FairQueueEntry(Object listKey)
-   {
-      this.listKey = listKey;
-   }
-
-   public Object getListKey ()
-   {
-      return listKey;
-   }  
+   public Object getListKey();
 }

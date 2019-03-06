@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016 GAEL Systems
+ * Copyright (C) 2015-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -42,16 +42,22 @@ import fr.gael.dhus.service.exception.RootNotModifiableException;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import java.util.StringTokenizer;
 
+import org.apache.olingo.odata2.api.edm.Edm;
 import org.apache.olingo.odata2.api.edm.EdmEntitySet;
 import org.apache.olingo.odata2.api.ep.entry.ODataEntry;
 import org.apache.olingo.odata2.api.exception.ODataException;
+import org.apache.olingo.odata2.api.rt.RuntimeDelegate;
+import org.apache.olingo.odata2.api.uri.KeyPredicate;
 import org.apache.olingo.odata2.api.uri.NavigationSegment;
+import org.apache.olingo.odata2.api.uri.PathSegment;
 import org.apache.olingo.odata2.api.uri.UriInfo;
+import org.apache.olingo.odata2.api.uri.UriParser;
 import org.apache.olingo.odata2.api.uri.info.DeleteUriInfo;
 
 /**
@@ -80,6 +86,197 @@ public class User extends AbstractEntity
    public User (String username)
    {
       this.user = USER_SERVICE.getUserNoCheck (username);
+   }
+
+   /**
+    * Creates a new User from the given ODataEntry.
+    *
+    * @param odata_entry created by a POST request on the OData interface
+    * @throws ODataException if the given entry is malformed
+    */
+   public User(ODataEntry odata_entry) throws ODataException
+   {
+      Map<String, Object> properties = odata_entry.getProperties();
+      user = new fr.gael.dhus.database.object.User();
+
+      // set username
+      String username = (String) properties.get(UserEntitySet.USERNAME);
+      if (username != null && !username.isEmpty())
+      {
+         if (UserService.USERNAME_PATTERN.matcher(username).matches())
+         {
+            this.user.setUsername(username);
+         }
+         else
+         {
+            throw new InvalidValueException(UserEntitySet.USERNAME, username);
+         }
+      }
+
+      // set email
+      String email = (String) properties.get(UserEntitySet.EMAIL);
+      if (email != null && !email.isEmpty())
+      {
+         if (UserService.EMAIL_PATTERN.matcher(email).matches())
+         {
+            this.user.setEmail(email);
+         }
+         else
+         {
+            throw new InvalidValueException(UserEntitySet.EMAIL, email);
+         }
+      }
+
+      // set first name
+      String first_name = (String) properties.get(UserEntitySet.FIRSTNAME);
+      if (first_name != null && !first_name.isEmpty())
+      {
+         this.user.setFirstname(first_name);
+      }
+
+      // set last name
+      String last_name = (String) properties.get(UserEntitySet.LASTNAME);
+      if (last_name != null && !last_name.isEmpty())
+      {
+         this.user.setLastname(last_name);
+      }
+
+      // set country
+      String country = (String) properties.get(UserEntitySet.COUNTRY);
+      if (country != null && !country.isEmpty())
+      {
+         Country iso_country = USER_SERVICE.getCountry(country);
+         if (iso_country != null)
+         {
+            this.user.setCountry(iso_country.getName());
+         }
+         else
+         {
+            throw new InvalidValueException(UserEntitySet.COUNTRY, country);
+         }
+      }
+
+      // set phone
+      String phone = (String) properties.get(UserEntitySet.PHONE);
+      if (phone != null && !phone.isEmpty())
+      {
+         this.user.setPhone(phone);
+      }
+
+      // set address
+      String address = (String) properties.get(UserEntitySet.ADDRESS);
+      if (address != null && !address.isEmpty())
+      {
+         this.user.setAddress(address);
+      }
+
+      // set domain
+      String domain = (String) properties.get(UserEntitySet.DOMAIN);
+      if (domain != null && !domain.isEmpty())
+      {
+         this.user.setDomain(domain);
+      }
+
+      // set sub-domain
+      String sub_domain = (String) properties.get(UserEntitySet.SUBDOMAIN);
+      if (sub_domain != null && !sub_domain.isEmpty())
+      {
+         this.user.setSubDomain(sub_domain);
+      }
+
+      // set usage
+      String usage = (String) properties.get(UserEntitySet.USAGE);
+      if (usage != null && !usage.isEmpty())
+      {
+         this.user.setUsage(usage);
+      }
+
+      // set sub-usage
+      String sub_usage = (String) properties.get(UserEntitySet.SUBUSAGE);
+      if (sub_usage != null && !sub_usage.isEmpty())
+      {
+         this.user.setSubUsage(sub_usage);
+      }
+
+      // set password
+      String pass_plain = (String) properties.get(UserEntitySet.PASSWORD);
+      if (pass_plain != null && !pass_plain.isEmpty())
+      {
+         this.user.setPassword(pass_plain);
+      }
+      else
+      {
+         this.user.generatePassword();
+      }
+
+      try
+      {
+         List<Role> roles = getSystemRoles(odata_entry);
+         if (roles != null && !roles.isEmpty())
+         {
+            this.user.setRoles(roles);
+         }
+      }
+      catch (ODataException | RuntimeException ex)
+      {
+         throw new ExpectedException("At least one given role is not existing");
+      }
+
+      try
+      {
+         USER_SERVICE.createUser(user);
+      }
+      catch (RootNotModifiableException ex)
+      {
+         throw new ExpectedException("Root user cannot be updated");
+      }
+      catch (RequiredFieldMissingException ex)
+      {
+         throw new IncompleteDocException(ex.getMessage());
+      }
+   }
+
+   private static List<Role> getSystemRoles(ODataEntry entry) throws ODataException
+   {
+      List<Role> roles = new ArrayList<>();
+      String navLinkName = "SystemRoles";
+      List<String> nll = entry.getMetadata().getAssociationUris(navLinkName);
+
+      if (nll != null && !nll.isEmpty())
+      {
+         for (String uri: nll)
+         {
+            // Nullifying
+            if (uri == null || uri.isEmpty())
+            {
+               return null;
+            }
+
+            Edm edm = RuntimeDelegate.createEdm(new Model());
+            UriParser urip = RuntimeDelegate.getUriParser(edm);
+
+            List<PathSegment> path_segments = new ArrayList<>();
+
+            StringTokenizer st = new StringTokenizer(uri, "/");
+
+            while (st.hasMoreTokens())
+            {
+               path_segments.add(UriParser.createPathSegment(st.nextToken(), null));
+            }
+
+            UriInfo uinfo = urip.parse(path_segments, Collections.<String, String>emptyMap());
+
+            KeyPredicate kp = uinfo.getKeyPredicates().get(0);
+
+            Role role = Role.valueOf(kp.getLiteral());
+            if (role != null)
+            {
+               roles.add(role);
+            }
+         }
+      }
+
+      return roles;
    }
 
    public String getName ()
@@ -151,12 +348,7 @@ public class User extends AbstractEntity
       String email = (String) properties.get (UserEntitySet.EMAIL);
       if (email != null && !email.isEmpty ())
       {
-         StringBuilder pattern = new StringBuilder ();
-         pattern.append ("^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+")
-               .append ("(?:\\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*")
-               .append ("@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+")
-               .append ("[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$");
-         if (email.matches (pattern.toString ()))
+         if (UserService.EMAIL_PATTERN.matcher(email).matches())
          {
             this.user.setEmail (email);
          }
@@ -244,6 +436,23 @@ public class User extends AbstractEntity
          this.user.setPassword(pass_plain);
       }
 
+      // update roles if right is ok
+      if (Security.getCurrentUser().getRoles().contains(Role.USER_MANAGER))
+      {
+         try
+         {
+            List<Role> roles = getSystemRoles(entry);
+            if (roles != null && !roles.isEmpty())
+            {
+               this.user.setRoles(roles);
+            }
+         }
+         catch (ODataException | RuntimeException ex)
+         {
+            throw new ExpectedException("At least one given role is not existing");
+         }
+      }
+
       try
       {
          if (Security.getCurrentUser().equals(this.user))
@@ -264,6 +473,22 @@ public class User extends AbstractEntity
       }
    }
 
+   public static void delete(String username) throws ODataException
+   {
+      try
+      {
+         fr.gael.dhus.database.object.User user = USER_SERVICE.getUserByName(username);
+         if (user != null)
+         {
+            USER_SERVICE.deleteUser(user.getUUID());
+         }
+      }
+      catch (RootNotModifiableException e)
+      {
+         throw new ExpectedException("Cannot delete root user");
+      }
+   }
+
    @Override
    public Object navigate(NavigationSegment ns) throws ODataException
    {
@@ -275,7 +500,7 @@ public class User extends AbstractEntity
          res = new ConnectionMap(this.getName());
          if (!ns.getKeyPredicates().isEmpty())
          {
-            UUID key = UUID.fromString(ns.getKeyPredicates().get(0).getLiteral());
+            String key = ns.getKeyPredicates().get(0).getLiteral();
             res = ((ConnectionMap)res).get(key);
          }
       }
@@ -301,7 +526,7 @@ public class User extends AbstractEntity
          res = new ConnectionMap(getName());
          if (!ns.getKeyPredicates().isEmpty())
          {
-            UUID key = UUID.fromString(ns.getKeyPredicates().get(0).getLiteral());
+            String key = ns.getKeyPredicates().get(0).getLiteral();
             res = ((ConnectionMap)res).get(key);
          }
       }

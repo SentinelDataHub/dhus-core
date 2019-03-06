@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,12 +19,12 @@
  */
 package fr.gael.dhus.sync;
 
-import fr.gael.dhus.database.object.SynchronizerConf;
-import java.text.ParseException;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+
+import fr.gael.dhus.database.object.config.synchronizer.ProductSynchronizer;
 
 import org.testng.annotations.Test;
-
-import static org.testng.Assert.*;
 
 /** Tests for {@link ExecutorImpl}. */
 public class ExecutorTest
@@ -49,20 +49,15 @@ public class ExecutorTest
    }
 
    /** Implementation of {@link Synchronizer} for testing purposes. */
-   private static class TestSync extends Synchronizer {
+   private static class TestSync extends Synchronizer
+   {
       boolean hasBeenCalled = false;
       int id;
       public TestSync (int id)
       {
-         super (new SynchronizerConf ());
+         super (new ProductSynchronizer());
          this.id = id;
-         try
-         {
-            this.syncConf.setCronExpression ("* * * * * ?");
-         }
-         catch (ParseException e)
-         {
-         }
+         this.syncConf.setSchedule ("* * * * * ?");
       }
       @Override
       public boolean synchronize () throws InterruptedException

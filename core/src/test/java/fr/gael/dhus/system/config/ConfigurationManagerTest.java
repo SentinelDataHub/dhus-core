@@ -8,6 +8,7 @@ import javax.xml.bind.JAXBException;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
+import org.xml.sax.SAXException;
 
 import fr.gael.dhus.database.object.config.Configuration;
 import fr.gael.dhus.database.object.config.cron.ArchiveSynchronizationCronConfiguration;
@@ -15,18 +16,14 @@ import fr.gael.dhus.database.object.config.cron.CleanDatabaseCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.CleanDatabaseDumpCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.CronConfiguration;
 import fr.gael.dhus.database.object.config.cron.DumpDatabaseCronConfiguration;
-import fr.gael.dhus.database.object.config.cron.EvictionCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.FileScannersCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.SearchesCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.SendLogsCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.SystemCheckCronConfiguration;
-import fr.gael.dhus.database.object.config.gui.GuiConfiguration;
 import fr.gael.dhus.database.object.config.messaging.MailConfiguration;
 import fr.gael.dhus.database.object.config.messaging.MailFromConfiguration;
 import fr.gael.dhus.database.object.config.messaging.MailServerConfiguration;
 import fr.gael.dhus.database.object.config.messaging.MessagingConfiguration;
-import fr.gael.dhus.database.object.config.messaging.jms.JmsConfiguration;
-import fr.gael.dhus.database.object.config.messaging.jms.JmsDestination;
 import fr.gael.dhus.database.object.config.network.ChannelType;
 import fr.gael.dhus.database.object.config.network.NetworkConfiguration;
 import fr.gael.dhus.database.object.config.network.TrafficShapingType;
@@ -48,11 +45,9 @@ public class ConfigurationManagerTest
 {
    Configuration conf ;
    @BeforeClass
-   public void init () throws JAXBException, IOException
+   public void init () throws JAXBException, IOException, SAXException
    {
-      ConfigurationLoader loader = new ConfigurationLoader ();
-      conf = loader.loadConfiguation (ClassLoader.
-         getSystemResource ("dhus-config-test.xml"));
+      conf = ConfigurationLoader.loadConfiguation(ClassLoader.getSystemResource("dhus-config-test.xml"));
    }
   @Test
   public void  checkConfigurationLoaderCron ()
@@ -132,17 +127,6 @@ public class ConfigurationManagerTest
      Assert.assertNotNull (cdd.getKeep (),"cleanDatabaseDump keep :");
   }
   @Test (dependsOnMethods="checkConfigurationLoaderCron")
-  public void  checkConfigurationLoaderCronEviction ()
-  {
-     CronConfiguration cron = conf.getCronConfiguration ();
-     
-     EvictionCronConfiguration e = cron.getEvictionConfiguration ();
-     
-     Assert.assertNotNull (e, "eviction: ");
-     Assert.assertNotNull (e.getSchedule (),"eviction schedule:");
-     Assert.assertNotNull (e.isActive (),"eviction active flag :");
-  }
-  @Test (dependsOnMethods="checkConfigurationLoaderCron")
   public void  checkConfigurationLoaderCronFileScanners ()
   {
      CronConfiguration cron = conf.getCronConfiguration ();
@@ -196,26 +180,6 @@ public class ConfigurationManagerTest
   {
      MessagingConfiguration message = conf.getMessagingConfiguration ();
      Assert.assertNotNull (message, "messaging configuration is null.");
-  }
-  @Test (dependsOnMethods="checkConfigurationLoaderMessage")
-  public void  checkConfigurationLoaderMessageJms()
-  {
-     MessagingConfiguration message = conf.getMessagingConfiguration ();
-     
-     JmsConfiguration jms = message.getJmsConfiguration ();
-     
-     Assert.assertNotNull (jms, "Jms: ");
-     Assert.assertNotNull (jms.getFolder (),"jms folder :");
-     Assert.assertNotNull (jms.getPort (),"jms port:");
-     List<JmsDestination>jmsds=jms.getDestinations ();
-     Assert.assertNotNull (jmsds,"Jms destinations:");
-     for(JmsDestination d:jmsds)
-     {
-        Assert.assertNotNull (d,"Jms destination:");
-        Assert.assertNotNull (d.getName (), "Jms destination name:");
-        Assert.assertNotNull (d.getMessageTypes (),"Jms destination type:");
-        Assert.assertNotNull (d.getDestination (),"Jms destination:");
-     }
   }
   @Test (dependsOnMethods="checkConfigurationLoaderMessage")
   public void  checkConfigurationLoaderMessageMail ()
@@ -282,10 +246,6 @@ public class ConfigurationManagerTest
 
      Assert.assertNotNull (channel, message+" channel");
      Assert.assertNotNull (channel.getClassifier (), message+", classifier");
-     Assert.assertNotNull (channel.getClassifier ().getExcludes (), 
-        message+", classifier/excludes");
-     Assert.assertNotNull (channel.getClassifier ().getExcludes ().getExclude(), 
-        message+", classifier/excludes/exclude");
      Assert.assertNotNull (channel.getClassifier ().getIncludes (), 
         message+", classifier/includes");
      Assert.assertNotNull (channel.getClassifier ().getIncludes ().getInclude(), 
@@ -294,14 +254,10 @@ public class ConfigurationManagerTest
      
      Assert.assertNotNull (channel.getDefaultUserQuotas (), 
         message+", user quota");
-     Assert.assertNotNull (channel.getDefaultUserQuotas ().getMaxBandwidth (), 
-        message+", user quota/max bandwidth");
      Assert.assertNotNull (channel.getDefaultUserQuotas ().getMaxConcurrent (), 
         message+", user quota/max concurrent");
      Assert.assertNotNull (channel.getDefaultUserQuotas ().getMaxCount (),
         message+", user quota/max count");
-     Assert.assertNotNull (channel.getDefaultUserQuotas ().
-        getMaxCumulativeSize (),message+", user quota/max cumulative size");
      Assert.assertNotNull (channel.getDefaultUserQuotas ().getMaxSize (),
         message+", user quota/max size");
      
@@ -310,12 +266,6 @@ public class ConfigurationManagerTest
            checkChannel (c, message);
   }
   
-  @Test
-  public void  checkConfigurationLoaderGUI ()
-  {
-     GuiConfiguration gui = conf.getGuiConfiguration ();
-     Assert.assertNotNull (gui, "gui configuration is null.");
-  }
   @Test
   public void  checkConfigurationLoaderProduct ()
   {
@@ -336,10 +286,10 @@ public class ConfigurationManagerTest
      
      OdataConfiguration oc = search.getOdataConfiguration ();
      Assert.assertNotNull (oc, "odata configuration is null.");
-     Assert.assertNotNull (oc.getMaxRows (), 
-        "odata configuration maxRow is null.");
-     Assert.assertEquals (oc.getMaxRows ().intValue (), 50,  
-        "odata configuration maxRow value not expected.");
+     Assert.assertNotNull (oc.getDefaultTop (), 
+        "odata configuration defaultTop is null.");
+     Assert.assertEquals(oc.getDefaultTop(), 50,
+           "odata configuration defaultTop value not expected.");
   }
   
   @Test

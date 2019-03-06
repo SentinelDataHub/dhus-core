@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,30 +19,22 @@
  */
 package fr.gael.dhus.service;
 
-import com.google.gson.ExclusionStrategy;
-import com.google.gson.FieldAttributes;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-
 import fr.gael.dhus.database.dao.AccessRestrictionDao;
-import fr.gael.dhus.database.dao.CollectionDao;
 import fr.gael.dhus.database.dao.CountryDao;
-import fr.gael.dhus.database.dao.ProductDao;
 import fr.gael.dhus.database.dao.SearchDao;
 import fr.gael.dhus.database.dao.UserDao;
-import fr.gael.dhus.database.object.Collection;
 import fr.gael.dhus.database.object.Country;
-import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.Search;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.database.object.User.PasswordEncryption;
 import fr.gael.dhus.database.object.restriction.AccessRestriction;
+import fr.gael.dhus.database.object.restriction.LockedAccessRestriction;
 import fr.gael.dhus.messaging.mail.MailServer;
+import fr.gael.dhus.network.CurrentQuotas;
 import fr.gael.dhus.olingo.v1.visitor.UserSQLVisitor;
 import fr.gael.dhus.service.exception.EmailNotSentException;
 import fr.gael.dhus.service.exception.MalformedEmailException;
-import fr.gael.dhus.service.exception.ProductNotExistingException;
 import fr.gael.dhus.service.exception.RequiredFieldMissingException;
 import fr.gael.dhus.service.exception.RootNotModifiableException;
 import fr.gael.dhus.service.exception.UserBadEncryptionException;
@@ -50,6 +42,7 @@ import fr.gael.dhus.service.exception.UserBadOldPasswordException;
 import fr.gael.dhus.service.exception.UserNotExistingException;
 import fr.gael.dhus.service.exception.UsernameBadCharacterException;
 import fr.gael.dhus.service.job.JobScheduler;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.spring.context.SecurityContextProvider;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
@@ -57,9 +50,9 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -72,6 +65,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -99,12 +93,6 @@ public class UserService extends WebService
    private UserDao userDao;
 
    @Autowired
-   private CollectionDao collectionDao;
-
-   @Autowired
-   private ProductDao productDao;
-
-   @Autowired
    private AccessRestrictionDao accessRestrictionDao;
 
    @Autowired
@@ -122,10 +110,13 @@ public class UserService extends WebService
    @Autowired
    private CacheManager cacheManager;
 
+   @Autowired
+   private SecurityContextProvider securityContextProvider;
+
    /**
     * Pattern for username checking
     */
-   private static Pattern USERNAME_PATTERN = Pattern.compile ("^[a-zA-Z0-9\\._\\-]+$");
+   public static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-zA-Z0-9\\._\\-]+$");
 
    /**
     * Pattern for email checking
@@ -135,7 +126,7 @@ public class UserService extends WebService
     * hacks, no security breach is expected even if all the character are
     * authorized in DHuS...
     */
-   private static Pattern EMAIL_PATTERN = Pattern.compile (
+   public static final Pattern EMAIL_PATTERN = Pattern.compile(
       "^[a-zA-Z0-9!#$%\\x26'*+/=?^_`{|}~-]+" +
       "(?:\\.[a-zA-Z0-9!#$%\\x26'*+/=?^_`{|}~-]+)*" + 
       "@" +
@@ -198,7 +189,7 @@ public class UserService extends WebService
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public Iterator<User> getUsers (String filter, int skip)
    {
-      return userDao.scrollNotDeleted (filter, skip);
+      return userDao.iterate(filter, skip);
    }
 
    /**
@@ -234,13 +225,6 @@ public class UserService extends WebService
       return userDao.scrollAll (filter, skip);
    }
 
-   @PreAuthorize ("hasRole('ROLE_USER_MANAGER')")
-   @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public Iterator<User> getUsersForDataRight (String filter, int skip)
-   {
-      return userDao.scrollForDataRight (filter, skip);
-   }
-
    /**
     * Create given User, after checking required fields.
     * 
@@ -272,6 +256,19 @@ public class UserService extends WebService
       checkRequiredFields(user);
       checkRoot(user);
       userDao.create(user);
+   }
+
+   /**
+    * Create given user provided by the SSO service.
+    *
+    * @param user to create
+    * @return created user
+    */
+   @Transactional(readOnly=false)
+   @CacheEvict(value = "userByName", key = "#user?.getUsername().toLowerCase()")
+   public User systemCreateSSOUser(User user)
+   {
+      return userDao.createWithoutMail(user);
    }
 
    /**
@@ -434,7 +431,7 @@ public class UserService extends WebService
 
       if ((restrictions != null && !restrictions.isEmpty ()) || updateRoles)
       {
-         SecurityContextProvider.forceLogout (u.getUsername ());
+         securityContextProvider.forceLogout(u.getUsername());
       }
 
       if (restrictionsToDelete != null)
@@ -519,8 +516,8 @@ public class UserService extends WebService
    {
       User u = userDao.read (uuid);
       checkRoot (u);
-      SecurityContextProvider.forceLogout (u.getUsername ());
-      userDao.removeUser (u);
+      securityContextProvider.forceLogout(u.getUsername());
+      userDao.delete(u);
    }
 
    /**
@@ -533,7 +530,7 @@ public class UserService extends WebService
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public int count (String filter)
    {
-      return userDao.countNotDeleted (filter);
+      return userDao.countNotAdmin(filter);
    }
 
    @PreAuthorize ("hasRole('ROLE_STATS')")
@@ -543,83 +540,12 @@ public class UserService extends WebService
       return userDao.countAll (filter);
    }
 
-   @PreAuthorize ("hasAnyRole('ROLE_USER_MANAGER','ROLE_DATA_MANAGER')")
-   @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public int countForDataRight (String filter)
-   {
-      return userDao.countForDataRight (filter);
-   }
-
    @PreAuthorize ("isAuthenticated ()")
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public List<AccessRestriction> getRestrictions (String user_uuid)
    {
       return new ArrayList<> (userDao.read (user_uuid).getRestrictions ());
    }
-
-   /**
-    * THIS METHOD IS NOT SAFE: IT MUST BE REMOVED. 
-    * TODO: manage access by page.
-    * @param user_uuid
-    * @return
-    */
-   @PreAuthorize ("hasRole('ROLE_DATA_MANAGER')")
-   @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public List<Long> getAuthorizedProducts (String user_uuid)
-   {
-      return productDao.getAuthorizedProducts (user_uuid);
-   }
-
-   @PreAuthorize ("hasRole('ROLE_DATA_MANAGER')")
-   @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public List<String> getAuthorizedCollections (String user_uuid)
-   {
-      return collectionDao.getAuthorizedCollections (user_uuid);
-   }
-
-   @PreAuthorize ("hasRole('ROLE_DATA_MANAGER')")
-   @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
-   public void addAccessToCollections (String user_uuid, List<String> collection_uuids)
-      throws RootNotModifiableException
-   {
-      User user = userDao.read (user_uuid);
-      checkRoot (user);
-      // database
-      for (String collectionUUID : collection_uuids)
-      {
-         Collection collection = collectionDao.read (collectionUUID);
-         userDao.addAccessToCollection (user, collection);
-      }
-   }
-
-   @PreAuthorize ("hasRole('ROLE_DATA_MANAGER')")
-   @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
-   public void removeAccessToCollections (String user_uuid,
-         List<String> collection_uuids) throws RootNotModifiableException
-   {
-      User user = userDao.read (user_uuid);
-      checkRoot (user);
-      for (String collectionUUID : collection_uuids)
-      {
-         Collection collection = collectionDao.read(collectionUUID);
-         userDao.removeAccessToCollection (user.getUUID(), collection);
-      }
-   }
-
-   @PreAuthorize ("hasRole('ROLE_DATA_MANAGER')")
-   public void addAccessToProducts (Long user_id, List<Long> product_ids) throws
-         RootNotModifiableException
-   {
-      // TODO to remove
-   }
-
-   @PreAuthorize ("hasRole('ROLE_DATA_MANAGER')")
-   public void removeAccessToProducts (Long user_id, List<Long> product_ids)
-         throws RootNotModifiableException
-   {
-      // TODO to remove
-   }
-
 
    /**
     * Update given User, after checking required fields.
@@ -749,19 +675,6 @@ public class UserService extends WebService
    }
 
    @PreAuthorize ("hasRole('ROLE_SEARCH')")
-   @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public int countUploadedProducts (String uuid)
-   {
-      User u = userDao.read (uuid);
-      if (u == null)
-      {
-         throw new UserNotExistingException ();
-      }
-      List<Product> uploadeds = productDao.getUploadedProducts (u);
-      return uploadeds != null ? uploadeds.size () : 0;
-   }
-
-   @PreAuthorize ("hasRole('ROLE_SEARCH')")
    @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
    public void clearSavedSearches (String uuid)
    {
@@ -802,39 +715,7 @@ public class UserService extends WebService
       }
       return searchDao.scrollSearchesOfUser (u, skip, top);
    }
-
-   @PreAuthorize ("hasRole('ROLE_UPLOAD')")
-   @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public List<Product> getUploadedProducts(String uuid, int skip, int top)
-            throws UserNotExistingException, ProductNotExistingException
-   {
-      User user = userDao.read (uuid);
-      if (user == null)
-      {
-         throw new UserNotExistingException();
-      }
-      return productDao.scrollUploadedProducts (user, skip, top);
-   } 
-
-   @PreAuthorize ("hasRole('ROLE_UPLOAD')")
-   @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public Set<String> getUploadedProductsIdentifiers (String uuid) throws
-         UserNotExistingException, ProductNotExistingException
-   {
-      User user = userDao.read (uuid);
-      if (user == null)
-      {
-         throw new UserNotExistingException();
-      }
-      List<Product> products = productDao.getUploadedProducts (user);
-      Set<String> prods = new HashSet<String> ();
-      for (Product p : products)
-      {
-         prods.add(p.getIdentifier ());
-      }
-      return prods;
-   }
-
+   
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public void forgotPassword (User user, String baseuri) 
       throws UserNotExistingException, RootNotModifiableException,
@@ -926,12 +807,6 @@ public class UserService extends WebService
    }
 
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public String getPublicDataUserUUID ()
-   {
-      return userDao.getPublicData ().getUUID ();
-   } 
-
-   @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public List<Country> getCountries ()
    {
       return countryDao.readAll ();
@@ -947,56 +822,16 @@ public class UserService extends WebService
    }
 
    /**
-    * Facility method to easily provide user content with resolved lazy fields
-    * to be able to serialize. The method takes care of the possible cycles
-    * such as "users->pref->filescanners->collections->users" ...
-    * It also removes possible huge product list from collections.
-    * 
-    * @param u the user to resolve.
-    * @return the resolved user.
-    * @deprecated Please use securityService.getCurrentUser() instead.
-    */
-   @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   @Deprecated
-   public User resolveUser (User u)
-   {
-      u = userDao.read(u.getUUID());
-      Gson gson = new GsonBuilder().setExclusionStrategies (
-         new ExclusionStrategy()
-         {
-            public boolean shouldSkipClass(Class<?> clazz)
-            {
-               // Avoid huge number of products in collection
-               return clazz==Product.class; 
-            }
-            /**
-             * Custom field exclusion goes here
-             */
-            public boolean shouldSkipField(FieldAttributes f)
-            {
-               // Avoid cycles caused by collection tree and user/auth users... 
-               return f.getName().equals("authorizedUsers") ||
-                      f.getName().equals("parent") ||
-                      f.getName().equals("subCollections");
-
-            }
-         }).serializeNulls().create();
-      String users_string = gson.toJson(u);
-      return gson.fromJson(users_string, User.class);
-   }
-
-    /*
-    * Get all non deleted users corresponding to given filter from the specified offset and limit.
+    * Get all users corresponding to given filter from the specified offset and limit.
     * @param filter
     * @param skip
-    * @param top
     * @return
     */
    @PreAuthorize ("hasRole('ROLE_USER_MANAGER')")
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public Iterator<User> getUsersByFilter (String filter, int skip)
    {
-      return userDao.scrollNotDeletedByFilter (filter, skip);
+      return userDao.getUsersByFilter(filter, skip);
    }
 
    /**
@@ -1009,7 +844,7 @@ public class UserService extends WebService
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public int countByFilter (String filter)
    {
-      return userDao.countNotDeletedByFilter (filter);
+      return userDao.countByFilter(filter);
    }
 
    /**
@@ -1031,4 +866,99 @@ public class UserService extends WebService
       }
    }
 
+   /**
+    * Returns quota informations of given user.
+    *
+    * @param user from whom to retrieve quota informations
+    * @return quota informations
+    */
+   public CurrentQuotas getCurrentQuotasForUser(User user)
+   {
+      Objects.requireNonNull(user);
+      return user.getCurrentQuotas();
+   }
+
+   /**
+    * Returns the number of running downloads of given user.
+    *
+    * @param user from whom to retrieve number of downloads running in parallel
+    * @return number of downloads running in parallel
+    */
+   @Cacheable(value = "current_quotas", key = "#user.getUUID()")
+   public int getCurrentDownloadsForUser(User user)
+   {
+      int currentDownloads = getCurrentQuotasForUser(user).getCurrentDownloads();
+      return currentDownloads;
+   }
+
+   /**
+    * Increment the number of running downloads of given user.
+    *
+    * @param user whose downloads running in parallel is to be incremented
+    * @return the new number of running downloads
+    */
+   @CachePut(value = "current_quotas", key = "#user.getUUID()")
+   public int addDownloadForUser(User user)
+   {
+      int downloads = ApplicationContextProvider.getBean(UserService.class).getCurrentDownloadsForUser(user);
+      getCurrentQuotasForUser(user).setCurrentDownloads(downloads + 1);
+      return downloads + 1;
+   }
+
+   /**
+    * Decrement the number of running downloads of given user.
+    *
+    * @param user whose downloads running in parallel is to be decremented
+    * @return the new number of running downloads
+    */
+   @CachePut(value = "current_quotas", key = "#user.getUUID()")
+   public int removeDownloadForUser(User user)
+   {
+      int downloads = ApplicationContextProvider.getBean(UserService.class).getCurrentDownloadsForUser(user);
+      getCurrentQuotasForUser(user).setCurrentDownloads(downloads - 1);
+      return downloads - 1;
+   }
+
+   @PreAuthorize("hasRole('ROLE_USER_MANAGER')")
+   @Transactional(readOnly = false, propagation = Propagation.REQUIRED)
+   @Caching(evict =
+   {
+      @CacheEvict(value = "user", key = "#user?.getUUID()"),
+      @CacheEvict(value = "userByName", key = "#user?.username.toLowerCase()")
+   })
+   public void lockUser(User user, String reason) throws RootNotModifiableException, UserNotExistingException
+   {
+      LockedAccessRestriction accessRestriction = new LockedAccessRestriction();
+      accessRestriction.setBlockingReason(reason);
+      user.addRestriction(accessRestriction);
+      userDao.update(user);
+   }
+
+   @PreAuthorize("hasRole('ROLE_USER_MANAGER')")
+   @Transactional(readOnly = false, propagation = Propagation.REQUIRED)
+   @Caching(evict =
+   {
+      @CacheEvict(value = "user", key = "#user?.getUUID()"),
+      @CacheEvict(value = "userByName", key = "#user?.username.toLowerCase()")
+   })
+   public boolean unlockUser(User user, String restrictionUUID) throws RootNotModifiableException, UserNotExistingException
+   {
+      AccessRestriction toRemove = null;
+      for (AccessRestriction accessRestriction: user.getRestrictions())
+      {
+         if (accessRestriction.getUUID().equals(restrictionUUID))
+         {
+            toRemove = accessRestriction;
+         }
+      }
+
+      if (toRemove == null)
+      {
+         return false;
+      }
+      user.getRestrictions().remove(toRemove);
+      userDao.update(user);
+      accessRestrictionDao.delete(toRemove);
+      return true;
+   }
 }

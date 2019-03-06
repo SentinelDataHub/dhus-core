@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,14 +19,17 @@
  */
 package fr.gael.dhus.sync;
 
-import fr.gael.dhus.database.object.SynchronizerConf;
+import fr.gael.dhus.database.object.config.synchronizer.ProductSynchronizer;
+import fr.gael.dhus.database.object.config.synchronizer.SynchronizerConfiguration;
+import fr.gael.dhus.database.object.config.synchronizer.UserSynchronizer;
+import fr.gael.dhus.sync.impl.ODataProductSynchronizer;
 import fr.gael.dhus.sync.impl.ODataUserSynchronizer;
 
 /**
  * Dispatches tasks to different executors.
  *
- * This implementation dispatches Synchronizers to 2 different Executor according to their type:
- * ODataUserSynchronizer or ODataProductSynchronizer.
+ * This implementation dispatches Synchronizers to different Executor according to their type:
+ * ODataUserSynchronizer or ODataProductSynchronizer or other.
  */
 public final class MetaExecutor implements Executor
 {
@@ -35,6 +38,8 @@ public final class MetaExecutor implements Executor
 
    /** An executor to run {@link ODataUserSynchronizer}s. */
    private final Executor userSyncExecutor = new ExecutorImpl();
+   /** An executor to run {@link ODataProductSynchronizer}s. */
+   private final Executor prodSyncExecutor = new ExecutorImpl();
    /** An executor to run any other type of Synchronizer. */
    private final Executor miscSyncExecutor = new ExecutorImpl();
 
@@ -57,6 +62,10 @@ public final class MetaExecutor implements Executor
       {
          return userSyncExecutor.addSynchronizer(s);
       }
+      else if (s instanceof ODataProductSynchronizer)
+      {
+         return prodSyncExecutor.addSynchronizer(s);
+      }
       else
       {
          return miscSyncExecutor.addSynchronizer(s);
@@ -64,15 +73,19 @@ public final class MetaExecutor implements Executor
    }
 
    @Override
-   public Synchronizer removeSynchronizer(SynchronizerConf s)
+   public Synchronizer removeSynchronizer(SynchronizerConfiguration sc)
    {
-      if (s.getType().endsWith(ODataUserSynchronizer.class.getSimpleName()))
+      if (sc instanceof UserSynchronizer)
       {
-         return userSyncExecutor.removeSynchronizer(s);
+         return userSyncExecutor.removeSynchronizer(sc);
+      }
+      else if (sc instanceof ProductSynchronizer)
+      {
+         return prodSyncExecutor.removeSynchronizer(sc);
       }
       else
       {
-         return miscSyncExecutor.removeSynchronizer(s);
+         return miscSyncExecutor.removeSynchronizer(sc);
       }
    }
 
@@ -80,32 +93,37 @@ public final class MetaExecutor implements Executor
    public void removeAllSynchronizers()
    {
       userSyncExecutor.removeAllSynchronizers();
+      prodSyncExecutor.removeAllSynchronizers();
       miscSyncExecutor.removeAllSynchronizers();
    }
 
    @Override
    public boolean isRunning()
    {
-      return userSyncExecutor.isRunning() && miscSyncExecutor.isRunning();
+      return userSyncExecutor.isRunning() && miscSyncExecutor.isRunning() && prodSyncExecutor.isRunning();
    }
 
    @Override
    public void enableBatchMode(boolean enabled)
    {
       userSyncExecutor.enableBatchMode(enabled);
+      prodSyncExecutor.enableBatchMode(enabled);
       miscSyncExecutor.enableBatchMode(enabled);
    }
 
    @Override
    public boolean isBatchModeEnabled()
    {
-      return userSyncExecutor.isBatchModeEnabled() && miscSyncExecutor.isBatchModeEnabled();
+      return userSyncExecutor.isBatchModeEnabled()
+          && prodSyncExecutor.isBatchModeEnabled()
+          && miscSyncExecutor.isBatchModeEnabled();
    }
 
    @Override
    public void start(boolean start_now)
    {
       userSyncExecutor.start(start_now);
+      prodSyncExecutor.start(start_now);
       miscSyncExecutor.start(start_now);
    }
 
@@ -113,6 +131,7 @@ public final class MetaExecutor implements Executor
    public void stop()
    {
       userSyncExecutor.stop();
+      prodSyncExecutor.stop();
       miscSyncExecutor.stop();
    }
 
@@ -121,14 +140,19 @@ public final class MetaExecutor implements Executor
    {
       userSyncExecutor.terminate();
       miscSyncExecutor.terminate();
+      prodSyncExecutor.terminate();
    }
 
    @Override
-   public SynchronizerStatus getSynchronizerStatus(SynchronizerConf sc)
+   public SynchronizerStatus getSynchronizerStatus(SynchronizerConfiguration sc)
    {
-      if (sc.getType().endsWith(ODataUserSynchronizer.class.getSimpleName()))
+      if (sc instanceof UserSynchronizer)
       {
          return userSyncExecutor.getSynchronizerStatus(sc);
+      }
+      else if (sc instanceof ProductSynchronizer)
+      {
+         return prodSyncExecutor.getSynchronizerStatus(sc);
       }
       else
       {

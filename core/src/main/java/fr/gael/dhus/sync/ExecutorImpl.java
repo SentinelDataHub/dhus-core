@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,10 +19,9 @@
  */
 package fr.gael.dhus.sync;
 
-import fr.gael.dhus.database.object.SynchronizerConf;
+import fr.gael.dhus.database.object.config.synchronizer.SynchronizerConfiguration;
 
 import java.text.ParseException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -32,6 +31,7 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TimeZone;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -140,18 +140,18 @@ public final class ExecutorImpl implements Executor
     *    back in the database) or {@code null} if not found.
     */
    @Override
-   public Synchronizer removeSynchronizer (SynchronizerConf s)
+   public Synchronizer removeSynchronizer(SynchronizerConfiguration s)
    {
       Objects.requireNonNull (s, "Param must not be null");
       Synchronizer res = null;
       try
       {
-         CronSchedule cron = new CronSchedule(s.getCronExpression ());
+         CronSchedule cron = new CronSchedule(s.getSchedule());
 
          this.lockSyncMap.lock ();
          try
          {
-            List<StatSync> sync_l = this.synchronizers.get (cron);
+            List<StatSync> sync_l = this.synchronizers.get(cron);
             if (sync_l != null && !sync_l.isEmpty ())
             {
                // Finds and remove `s` from the StatSyncList.
@@ -219,7 +219,10 @@ public final class ExecutorImpl implements Executor
       try
       {
          // Block until running sync is done
-         this.thread.interrupt();
+         if (this.thread != null && this.thread.isAlive())
+         {
+            this.thread.interrupt();
+         }
          StatSync current = this.runningSyncer.get();
          if (current != null)
          {
@@ -347,11 +350,11 @@ public final class ExecutorImpl implements Executor
     * @return an instance of SynchronizerStatus or null if not found.
     */
    @Override
-   public SynchronizerStatus getSynchronizerStatus (SynchronizerConf sc)
+   public SynchronizerStatus getSynchronizerStatus(SynchronizerConfiguration sc)
    {
       try
       {
-         List<StatSync> lss = this.synchronizers.get (new CronSchedule (sc.getCronExpression ()));
+         List<StatSync> lss = this.synchronizers.get(new CronSchedule(sc.getSchedule()));
 
          if (lss == null || lss.isEmpty ())
          {
@@ -424,7 +427,7 @@ public final class ExecutorImpl implements Executor
       }
 
       @Override
-      public SynchronizerConf getSynchronizerConf ()
+      public SynchronizerConfiguration getSynchronizerConf()
       {
          return this.sync.getSynchronizerConf ();
       }

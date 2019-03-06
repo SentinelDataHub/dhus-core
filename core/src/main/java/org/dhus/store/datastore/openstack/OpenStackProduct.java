@@ -109,6 +109,9 @@ public class OpenStackProduct extends AbstractProduct implements DataStoreProduc
       throw new UnsupportedOperationException("No implementation for class " + cl.getName());
    }
 
+   /**
+    * Returns null if the corresponding SwiftObject is not found.
+    */
    @Override
    public Long getContentLength()
    {

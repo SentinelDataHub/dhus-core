@@ -139,7 +139,7 @@ public abstract class AbstractScanner implements Scanner
             }
             catch (IOException e1)
             {
-               e1.printStackTrace();
+               LOGGER.error("Could not get the default DrbCortex model", e1);
             }
          
             LOGGER.debug("Checking class : " + cl.getLabel () + 

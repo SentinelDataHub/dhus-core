@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -21,6 +21,8 @@ package org.dhus.store;
 
 public class ExtractorException extends Exception
 {
+   private static final long serialVersionUID = 1L;
+
    ExtractorException(String message)
    {
       super(message);

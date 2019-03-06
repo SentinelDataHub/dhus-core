@@ -1,9 +1,7 @@
 package fr.gael.dhus.database.dao;
 
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.DirtiesContext;
@@ -15,7 +13,6 @@ import fr.gael.dhus.database.dao.interfaces.HibernateDao;
 import fr.gael.dhus.database.object.Collection;
 import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.User;
-import fr.gael.dhus.util.CheckIterator;
 import fr.gael.dhus.util.TestContextLoader;
 
 @ContextConfiguration (
@@ -74,7 +71,6 @@ public class TestCollectionDao extends
       collection.setName (collectioName);
       collection.setDescription ("Unit Test create");
       collection.getProducts ().addAll (products);
-      collection.getAuthorizedUsers ().add (user);
 
       Collection nc = dao.create (collection);
       Assert.assertNotNull (nc);
@@ -82,9 +78,6 @@ public class TestCollectionDao extends
 
       Assert.assertEquals (nc.getProducts ().size (), 2);
       Assert.assertTrue (nc.getProducts ().containsAll (products));
-
-      Assert.assertEquals (nc.getAuthorizedUsers ().size (), 1);
-      Assert.assertTrue (nc.getAuthorizedUsers ().contains (user));
    }
 
    @Override
@@ -112,15 +105,10 @@ public class TestCollectionDao extends
       Assert.assertTrue (c.getProducts ().containsAll (
             Arrays.asList (p0, p1, p2)));
 
+      // FIXME java won't execute the read if the returned value is unused
       User u0 = udao.read ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0");
       User u1 = udao.read ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1");
       User u2 = udao.read ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2");
-
-      Set<User> authorizedUsers = c.getAuthorizedUsers ();
-      Assert.assertEquals (authorizedUsers.size (), 3);
-      Assert.assertTrue (authorizedUsers.contains (u0));
-      Assert.assertTrue (authorizedUsers.contains (u1));
-      Assert.assertTrue (authorizedUsers.contains (u2));
    }
 
    @Override
@@ -138,12 +126,10 @@ public class TestCollectionDao extends
 
       collection.setDescription (description);
       collection.getProducts ().add (p);
-      collection.getAuthorizedUsers ().add (u);
       dao.update (collection);
 
       collection = dao.read (id);
       Assert.assertEquals (collection.getDescription (), description);
-      Assert.assertTrue (collection.getAuthorizedUsers ().contains (u));
       Assert.assertTrue (collection.getProducts ().contains (p));
    }
 
@@ -158,7 +144,6 @@ public class TestCollectionDao extends
       Assert.assertNotNull (collection);
 
       List<Long> products = dao.getProductIds (id, null);
-      List<User> users = dao.getAuthorizedUsers (collection);
 
       dao.delete (collection);
       Assert.assertNull (dao.read (id));
@@ -169,10 +154,6 @@ public class TestCollectionDao extends
       {
          Assert.assertNotNull (pdao.read (pid));
       }
-      for (User u : users)
-      {
-         Assert.assertNotNull (udao.read (u.getUUID ()));
-      }
    }
 
    @Override
@@ -180,14 +161,6 @@ public class TestCollectionDao extends
    {
       dao.deleteAll ();
       Assert.assertEquals (dao.count (), 0);
-   }
-
-   @Override
-   public void scroll ()
-   {
-      String hql = "WHERE uuid not like 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2'";
-      Iterator<Collection> it = dao.scroll (hql, -1, -1).iterator ();
-      Assert.assertTrue (CheckIterator.checkElementNumber (it, howMany () - 1));
    }
 
    @Override
@@ -216,22 +189,6 @@ public class TestCollectionDao extends
    {
       // classic count
       Assert.assertEquals (dao.count (), howMany ());
-
-      // count (User u)
-      Assert.assertEquals (dao.count (udao.getRootUser ()), howMany ());
-      Assert.assertEquals (dao.count (udao.read ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0")), 3);
-   }
-
-   @Test
-   public void getAuthorizedCollections ()
-   {
-      String userId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3";
-      List<String> collections = dao.getAuthorizedCollections (userId);
-      Assert.assertNotNull (collections);
-      Assert.assertEquals (collections.size (), 2);
-      // check if collections contains collections {4; 5}
-      Assert.assertTrue (collections.contains ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa4"));
-      Assert.assertTrue (collections.contains ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa5"));
    }
 
    @Test

@@ -22,10 +22,12 @@ package fr.gael.dhus.olingo.v1;
 import fr.gael.dhus.database.object.DeletedProduct;
 import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.User;
+import fr.gael.dhus.olingo.v1.visitor.CartSQLVisitor;
 import fr.gael.dhus.olingo.v1.visitor.DeletedProductSQLVisitor;
 import fr.gael.dhus.olingo.v1.visitor.ProductSQLVisitor;
 import fr.gael.dhus.olingo.v1.visitor.UserSQLVisitor;
 import fr.gael.dhus.service.DeletedProductService;
+import fr.gael.dhus.service.ProductCartService;
 import fr.gael.dhus.service.ProductService;
 import fr.gael.dhus.service.UserService;
 
@@ -51,6 +53,9 @@ public class OlingoManager
 
    @Autowired
    private UserService userService;
+
+   @Autowired
+   private ProductCartService productCartService;
 
    public List<DeletedProduct> getDeletedProducts(FilterExpression filter_expr,
          OrderByExpression order_expr, int skip, int top)
@@ -98,6 +103,42 @@ public class OlingoManager
    {
       ProductSQLVisitor expV = new ProductSQLVisitor(filter_expr, null);
       return productService.countProducts(expV, uuid);
+   }
+
+   /**
+    * Filterable and sortable list of product from a user's cart.
+    *
+    * @param uuid user UUID.
+    * @param filter_expr $filter expression
+    * @param order_expr $orderby expression
+    * @param skip $skip parameter
+    * @param top $top parameter
+    * @return A filtered and ordered list of product from givern user's cart
+    * @throws ExceptionVisitExpression could not visit given filter/order expression
+    * @throws ODataApplicationException other error
+    */
+   public List<Product> getProductCart(String uuid, FilterExpression filter_expr,
+         OrderByExpression order_expr, int skip, int top)
+         throws ExceptionVisitExpression, ODataApplicationException
+   {
+      CartSQLVisitor expV = new CartSQLVisitor(filter_expr, order_expr);
+      return productCartService.getCartProducts(expV, uuid, skip, top);
+   }
+
+   /**
+    * Filterable product of cart count ($count)
+    *
+    * @param uuid user UUID
+    * @param filter_expr $filter expression
+    * @return count of product in cart of given user that validate the given filter
+    * @throws ExceptionVisitExpression could not visit given filter expression
+    * @throws ODataApplicationException other error
+    */
+   public int getCartProductCount(String uuid, FilterExpression filter_expr)
+         throws ExceptionVisitExpression, ODataApplicationException
+   {
+      CartSQLVisitor expV = new CartSQLVisitor(filter_expr, null);
+      return productCartService.countProducts(expV, uuid);
    }
 
    public List<User> getUsers(

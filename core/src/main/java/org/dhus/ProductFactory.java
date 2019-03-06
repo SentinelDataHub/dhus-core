@@ -33,8 +33,6 @@ import org.dhus.store.datastore.hfs.HfsProduct;
 public class ProductFactory
 {
    private static final String FILE_PROTOCOL = "file";
-   private static final String HTTP_PROTOCOL = "http";
-   private static final String FTP_PROTOCOL = "ftp";
    private static final Logger LOGGER = LogManager.getLogger();
 
    public static Product generateProduct(final URL url)
@@ -48,10 +46,12 @@ public class ProductFactory
       String protocol = url.getProtocol();
       if (protocol.equals(FILE_PROTOCOL))
       {
+         LOGGER.debug("Generating product from file: {}", url);
          return getProductFromPath(Paths.get(url.getPath()));
       }
       else
       {
+         LOGGER.debug("Generating product from stream: {}", url);
          Product product = new AbstractProduct()
          {
             @Override

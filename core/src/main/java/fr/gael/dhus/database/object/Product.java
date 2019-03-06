@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,14 +20,11 @@
 package fr.gael.dhus.database.object;
 
 import java.io.Serializable;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 import javax.persistence.CollectionTable;
@@ -41,11 +38,7 @@ import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
-import javax.persistence.JoinTable;
-import javax.persistence.ManyToMany;
-import javax.persistence.ManyToOne;
 import javax.persistence.MapKeyColumn;
-import javax.persistence.OrderBy;
 import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
@@ -83,11 +76,11 @@ public class Product implements Serializable
    @Column (name = "updated", nullable = false)
    private Date updated = new Date ();
 
-   @Column (name = "PATH", nullable = false)
-   private URL path;
-
    @Column (name = "IDENTIFIER", nullable = true)
    private String identifier;
+
+   @Column(name = "ONLINE",columnDefinition = "boolean", nullable = false)
+   private Boolean online;
 
    @ElementCollection (targetClass = MetadataIndex.class,
                        fetch = FetchType.LAZY)
@@ -96,21 +89,11 @@ public class Product implements Serializable
       joinColumns=@JoinColumn(name="PRODUCT_ID"))
    private List<MetadataIndex> indexes=new ArrayList<MetadataIndex> ();
 
-   @Column (name = "PROCESSED", nullable = false,
-            columnDefinition = "boolean default false")
-   private Boolean processed = false;
-
    @Column (name = "QUICKLOOK_SIZE")
    private Long quicklookSize;
-   
+
    @Column (name = "THUMBNAIL_SIZE")
    private Long thumbnailSize;
-   
-   @Column (name = "QUICKLOOK_PATH")
-   private String quicklookPath = null;
-
-   @Column (name = "THUMBNAIL_PATH")
-   private String thumbnailPath = null;
 
    /**
     * Locked flag used by eviction
@@ -125,14 +108,6 @@ public class Product implements Serializable
    @Column (name = "FOOTPRINT", nullable = true, length = 8192)
    private String footPrint;
 
-   @ManyToMany (fetch = FetchType.LAZY)
-   @JoinTable (
-      name="PRODUCT_USER_AUTH",
-      joinColumns={@JoinColumn(name="PRODUCTS_ID", table="PRODUCTS")},
-      inverseJoinColumns={@JoinColumn(name="USERS_UUID", table="USERS")})
-   @OrderBy ("username")
-   private Set<User> authorizedUsers = new HashSet<User> ();
-
    @Embedded
    @Cascade ({CascadeType.ALL})
    private Download download = new Download ();
@@ -145,10 +120,6 @@ public class Product implements Serializable
 
    @Column (name = "ingestionDate")
    private Date ingestionDate;
-
-   @ManyToOne (fetch = FetchType.LAZY)
-   @JoinColumn (name = "OWNER_UUID", nullable = true)
-   private User owner;
 
    @Column (name = "contentStart")
    private Date contentStart;
@@ -202,22 +173,6 @@ public class Product implements Serializable
    public void setUpdated (Date updated)
    {
       this.updated = updated;
-   }
-
-   /**
-    * @param path the path to set
-    */
-   public void setPath (URL path)
-   {
-      this.path = path;
-   }
-
-   /**
-    * @return the path
-    */
-   public URL getPath ()
-   {
-      return path;
    }
 
    /**
@@ -284,49 +239,6 @@ public class Product implements Serializable
       return footPrint;
    }
 
-   /**
-    * @param authorized_users the authorizedUsers to set
-    */
-   public void setAuthorizedUsers (Set<User> authorized_users)
-   {
-      this.authorizedUsers = authorized_users;
-   }
-
-   /**
-    * @return the authorizedUsers
-    */
-   public Set<User> getAuthorizedUsers ()
-   {
-      return authorizedUsers;
-   }
-
-   /**
-    * @param downloadable_path the downloadablePath to set
-    */
-   public void setDownloadablePath (String downloadable_path)
-   {
-      getDownload ().setPath (downloadable_path);
-   }
-
-   /**
-    * @return the downloadablePath
-    */
-   public String getDownloadablePath ()
-   {
-      return getDownload ().getPath ();
-   }
-
-   public long getDownloadableSize ()
-   {
-      Long result = getDownload ().getSize ();
-      return (result != null) ? result : -1;
-   }
-
-   public void setDownloadableSize (long size)
-   {
-      getDownload ().setSize (size);
-   }
-
    public String getDownloadableType ()
    {
       return getDownload ().getType ();
@@ -335,22 +247,6 @@ public class Product implements Serializable
    public void setDownloadableType (String type)
    {
       getDownload ().setType (type);
-   }
-
-   /**
-    * @param processed the processed to set
-    */
-   public void setProcessed (Boolean processed)
-   {
-      this.processed = processed;
-   }
-
-   /**
-    * @return the processed
-    */
-   public Boolean getProcessed ()
-   {
-      return processed;
    }
 
    /**
@@ -377,54 +273,6 @@ public class Product implements Serializable
    public void setSize (Long size)
    {
       this.size = size;
-   }
-
-   /**
-    * @return the quicklookPath
-    */
-   public String getQuicklookPath ()
-   {
-      return quicklookPath;
-   }
-
-   /**
-    * @param quicklook_path the quicklookPath to set
-    */
-   public void setQuicklookPath (String quicklook_path)
-   {
-      this.quicklookPath = quicklook_path;
-   }
-
-   /**
-    * @return true if quicklookPath exists
-    */
-   public Boolean getQuicklookFlag ()
-   {
-      return this.quicklookPath != null;
-   }
-
-   /**
-    * @return the thumbnailPath
-    */
-   public String getThumbnailPath ()
-   {
-      return thumbnailPath;
-   }
-
-   /**
-    * @param thumbnail_path the thumbnailPath to set
-    */
-   public void setThumbnailPath (String thumbnail_path)
-   {
-      this.thumbnailPath = thumbnail_path;
-   }
-
-   /**
-    * @return if thumbnail exists
-    */
-   public Boolean getThumbnailFlag ()
-   {
-      return thumbnailPath != null;
    }
 
    public String getUuid ()
@@ -461,16 +309,6 @@ public class Product implements Serializable
       this.ingestionDate = ingestion_date;
    }
 
-   public User getOwner ()
-   {
-      return owner;
-   }
-
-   public void setOwner (User owner)
-   {
-      this.owner = owner;
-   }
-
    public Date getContentStart ()
    {
       return contentStart;
@@ -500,7 +338,7 @@ public class Product implements Serializable
    {
       this.itemClass = item_class;
    }
-   
+
    public void setQuicklookSize (Long quicklook_size)
    {
       this.quicklookSize = quicklook_size;
@@ -510,7 +348,7 @@ public class Product implements Serializable
    {
       this.thumbnailSize = thumbnail_size;
    }
-   
+
    public Long getQuicklookSize ()
    {
       return quicklookSize;
@@ -519,6 +357,16 @@ public class Product implements Serializable
    public Long getThumbnailSize ()
    {
       return thumbnailSize;
+   }
+
+   public Boolean isOnline()
+   {
+      return online;
+   }
+
+   public void setOnline(Boolean online)
+   {
+      this.online = online;
    }
 
    @Override
@@ -546,12 +394,6 @@ public class Product implements Serializable
    {
       private static final long serialVersionUID = -3040416544960325852L;
 
-      @Column (name = "DOWNLOAD_PATH")
-      private String path;
-
-      @Column (name = "DOWNLOAD_SIZE")
-      private Long size = -1L;
-
       @Column (name = "DOWNLOAD_TYPE")
       private String type = DEFAULT_CONTENT_TYPE;
 
@@ -561,26 +403,6 @@ public class Product implements Serializable
       @Column (name = "DOWNLOAD_CHECKSUM_VALUE")
       @CollectionTable (name = "CHECKSUMS")
       private Map<String, String> checksums;
-
-      public String getPath ()
-      {
-         return path;
-      }
-
-      public void setPath (String path)
-      {
-         this.path = path;
-      }
-
-      public Long getSize ()
-      {
-         return size;
-      }
-
-      public void setSize (Long size)
-      {
-         this.size = size;
-      }
 
       public String getType ()
       {

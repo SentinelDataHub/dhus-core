@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,8 +19,17 @@
  */
 package fr.gael.dhus.service;
 
+import fr.gael.dhus.database.object.Collection;
+import fr.gael.dhus.database.object.MetadataIndex;
+import fr.gael.dhus.database.object.Product;
+import fr.gael.dhus.search.DHusSearchException;
+import fr.gael.dhus.search.SolrDao;
+import fr.gael.dhus.service.metadata.MetadataType;
+import fr.gael.dhus.service.metadata.SolrField;
+
 import java.io.IOException;
 import java.util.AbstractList;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -37,17 +46,14 @@ import org.apache.solr.client.solrj.response.Suggestion;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
+
+import org.dhus.ProductConstants;
+import org.dhus.store.ingestion.IngestibleProduct;
+import org.dhus.store.ingestion.MetadataExtractionException;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
-
-import fr.gael.dhus.database.object.Collection;
-import fr.gael.dhus.database.object.MetadataIndex;
-import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.search.DHusSearchException;
-import fr.gael.dhus.search.SolrDao;
-import fr.gael.dhus.service.metadata.MetadataType;
-import fr.gael.dhus.service.metadata.SolrField;
 
 @Service
 public class SearchService extends WebService
@@ -74,6 +80,9 @@ public class SearchService extends WebService
    @Autowired
    private MetadataTypeService metadataTypeService;
 
+   /** Max tries for solr indexing, default is 1 */
+   private static final int MAX_TRY =
+      Integer.valueOf(System.getProperty("dhus.solr.max.index.try", "1"));
 
    /**
     * Indexes or Reindexes a product.
@@ -84,31 +93,62 @@ public class SearchService extends WebService
     * @throws IOException connectivity issue
     * @throws SolrServerException indexing failed or server-side issue
     */
+   // TODO move to MetadataStoreService
    public void index(Product product) throws IOException, SolrServerException
    {
-         long start = System.currentTimeMillis();
-
-         SolrInputDocument doc = toInputDocument(product);
-         LOGGER.debug("Indexing product '{}'", product.getUuid());
-         solrDao.index(doc);
-         long end = System.currentTimeMillis();
-         LOGGER.info("Indexed product in  " + (end - start) + "ms");
+      LOGGER.debug("Indexing product '{}'", product.getUuid());
+      SolrInputDocument document = toInputDocument(product);
+      indexSolrDocument(document);
    }
 
    /**
-    * Removes the given product from the index.
-    * @param product to remove.
+    * Indexes or Reindexes a product.
+    *
+    * @param inProduct a product
+    * @param targetCollectionNames list of names of collections referencing that product
+    *
+    * @throws IOException connectivity issue
+    * @throws SolrServerException indexing failed or server-side issue
+    * @throws MetadataExtractionException Could not extract metadatas from given product
     */
-   public void remove(Product product)
+   public void index(IngestibleProduct inProduct, List<String> targetCollectionNames)
+         throws IOException, SolrServerException, MetadataExtractionException
    {
-      try
+      LOGGER.debug("Indexing product '{}'", inProduct.getUuid());
+      long start = System.currentTimeMillis();
+      SolrInputDocument document = makeInputDocument(
+            inProduct.getUuid(),
+            (Long) inProduct.getProperty(ProductConstants.DATABASE_ID),
+            inProduct.getItemClass(),
+            inProduct.getMetadataIndexes(),
+            targetCollectionNames);
+      LOGGER.debug("Solr Input Document for product '{}' made in {}ms", inProduct.getUuid(), System.currentTimeMillis() - start);
+      indexSolrDocument(document);
+   }
+
+   private void indexSolrDocument(final SolrInputDocument document) throws IOException, SolrServerException
+   {
+      long start = System.currentTimeMillis();
+      boolean indexed = false;
+      for (int tries = 0; !indexed && tries <= MAX_TRY; tries++)
       {
-         solrDao.remove(product.getId());
+         try
+         {
+            solrDao.index(document);
+            indexed = true;
+         }
+         catch (SolrServerException | IOException e)
+         {
+            if (tries == MAX_TRY)
+            {
+               LOGGER.error("Could not index product {}", document.getFieldValue("uuid"));
+               throw e;
+            }
+         }
       }
-      catch (Exception ex)
-      {
-         LOGGER.error("Cannot remove product " + product.getIdentifier() + "from index", ex);
-      }
+      LOGGER.debug("Product '{}' indexed in {}ms",
+            () -> document.getFieldValue("uuid"),
+            () -> (System.currentTimeMillis() - start));
    }
 
    /**
@@ -160,7 +200,7 @@ public class SearchService extends WebService
       {
          LOGGER.error("An exception occured while searching", ex);
       }
-      return Collections.EMPTY_LIST.iterator();
+      return Collections.emptyIterator();
    }
 
    /**
@@ -199,7 +239,7 @@ public class SearchService extends WebService
    public Product asProduct(SolrDocument doc)
    {
       Long pid = Long.class.cast(doc.get("id"));
-      return productService.getProduct(pid);
+      return productService.systemGetProduct(pid);
    }
 
    /**
@@ -321,6 +361,7 @@ public class SearchService extends WebService
    /**
     * Wipes the current index and reindex everything from the DataBase.
     */
+   // TODO move to MetadataStoreService
    public void fullReindex()
    {
       try
@@ -385,20 +426,92 @@ public class SearchService extends WebService
    }
 
    /**
-    * Makes a SolrInputDocument from a Product database object.
-    * The returned document can be indexed as is.
-    * @param product to convert.
-    * @return an indexable solr document.
+    * Partially reindex products matched by the provided query.
+    * Uses {@link SolrDao#batchIndex(java.util.Iterator)}.
+    *
+    * @param query to select a partition of products
+    * @param enableTweaks true to to disable autocommits and autosoftcommits to speed-up the reindex
+    *                     (disables NRT availability of solr documents)
     */
-   private SolrInputDocument toInputDocument(Product product)
+   public void partialReindex(SolrQuery query, boolean enableTweaks)
+   {
+      try
+      {
+         LOGGER.info("Partial reindex using query '{}', tweaks are {}", query, enableTweaks ? "on" : "off");
+         long start = System.currentTimeMillis();
+
+         SolrDocumentList queryRes = search(query);
+         if (queryRes.isEmpty())
+         {
+            LOGGER.warn("Partial reindex: Query '{}' returned an empty document list, aborting...", query);
+            return;
+         }
+         LOGGER.info("Partial reindex, {} products to reindex", queryRes.size());
+
+         final Iterator<SolrDocument> toReindex = queryRes.iterator();
+
+         // Makes an adaptor for SolrDao#batchIndex(...)
+         Iterator<SolrInputDocument> it = new Iterator<SolrInputDocument>()
+         {
+            @Override
+            public boolean hasNext()
+            {
+               return toReindex.hasNext();
+            }
+
+            @Override
+            public SolrInputDocument next()
+            {
+               Product product = asProduct(toReindex.next());
+               product.setIndexes(productService.getIndexes(product.getId()));
+               return toInputDocument(product);
+            }
+
+            @Override
+            public void remove()
+            {
+               throw new UnsupportedOperationException("Do not use remove()");
+            }
+         };
+
+         Map<String, String> config = null;
+         if (enableTweaks)
+         {
+            config = new HashMap<>();
+            // Best config for bulk reindex
+            // see: http://lucidworks.com/blog/2013/08/23/understanding-transaction-logs-softcommit-and-commit-in-sorlcloud/
+            config.put("updateHandler.autoSoftCommit.maxDocs", "-1");     // Opens a new searcher (the slowest operation).
+            config.put("updateHandler.autoSoftCommit.maxTime", "-1");     // Opens a new searcher (the slowest operation).
+            config.put("updateHandler.autoCommit.maxDocs", "-1");         // Time based autocommit is better.
+            config.put("updateHandler.autoCommit.maxTime", "60000");      // 1 minute, controls the size of tlog files.
+            config.put("updateHandler.autoCommit.openSearcher", "false"); // Opens a new searcher (the slowest operation).
+            solrDao.setProperties(config);
+         }
+
+         solrDao.batchIndex(it);
+
+         if (enableTweaks && config != null)
+         {
+            solrDao.unsetProperties(config.keySet());
+         }
+
+         LOGGER.info("Partial reindex done in {}ms", (System.currentTimeMillis() - start));
+      }
+      catch (IOException | SolrServerException ex)
+      {
+         LOGGER.error("Failed to perform partial reindex", ex);
+      }
+   }
+
+   private SolrInputDocument makeInputDocument(String productUuid, Long productId,
+         String productClass, List<MetadataIndex> metadataIndices, List<String> targetCollectionNames)
    {
       SolrInputDocument doc = new SolrInputDocument();
 
-      // Metadatas
-      List<MetadataIndex> indices = product.getIndexes();
-      if (indices != null && !indices.isEmpty())
+      // Metadata
+      if (metadataIndices != null && !metadataIndices.isEmpty())
       {
-         for (MetadataIndex index : indices)
+         for (MetadataIndex index: metadataIndices)
          {
             String type = index.getType();
 
@@ -412,7 +525,7 @@ public class SearchService extends WebService
             //doc.addField("contents", index.getQueryable());
 
             MetadataType mt = metadataTypeService
-                  .getMetadataTypeByName(product.getItemClass(), index.getName());
+                  .getMetadataTypeByName(productClass, index.getName());
             SolrField sf = (mt != null)? mt.getSolrField(): null;
 
             if (sf != null || index.getQueryable() != null)
@@ -435,24 +548,62 @@ public class SearchService extends WebService
       }
       else
       {
-         LOGGER.warn("Product '" + product.getIdentifier() + "' contains no metadata");
+         LOGGER.warn("Product '{}' contains no metadata", productUuid);
       }
 
       // DHuS Attributes
-      doc.setField("id", product.getId());
-      doc.setField("uuid", product.getUuid());
+      doc.setField("id", productId);
+      doc.setField("uuid", productUuid);
       doc.setField("path", DEFAULT_PATH);
 
       // Collections
-      List<Collection> collections = collectionService.getCollectionsOfProduct(product);
-      if (collections != null && !collections.isEmpty())
+      if (targetCollectionNames != null)
       {
-         for (Collection collection : collections)
+         for (String collectionName : targetCollectionNames)
          {
-            doc.addField("collection", collection.getName());
+            doc.addField("collection", collectionName);
          }
       }
 
       return doc;
+   }
+
+   /**
+    * Makes a SolrInputDocument from a Product database object.
+    * The returned document can be indexed as is.
+    *
+    * @param product to convert
+    * @return an indexable solr document
+    */
+   // TODO move to metadatastoreservice
+   private SolrInputDocument toInputDocument(Product product)
+   {
+      long start = System.currentTimeMillis();
+      List<Collection> collections = collectionService.getCollectionsOfProduct(product.getId());
+      List<String> collectionNames = new ArrayList<>();
+      if (collections != null && !collections.isEmpty())
+      {
+         collections.forEach((collection) -> collectionNames.add(collection.getName()));
+      }
+      SolrInputDocument res = makeInputDocument(product.getUuid(), product.getId(), product.getItemClass(), product.getIndexes(), collectionNames);
+      LOGGER.debug("Solr Input Document for product '{}' made in {}ms", product.getUuid(), System.currentTimeMillis() - start);
+      return res;
+   }
+
+   /**
+    * Removes a product from the index by uuid.
+    *
+    * @param uuid the uuid of a product
+    */
+   public void removeProduct(String uuid)
+   {
+      try
+      {
+         solrDao.removeProduct(uuid);
+      }
+      catch (SolrServerException | IOException e)
+      {
+         LOGGER.error("Cannot remove product {} from index", uuid, e);
+      }
    }
 }

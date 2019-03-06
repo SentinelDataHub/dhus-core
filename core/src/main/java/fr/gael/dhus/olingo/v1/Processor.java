@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,17 +19,21 @@
  */
 package fr.gael.dhus.olingo.v1;
 
+import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.olingo.Security;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidKeyException;
 import fr.gael.dhus.olingo.v1.ExpectedException.NotAllowedException;
 import fr.gael.dhus.olingo.v1.ExpectedException.NotImplementedException;
 import fr.gael.dhus.olingo.v1.entity.Ingest;
 import fr.gael.dhus.olingo.v1.entity.Product;
+import fr.gael.dhus.olingo.v1.entity.Scanner;
 import fr.gael.dhus.olingo.v1.entity.Synchronizer;
 import fr.gael.dhus.olingo.v1.entity.User;
 import fr.gael.dhus.olingo.v1.entity.UserSynchronizer;
 import fr.gael.dhus.olingo.v1.entity.AbstractEntity;
 import fr.gael.dhus.olingo.v1.entity.DeletedProduct;
+import fr.gael.dhus.olingo.v1.entity.Event;
+import fr.gael.dhus.olingo.v1.entity.EventSynchronizer;
 import fr.gael.dhus.olingo.v1.entityset.AbstractEntitySet;
 import fr.gael.dhus.olingo.v1.formats.CsvFormatter;
 import fr.gael.dhus.olingo.v1.formats.MetalinkFormatter;
@@ -57,14 +61,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.StringTokenizer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.apache.http.client.utils.URIBuilder;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.apache.olingo.odata2.api.ODataCallback;
 import org.apache.olingo.odata2.api.commons.HttpStatusCodes;
 import org.apache.olingo.odata2.api.commons.InlineCount;
@@ -107,11 +107,6 @@ import org.apache.olingo.odata2.api.uri.info.GetSimplePropertyUriInfo;
 import org.apache.olingo.odata2.api.uri.info.PostUriInfo;
 import org.apache.olingo.odata2.api.uri.info.PutMergePatchUriInfo;
 
-import org.hibernate.HibernateException;
-import org.hibernate.Session;
-import org.hibernate.SessionFactory;
-import org.hibernate.Transaction;
-
 /**
  * Processes every resources request. Executes the CRUD commands. Each method is
  * prefixed by 'create', 'read', 'update' or 'delete'. URLs are validated by the
@@ -120,7 +115,6 @@ import org.hibernate.Transaction;
 public class Processor extends ODataSingleProcessor
 {
    /** Extract the OData resource path from an URL. */
-   private static final Pattern RESOURCE_PATH_EXTRACTOR = Pattern.compile("odata/v1(/.*)$");
    private static final Logger LOGGER = LogManager.getLogger(Processor.class);
    private static final ConfigurationManager CONFIGURATION_MANAGER =
          ApplicationContextProvider.getBean(ConfigurationManager.class);
@@ -151,9 +145,9 @@ public class Processor extends ODataSingleProcessor
          throws ODataException
    {
       // Gets values for `skip` and `top` (pagination).
-      int maxrows = CONFIGURATION_MANAGER.getOdataConfiguration().getMaxRows();
+      int defaultTop = CONFIGURATION_MANAGER.getOdataConfiguration().getDefaultTop();
       int skip = (uri_info.getSkip() == null) ?        0 : uri_info.getSkip();
-      int top  = (uri_info.getTop()  == null) ?  maxrows : uri_info.getTop();
+      int top  = (uri_info.getTop()  == null) ?  defaultTop : uri_info.getTop();
 
       // Gets the `collection` part of the URI.
       EdmEntitySet targetES = uri_info.getTargetEntitySet();
@@ -430,10 +424,10 @@ public class Processor extends ODataSingleProcessor
          do_pagination = false;
       }
 
-      int maxrows = CONFIGURATION_MANAGER.getOdataConfiguration().getMaxRows();
+      int defaultTop = CONFIGURATION_MANAGER.getOdataConfiguration().getDefaultTop();
 
       int skip = (uri_info.getSkip() == null) ? 0 : uri_info.getSkip();
-      int top = (uri_info.getTop() == null) ? maxrows : uri_info.getTop();
+      int top = (uri_info.getTop() == null) ? defaultTop : uri_info.getTop();
       FilterExpression filter = uri_info.getFilter();
       if (do_pagination && (filter != null || skip != 0 || top != 0))
       {
@@ -592,6 +586,50 @@ public class Processor extends ODataSingleProcessor
                throw new NotAllowedException();
             }
          }
+         else if (target_et.getName().equals(Model.SCANNER.getEntityName()))
+         {
+            if (Model.SCANNER.isAuthorized(current_user))
+            {
+               Scanner scanner = Scanner.create(entry);
+               res = scanner.toEntityResponse(makeLink().toString());
+            }
+         }
+         else if (target_et.getName().equals(Model.EVENT.getEntityName()))
+         {
+            if (Model.EVENT.hasWritePermission(current_user))
+            {
+               Event event = Event.create(entry);
+               res = event.toEntityResponse(makeLink().toString());
+            }
+            else
+            {
+               throw new NotAllowedException();
+            }
+         }
+         else if (target_et.getName().equals(Model.EVENT_SYNCHRONIZER.getEntityName()))
+         {
+            if (Model.EVENT_SYNCHRONIZER.isAuthorized(current_user))
+            {
+               EventSynchronizer eventSynchronizer = new EventSynchronizer(entry);
+               res = eventSynchronizer.toEntityResponse(makeLink().toString());
+            }
+            else
+            {
+               throw new NotAllowedException();
+            }
+         }
+         else if (target_et.getName().equals(Model.USER.getEntityName()))
+         {
+            if (current_user.getRoles().contains(Role.USER_MANAGER))
+            {
+               User user = new User(entry);
+               res = user.toEntityResponse(makeLink().toString());
+            }
+            else
+            {
+               throw new NotAllowedException();
+            }
+         }
          else
          {
             throw new NotImplementedException();
@@ -618,12 +656,6 @@ public class Processor extends ODataSingleProcessor
       EdmEntitySet  target_es = getLinkFromES(new AdaptableUriInfo(uri_info));
       EdmEntityType target_et = target_es.getEntityType();
 
-      // Check abilities and permissions
-      if (!target_es.getName().equals(Model.USER.getName()))
-      {
-         throw new ODataException("EntitySet " + target_et.getName() + " cannot create links");
-      }
-
       fr.gael.dhus.database.object.User current_user = Security.getCurrentUser();
 
       AbstractEntitySet<?> es = Model.getEntitySet(target_es.getName());
@@ -632,35 +664,15 @@ public class Processor extends ODataSingleProcessor
          throw new NotAllowedException();
       }
 
-      // Gets the affected entity
-      String key = uri_info.getKeyPredicates().get(0).getLiteral();
-      User user = new User(key);
+      // Check abilities and permissions
+      if (!target_es.getName().equals(Model.USER.getName())
+            && !target_es.getName().equals(Model.SCANNER.getName()))
+      {
+         throw new ODataException("EntitySet " + target_et.getName() + " cannot create links");
+      }
 
       // Reads and parses the link
-      String link = EntityProvider.readLink(content_type, target_es, content);
-      link = link.trim(); // Olingo does not trim... resulting in a parse exception
-      try
-      {
-         link = (new URI(link)).getPath();
-         if (link == null || link.isEmpty())
-         {
-            throw new ExpectedException("Invalid link, path is empty");
-         }
-         // Gets the OData resource path
-         Matcher matcher = RESOURCE_PATH_EXTRACTOR.matcher(link);
-         if (matcher.find())
-         {
-            link = matcher.group(1);
-         }
-         else
-         {
-            throw new ExpectedException("Invalid link, path is malformed");
-         }
-      }
-      catch (URISyntaxException e)
-      {
-         throw new ExpectedException(e.getMessage());
-      }
+      String link = UriParsingUtils.extractResourcePath(EntityProvider.readLink(content_type, target_es, content));
 
       // Use Olingo's UriParser
       UriParser urip = RuntimeDelegate.getUriParser(getContext().getService().getEntityDataModel());
@@ -670,11 +682,21 @@ public class Processor extends ODataSingleProcessor
       {
          path_segments.add(UriParser.createPathSegment(st.nextToken(), null));
       }
-      @SuppressWarnings("unchecked")
-      UriInfo uilink = urip.parse(path_segments, Collections.EMPTY_MAP);
 
-      // Creates link
-      user.createLink(uilink);
+      UriInfo uilink = urip.parse(path_segments, Collections.<String, String>emptyMap());
+
+      // get affected entity and create link
+      String key = uri_info.getKeyPredicates().get(0).getLiteral();
+      if (target_es.getName().equals(Model.USER.getName()))
+      {
+         User user = new User(key);
+         user.createLink(uilink);
+      }
+      else if (target_es.getName().equals(Model.SCANNER.getName()))
+      {
+         Scanner scanner = Scanner.get(Long.decode(key));
+         scanner.createLink(uilink);
+      }
 
       // Empty answer with HTTP code 204: no content
       return ODataResponse.newBuilder().build();
@@ -744,6 +766,41 @@ public class Processor extends ODataSingleProcessor
                throw new NotAllowedException();
             }
          }
+         else if (target_entity.equals(Model.SCANNER.getEntityName()))
+         {
+            if(Model.SCANNER.isAuthorized(current_user))
+            {
+               long id = Long.decode(uri_info.getKeyPredicates().get(0).getLiteral());
+               Scanner scanner = Scanner.get(id);
+               scanner.updateFromEntry(entry);
+            }
+         }
+         else if (target_entity.equals(Model.EVENT.getEntityName()))
+         {
+            if (Model.EVENT.hasWritePermission(current_user))
+            {
+               long key = Long.decode(uri_info.getKeyPredicates().get(0).getLiteral());
+               Event event = new Event(key);
+               event.updateFromEntry(entry);
+            }
+            else
+            {
+               throw new NotAllowedException();
+            }
+         }
+         else if (target_entity.equals(Model.EVENT_SYNCHRONIZER.getEntityName()))
+         {
+            if (Model.EVENT_SYNCHRONIZER.isAuthorized(current_user))
+            {
+               long key = Long.decode(uri_info.getKeyPredicates().get(0).getLiteral());
+               EventSynchronizer eventSynchronizer = new EventSynchronizer(key);
+               eventSynchronizer.updateFromEntry(entry);
+            }
+            else
+            {
+               throw new NotAllowedException();
+            }
+         }
          else
          {
             throw new NotImplementedException();
@@ -792,8 +849,11 @@ public class Processor extends ODataSingleProcessor
       else if (target_et.getName().equals(Model.PRODUCT.getEntityName()))
       {
          String uuid = uri_info.getKeyPredicates().get(0).getLiteral();
-         String cause = uri_info.getCustomQueryOptions().get("cause");
-         Product.delete(uuid, cause);
+         Map<String, String> customQueryOptions = uri_info.getCustomQueryOptions();
+         String cause = customQueryOptions.get("cause");
+         String purgeInfo = customQueryOptions.get("purge");
+         boolean purge = Boolean.parseBoolean(purgeInfo);
+         Product.delete(uuid, cause, purge);
       }
       else if (target_et.getName().equals(Model.DELETEDPRODUCT.getEntityName()))
       {
@@ -804,6 +864,47 @@ public class Processor extends ODataSingleProcessor
       {
          long key = Long.decode(uri_info.getKeyPredicates().get(0).getLiteral());
          Ingest.delete(key);
+      }
+      else if (target_et.getName().equals(Model.SCANNER.getEntityName()))
+      {
+         if (Model.SCANNER.isAuthorized(current_user))
+         {
+            long id = Long.decode(uri_info.getKeyPredicates().get(0).getLiteral());
+            Scanner.delete(id);
+         }
+         else
+         {
+            throw new NotAllowedException();
+         }
+      }
+      else if (target_et.getName().equals(Model.EVENT.getEntityName()))
+      {
+         long key = Long.decode(uri_info.getKeyPredicates().get(0).getLiteral());
+         Event.delete(key);
+      }
+      else if (target_et.getName().equals(Model.EVENT_SYNCHRONIZER.getEntityName()))
+      {
+         if (Model.EVENT_SYNCHRONIZER.isAuthorized(current_user))
+         {
+            long key = Long.decode(uri_info.getKeyPredicates().get(0).getLiteral());
+            Synchronizer.delete(key);
+         }
+         else
+         {
+            throw new NotAllowedException();
+         }
+      }
+      else if (target_et.getName().equals(Model.USER.getEntityName()))
+      {
+         if (current_user.getRoles().contains(Role.USER_MANAGER))
+         {
+            String username = uri_info.getKeyPredicates().get(0).getLiteral();
+            User.delete(username);
+         }
+         else
+         {
+            throw new NotAllowedException();
+         }
       }
       else
       {

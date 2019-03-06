@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -18,7 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package fr.gael.dhus.olingo.v1.entityset;
-
 
 import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.olingo.Security;
@@ -63,6 +62,7 @@ public class ProductEntitySet extends AbstractEntitySet<Product>
    public static final String CONTENT_GEOMETRY = "ContentGeometry";
    public static final String CHECKSUM = "Checksum";
    public static final String LOCAL_PATH = "LocalPath";
+   public static final String ONLINE = "Online";
 
    public static final FullQualifiedName ASSO_PRODUCT_PRODUCT =
       new FullQualifiedName(Model.NAMESPACE, "Product_Product");
@@ -116,10 +116,14 @@ public class ProductEntitySet extends AbstractEntitySet<Product>
             .setType(EdmSimpleTypeKind.DateTime)
             .setFacets(new Facets().setPrecision(3)));
 
+      properties.add(new SimpleProperty()
+            .setName(ONLINE)
+            .setType(EdmSimpleTypeKind.Boolean)
+            .setFacets(new Facets().setNullable(false)));
+
       properties.add(new ComplexProperty().setName(CONTENT_DATE).setType(Model.TIME_RANGE));
       properties.add(new ComplexProperty().setName(CHECKSUM).setType(Model.CHECKSUM));
-      properties.add (new SimpleProperty ().setName (CONTENT_GEOMETRY).setType (
-         EdmSimpleTypeKind.String));
+      properties.add(new SimpleProperty().setName(CONTENT_GEOMETRY).setType(EdmSimpleTypeKind.String));
 
       if (Security.currentUserHasRole(Role.ARCHIVE_MANAGER))
       {

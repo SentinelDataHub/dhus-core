@@ -87,6 +87,11 @@ public class ServiceFactory extends ODataServiceFactory
          res = createODataSingleProcessorService(edmProvider, oDataProcessor);
       }
 
+      if (res == null)
+      {
+         throw new ExpectedException.ResourceNotFoundException();
+      }
+
       return res;
    }
 

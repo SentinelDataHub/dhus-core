@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -24,8 +24,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.olingo.odata2.api.edm.EdmMultiplicity;
 import org.apache.olingo.odata2.api.edm.EdmSimpleTypeKind;
 import org.apache.olingo.odata2.api.edm.EdmTargetPath;
@@ -44,8 +42,6 @@ import org.apache.olingo.odata2.api.edm.provider.PropertyRef;
 import org.apache.olingo.odata2.api.edm.provider.SimpleProperty;
 import org.apache.olingo.odata2.api.uri.KeyPredicate;
 
-import fr.gael.dhus.database.object.User;
-import fr.gael.dhus.olingo.Security;
 import fr.gael.dhus.olingo.v1.Expander;
 import fr.gael.dhus.olingo.v1.Model;
 import fr.gael.dhus.olingo.v1.entity.AbstractEntity;
@@ -56,7 +52,6 @@ import fr.gael.dhus.spring.context.ApplicationContextProvider;
 
 public class CollectionEntitySet extends AbstractEntitySet<Collection>
 {
-   private static final Logger LOGGER = LogManager.getLogger (CollectionEntitySet.class);
    private static final CollectionService COLLECTION_SERVICE =
          ApplicationContextProvider.getBean(CollectionService.class);
 
@@ -144,8 +139,7 @@ public class CollectionEntitySet extends AbstractEntitySet<Collection>
    @Override
    public int count ()
    {
-      User u = Security.getCurrentUser();
-      return COLLECTION_SERVICE.countAuthorizedCollections(u);
+      return COLLECTION_SERVICE.count();
    }
 
    @Override

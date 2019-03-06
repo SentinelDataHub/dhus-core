@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -38,11 +38,11 @@ public class PersistentKeyStoreTest extends AbstractTestNGSpringContextTests
    public void globalTest()
    {
       PersistentKeyStore pks = new PersistentKeyStore("test-persistent");
-      pks.put("myKey", "value");
-      Assert.assertEquals(pks.exists("myKey"), true);
-      Assert.assertEquals(pks.get("myKey"), "value");
-      pks.remove("myKey");
-      Assert.assertEquals(pks.exists("myKey"), false);
+      pks.put("myKey", "tag", "value");
+      Assert.assertEquals(pks.exists("myKey", "tag"), true);
+      Assert.assertEquals(pks.get("myKey", "tag"), "value");
+      pks.remove("myKey", "tag");
+      Assert.assertEquals(pks.exists("myKey", "tag"), false);
    }
 
 }

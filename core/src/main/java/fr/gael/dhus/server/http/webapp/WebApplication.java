@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -49,6 +49,11 @@ public abstract class WebApplication
          throw new IllegalArgumentException (
                "WebApp annotation is missing on " + this.getClass ());
       }
+   }
+
+   public boolean isActive()
+   {
+      return true;
    }
 
    public abstract void configure (String dest_folder) throws IOException;

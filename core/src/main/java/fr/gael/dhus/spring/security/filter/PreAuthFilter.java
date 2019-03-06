@@ -1,15 +1,21 @@
 /*
- * Data Hub Service (DHuS) - For Space data distribution. Copyright (C)
- * 2013,2014,2015 GAEL Systems This file is part of DHuS software sources. This
- * program is free software: you can redistribute it and/or modify it under the
- * terms of the GNU Affero General Public License as published by the Free
- * Software Foundation, either version 3 of the License, or (at your option) any
- * later version. This program is distributed in the hope that it will be
- * useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero
- * General Public License for more details. You should have received a copy of
- * the GNU Affero General Public License along with this program. If not, see
- * <http://www.gnu.org/licenses/>.
+ * Data Hub Service (DHuS) - For Space data distribution.
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ *
+ * This file is part of DHuS software sources.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package fr.gael.dhus.spring.security.filter;
 
@@ -31,12 +37,16 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.GenericFilterBean;
 
 import fr.gael.dhus.database.object.User.PasswordEncryption;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.spring.context.SecurityContextProvider;
 import fr.gael.dhus.spring.security.CookieKey;
 import fr.gael.dhus.util.encryption.EncryptPassword;
 
 public class PreAuthFilter extends GenericFilterBean 
 {
+   private static final SecurityContextProvider SEC_CTX_PROVIDER =
+         ApplicationContextProvider.getBean(SecurityContextProvider.class);
+
    /**
     * Check whether all required properties have been set.
     */
@@ -99,8 +109,6 @@ public class PreAuthFilter extends GenericFilterBean
       }
 
       Cookie authCookie = mapCookies.get (CookieKey.AUTHENTICATION_COOKIE_NAME);
-      // Cookie validityCookie =
-      // mapCookies.get (CookieKey.VALIDITY_COOKIE_NAME);
       Cookie integrityCookie = mapCookies.get (CookieKey.INTEGRITY_COOKIE_NAME);
 
       if (authCookie == null || integrityCookie == null)
@@ -109,14 +117,10 @@ public class PreAuthFilter extends GenericFilterBean
          return;
       }
 
-      // String validity = validityCookie.getValue ();
-      // if (Long.valueOf (validity) < System.currentTimeMillis ()) return null;
-
       String auth = authCookie.getValue ();
       String integrity = integrityCookie.getValue ();
-      SecurityContext ctx =
-         SecurityContextProvider.getSecurityContext (integrity);
-      
+      SecurityContext ctx = SEC_CTX_PROVIDER.getSecurityContext(integrity);
+
       if (ctx == null || !checkUsername (ctx, auth))
       {
          clearCookies (request, response);
@@ -125,11 +129,12 @@ public class PreAuthFilter extends GenericFilterBean
       
       SecurityContextHolder.setContext (ctx);
 
-      if (request.getSession ().getAttribute ("integrity") == null ||
-               request.getSession ().getAttribute ("integrity") != integrity)
+      // Update to clear security context on logout.
+      Object integrityAttr = request.getSession().getAttribute(CookieKey.INTEGRITY_ATTRIBUTE_NAME);
+      if (integrityAttr == null || integrityAttr != integrity)
       {
-         request.getSession ().setAttribute ("integrity", integrity);
-         SecurityContextProvider.saveSecurityContext (integrity, ctx);
+         request.getSession().setAttribute(CookieKey.INTEGRITY_ATTRIBUTE_NAME, integrity);
+         SEC_CTX_PROVIDER.saveSecurityContext(integrity, ctx);
       }
    }
    

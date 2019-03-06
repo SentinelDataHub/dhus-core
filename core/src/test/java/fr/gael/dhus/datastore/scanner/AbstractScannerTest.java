@@ -1,7 +1,5 @@
 package fr.gael.dhus.datastore.scanner;
 
-import java.util.regex.PatternSyntaxException;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.testng.Assert;
@@ -9,8 +7,6 @@ import org.testng.annotations.Test;
 
 import com.google.common.collect.ImmutableList;
 
-import fr.gael.dhus.datastore.scanner.AbstractScanner;
-import fr.gael.dhus.datastore.scanner.Scanner;
 import fr.gael.drb.DrbDefaultMutableNode;
 import fr.gael.drb.DrbNode;
 import fr.gael.drbx.cortex.DrbCortexItemClass;

@@ -44,11 +44,12 @@ import org.apache.logging.log4j.Logger;
 public class RemoveDeletedProductBlobFields implements CustomTaskChange
 {
    private static final Logger LOGGER = LogManager.getLogger();
-   private static final int PAGE_SIZE = 10_000;
+   private static final int PAGE_SIZE = 1_000;
 
    @Override
    public void execute(Database database) throws CustomChangeException
    {
+      long id = -1;
       try
       {
          JdbcConnection connection = (JdbcConnection) database.getConnection();
@@ -68,7 +69,7 @@ public class RemoveDeletedProductBlobFields implements CustomTaskChange
          LOGGER.info("{} deleted product(s) to update", max);
 
          long index = 0;
-         String get_pattern = "SELECT ID, CHECKSUMS FROM DELETED_PRODUCTS LIMIT %d,%d";
+         String get_pattern = "SELECT ID, CHECKSUMS FROM DELETED_PRODUCTS OFFSET %d LIMIT %d";
          String update_pattern = "UPDATE DELETED_PRODUCTS SET CHECKSUM_ALGORITHM='%s', CHECKSUM_VALUE='%s' WHERE ID=%d";
          while (index < max)
          {
@@ -81,7 +82,7 @@ public class RemoveDeletedProductBlobFields implements CustomTaskChange
                while (get_result.next())
                {
                   // retrieve data
-                  long id = get_result.getLong("ID");
+                  id = get_result.getLong("ID");
                   Blob blob = get_result.getBlob("CHECKSUMS");
                   byte[] data = blob.getBytes(1, (int) blob.length());
                   Map<String, String> checksums = (Map<String, String>) deserialize(data);
@@ -103,6 +104,10 @@ public class RemoveDeletedProductBlobFields implements CustomTaskChange
       }
       catch (DatabaseException | SQLException | IOException | ClassNotFoundException e)
       {
+         if (id != -1)
+         {
+            LOGGER.error ("There was an error while processing product #{}", id);
+         }
          throw new CustomChangeException("DELETED_PRODUCTS table update failed", e);
       }
    }

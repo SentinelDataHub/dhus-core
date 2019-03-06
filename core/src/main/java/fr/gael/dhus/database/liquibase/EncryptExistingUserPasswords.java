@@ -21,6 +21,11 @@ package fr.gael.dhus.database.liquibase;
 
 import fr.gael.dhus.database.object.User.PasswordEncryption;
 import fr.gael.dhus.service.exception.UserBadEncryptionException;
+
+import java.security.MessageDigest;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+
 import liquibase.change.custom.CustomTaskChange;
 import liquibase.database.Database;
 import liquibase.database.jvm.JdbcConnection;
@@ -28,14 +33,16 @@ import liquibase.exception.CustomChangeException;
 import liquibase.exception.SetupException;
 import liquibase.exception.ValidationErrors;
 import liquibase.resource.ResourceAccessor;
-import org.springframework.security.crypto.codec.Hex;
 
-import java.security.MessageDigest;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import org.springframework.security.crypto.codec.Hex;
 
 public class EncryptExistingUserPasswords implements CustomTaskChange
 {
+   private static final Logger LOGGER = LogManager.getLogger();
+
    @Override
    public String getConfirmationMessage ()
    {
@@ -107,7 +114,7 @@ public class EncryptExistingUserPasswords implements CustomTaskChange
       }
       catch (Exception e)
       {
-         e.printStackTrace ();
+         LOGGER.error("An exception occured while hashing existing user's passwords", e);
       }
    }
 

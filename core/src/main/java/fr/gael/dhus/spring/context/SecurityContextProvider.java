@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,107 +19,103 @@
  */
 package fr.gael.dhus.spring.context;
 
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.List;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
+import org.springframework.stereotype.Component;
 
+import fr.gael.dhus.server.http.valve.NoPendingEvictionPolicy;
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheManager;
+import net.sf.ehcache.Element;
+
+@Component
 public class SecurityContextProvider
 {
-   private static ConcurrentHashMap<String, SecurityContext> context;
-   private static ConcurrentHashMap<String, Integer> sessions;
+   private static final Logger LOGGER = LogManager.getLogger(SecurityContextProvider.class);
+   private static final String CACHE_MANAGER_NAME = "dhus_cache";
+   private static final String CACHE_NAME = "security_context";
+   private static Cache cache;
 
-   /**
-    * Hide Utility Class Constructor
-    */
-   private SecurityContextProvider ()
+   private static Cache getCache()
    {
+      if (cache == null)
+      {
+         cache = CacheManager.getCacheManager(CACHE_MANAGER_NAME).getCache(CACHE_NAME);
+
+         // Override the current eviction policy to avoid removing pending elements
+         cache.setMemoryStoreEvictionPolicy(new NoPendingEvictionPolicy(cache.getMemoryStoreEvictionPolicy()));
+      }
+      return cache;
    }
 
-   public static SecurityContext getSecurityContext (String key)
+   public SecurityContextProvider() {}
+
+   public SecurityContext getSecurityContext(String key)
    {
-      if (context == null) return null;
-      return context.get (key);
+      if (key == null)
+      {
+         return null;
+      }
+      Element e = getCache().get(key);
+      if (e == null)
+      {
+         return null;
+      }
+      return (SecurityContext) getCache().get(key).getObjectValue();
    }
 
-   public static void saveSecurityContext (String key, SecurityContext ctx)
+   public void saveSecurityContext(String key, SecurityContext ctx)
    {
-      if (context == null)
+      if (key == null)
       {
-         context = new ConcurrentHashMap<String, SecurityContext> ();
-      }
-      if (sessions == null)
-      {
-         sessions = new ConcurrentHashMap<String, Integer> ();
-      }
-      Integer count = sessions.get (key);
-      if (count == null)
-      {
-         count = 0;
-      }
-      count += 1;
-      sessions.put(key, count);
-      context.put (key, ctx);
-   }
-
-   public static void removeSecurityContext (String key)
-   {
-      if (context == null || sessions == null || key == null)
-      {
-         return;
-      }  
-      Integer count = sessions.get (key);
-      if (count == null)
-      {
+         LOGGER.error("Cannot save securityContext with a null key.");
          return;
       }
-      count -=1;
-      if (count == 0)
-      {
-         sessions.remove (key);
-         context.remove (key); // only remove if the last session has timed out
-      }
-      else
-      {
-         sessions.put(key, count);
-      }
+      Element element = new Element(key, ctx);
+      getCache().put(element);
    }
 
-   public static void logout (String key)
+   public void logout(String key)
    {
-      if (key == null || context == null || sessions == null)
+      if (key == null)
       {
          return;
       }
-      Integer count = sessions.get (key);
-      if (count == null)
-      {
-         return;
-      }
-      sessions.remove (key);
-      context.remove (key); // only remove if the last session has timed out
+      getCache().remove(key);
    }
-   
-   public static void forceLogout (String userName)
+
+   public void forceLogout(String userName)
    {
-      if (userName == null || context == null)
+      if (userName == null)
       {
          return;
       }
-      for (String key : context.keySet ())
+
+      List<Object> keys = getCache().getKeysWithExpiryCheck();
+
+      for (Object key: keys)
       {
-         SecurityContext securityContext = context.get (key);
-         if (securityContext == null)
+         if (getCache().isKeyInCache(key))
          {
-            continue;
-         }
-
-         Authentication auth = securityContext.getAuthentication ();
-         if (auth != null && userName.equals (auth.getName ()))
-         {
-            securityContext.setAuthentication (null);
-            context.remove (key);
-            sessions.remove (key);
+            Object value = getCache().get(key).getObjectValue();
+            if (value instanceof SecurityContext)
+            {
+               SecurityContext securityContext = (SecurityContext) value;
+               Authentication auth = securityContext.getAuthentication();
+               if (auth != null && userName.equals(auth.getName()))
+               {
+                  securityContext.setAuthentication(null);
+                  getCache().remove(key);
+               }
+            }
+            else // if not SecurityContext, delete it !
+            {
+               getCache().remove(key);
+            }
          }
       }
    }

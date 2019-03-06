@@ -52,7 +52,7 @@ import org.apache.olingo.odata2.api.exception.ODataException;
  */
 public class Sparql extends AbstractOperation
 {
-   public static String NAME = "SparQL";
+   public static final String NAME = "SparQL";
 
    @Override
    public String getName()
@@ -137,6 +137,8 @@ public class Sparql extends AbstractOperation
 
    public static class InvalidOperationException extends ExpectedException
    {
+      private static final long serialVersionUID = 1L;
+
       public InvalidOperationException(int qtype)
       {
          super("Invalid operation " + queryTypeToString(qtype));

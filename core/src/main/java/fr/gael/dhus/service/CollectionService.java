@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,6 +19,17 @@
  */
 package fr.gael.dhus.service;
 
+import fr.gael.dhus.database.dao.CollectionDao;
+import fr.gael.dhus.database.dao.ProductDao;
+import fr.gael.dhus.database.object.Collection;
+import fr.gael.dhus.database.object.Product;
+import fr.gael.dhus.database.object.Role;
+import fr.gael.dhus.database.object.User;
+import fr.gael.dhus.olingo.v1.visitor.CollectionSQLVisitor;
+import fr.gael.dhus.service.exception.CollectionNameExistingException;
+import fr.gael.dhus.service.exception.RequiredFieldMissingException;
+import java.io.IOException;
+
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
@@ -27,20 +38,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
-import fr.gael.dhus.database.dao.CollectionDao;
-import fr.gael.dhus.database.dao.ProductDao;
-import fr.gael.dhus.database.dao.UserDao;
-import fr.gael.dhus.database.object.Collection;
-import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.database.object.Role;
-import fr.gael.dhus.database.object.User;
-import fr.gael.dhus.olingo.v1.visitor.CollectionSQLVisitor;
-import fr.gael.dhus.service.exception.CollectionNameExistingException;
-import fr.gael.dhus.service.exception.RequiredFieldMissingException;
-import fr.gael.dhus.system.config.ConfigurationManager;
-
-import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.solr.client.solrj.SolrServerException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -65,28 +65,19 @@ public class CollectionService extends WebService
    private ProductDao productDao;
 
    @Autowired
-   private UserDao userDao;
-
-   @Autowired
    private SecurityService securityService;
 
    @Autowired
    private SearchService searchService;
-
-   @Autowired
-   private ConfigurationManager cfgManager;
 
    @PreAuthorize ("hasRole('ROLE_DATA_MANAGER')")
    @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
    public Collection createCollection(Collection collection) throws
          RequiredFieldMissingException, CollectionNameExistingException
    {
-      // Can user securityService.getCurrentUser() because
-      // there is a required role.
-      User user = securityService.getCurrentUser();
       checkRequiredFields(collection);
       checkName(collection);
-      return collectionDao.create (collection, user);
+      return collectionDao.create(collection);
    }
 
    @PreAuthorize ("hasRole('ROLE_DATA_MANAGER')")
@@ -102,24 +93,19 @@ public class CollectionService extends WebService
       c.setName(new_name);
       c.setDescription (collection.getDescription ());
 
+      collectionDao.update(c);
+
       if (!new_name.equals(old_name))
       {
-         Iterator<Collection> collectionIterator =
-               collectionDao.getAllCollections ();
-
-         while (collectionIterator.hasNext ())
+         for (Product product: c.getProducts())
          {
-            c = collectionIterator.next ();
-            for (Product product : c.getProducts ())
+            try
             {
-               try
-               {
-                  searchService.index(product);
-               }
-               catch (Exception e)
-               {
-                  throw new RuntimeException("Cannot update Solr index", e);
-               }
+               searchService.index(product);
+            }
+            catch (IOException | SolrServerException | RuntimeException e)
+            {
+               throw new RuntimeException("Cannot update Solr index", e);
             }
          }
       }
@@ -130,19 +116,24 @@ public class CollectionService extends WebService
    public void deleteCollection(String uuid)
    {
       Collection collection = collectionDao.read (uuid);
-      LOGGER.info("Removing collection " + collection.getName ());
-      for (Product product : collection.getProducts ())
+      LOGGER.info("Removing collection {}", collection.getName());
+      Set<Product> products = collection.getProducts();
+      Iterator<Product> iterator = products.iterator();
+      // delete collection before reindexing its old products.
+      collectionDao.delete(collection);
+      while (iterator.hasNext())
       {
          try
          {
+            Product product = iterator.next();
+            iterator.remove();
             searchService.index(product);
          }
-         catch (Exception e)
+         catch (IOException | SolrServerException | RuntimeException e)
          {
             throw new RuntimeException("Cannot update Solr index", e);
          }
       }
-      collectionDao.delete (collection);
    }
 
    @PreAuthorize ("hasAnyRole('ROLE_DATA_MANAGER','ROLE_SEARCH')")
@@ -151,7 +142,7 @@ public class CollectionService extends WebService
    {
       return systemGetCollection (uuid);
    }
-   
+
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public List<Collection> getCollections (Product product)
    {
@@ -214,6 +205,11 @@ public class CollectionService extends WebService
    @CacheEvict (value = "products", allEntries = true)
    public void addProductInCollection(Collection collection, Product product)
    {
+      if (collection == null)
+      {
+         LOGGER.error("Cannot add product '{}' in a null collection.", product.getUuid());
+         return;
+      }
       Collection c = collectionDao.read(collection.getUUID());
       if (!c.getProducts().contains(product))
       {
@@ -222,7 +218,6 @@ public class CollectionService extends WebService
       }
    }
 
-   @PreAuthorize ("hasAnyRole('ROLE_DATA_MANAGER','ROLE_SEARCH')")
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public List<Long> getProductIds(String uuid)
    {
@@ -234,11 +229,7 @@ public class CollectionService extends WebService
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public Integer count ()
    {
-      // Can use securityService.getCurrentUser() because
-      // there is a required
-      // role.
-      User user = securityService.getCurrentUser ();
-      return collectionDao.count (user);
+      return collectionDao.count();
    }
 
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
@@ -285,7 +276,7 @@ public class CollectionService extends WebService
    }
 
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public List<Product> getAuthorizedProducts (String uuid, User u)
+   public List<Product> getProducts(String uuid)
    {
       Collection collection = collectionDao.read (uuid);
       if (collection == null)
@@ -318,19 +309,16 @@ public class CollectionService extends WebService
    }
 
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public boolean hasAccessToCollection (String cid, String uid)
-   {
-      User user = userDao.read (uid);
-      if (user == null) return false;
-      if (user.getRoles ().contains (Role.DATA_MANAGER)) return true;
-      return collectionDao.hasAccessToCollection (cid, uid);
-   }
-
-   @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public boolean containsProduct (String uuid, Long pid)
    {
       if (uuid == null) return false;
       return collectionDao.contains (uuid, pid);
+   }
+
+   @Transactional(readOnly=true)
+   public List<Collection> getCollectionsOfProduct(Long id)
+   {
+      return collectionDao.getCollectionsOfProduct(id);
    }
 
    @Transactional (readOnly=true)
@@ -353,19 +341,17 @@ public class CollectionService extends WebService
    public List<Collection> getHigherCollections (CollectionSQLVisitor visitor,
          User user, int skip, int top)
    {
-      if (cfgManager.isDataPublic () ||
-            user.getRoles ().contains (Role.DATA_MANAGER))
+      if (user.getRoles().contains(Role.DATA_MANAGER))
       {
          return collectionDao.executeHQLQuery(visitor.getHqlQuery(), visitor.getHqlParameters(), skip, top);
       }
       else
       {
-         StringBuilder sb = new StringBuilder(visitor.getHqlFilter());
-         sb.append(" AND ");
-         sb.append(user.getUUID()).append(" in authorizedUsers");
-
          StringBuilder hql = new StringBuilder(visitor.getHqlPrefix());
-         hql.append("WHERE ").append(sb.toString());
+         if (visitor.getHqlFilter() != null)
+         {
+            hql.append("WHERE ").append(visitor.getHqlFilter());
+         }
          if (visitor.getHqlOrder() != null)
          {
             hql.append(" ORDER BY ").append(visitor.getHqlOrder());
@@ -382,73 +368,37 @@ public class CollectionService extends WebService
    }
 
    /**
-    * Counts of authorized collections for the given user.
-    * @param user the user to filter collections.
-    * @return number of collections than can see the user.
+    * Retrieves all collections.
+    *
+    * @return all collections
     */
    @Transactional(readOnly = true)
-   public int countAuthorizedCollections (User user)
+   public Set<Collection> getCollections()
    {
-      if (user == null)
-      {
-         throw new IllegalArgumentException ("User must not be null !");
-      }
-
-      if (cfgManager.isDataPublic () ||
-            user.getRoles ().contains (Role.DATA_MANAGER))
-      {
-         return productDao.count ();
-      }
-
-      return 0;
+      return new HashSet<>(collectionDao.readAll());
    }
 
-   /**
-    * Retrieves all authorized collections for the given user.
-    *
-    * @param u the given user.
-    * @return a set of authorized collections.
-    */
-   @Transactional(readOnly = true)
-   public Set<Collection> getAuthorizedCollection (User u)
+   @PreAuthorize("hasRole('ROLE_DATA_MANAGER')")
+   @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
+   public List<String> getCollectionsUUID()
    {
-      HashSet<Collection> collections = new HashSet<> ();
-
-      for (String cid : collectionDao.getAuthorizedCollections (u.getUUID ()))
-      {
-         Collection collection = collectionDao.read (cid);
-         if (collection != null)
-         {
-            collections.add (collection);
-         }
-      }
-
-      return collections;
+      return collectionDao.getCollectionsUUID();
    }
 
    /**
     * Retrieves a collection by its name.
-    * <p>Checks also if the given user is authorized to access it.</p>
     *
-    * @param name collection name.
-    * @param u    the current user.
-    * @return the named collection or null.
+    * @param name collection name
+    * @return the named collection or null
     */
    @Transactional(readOnly = true)
-   public Collection getAuthorizedCollectionByName (String name, User u)
+   public Collection getCollectionByName(String name)
    {
-      if (name != null && u != null)
+      if (name == null)
       {
-         Collection collection = collectionDao.read (
-               getCollectionUUIDByName (name));
-         if (collection != null
-               && (cfgManager.isDataPublic () ||
-               collection.getAuthorizedUsers ().contains (u)))
-         {
-            return collection;
-         }
+         return null;
       }
-      return null;
+      return collectionDao.getByName(name);
    }
 
    /**
@@ -470,5 +420,10 @@ public class CollectionService extends WebService
    public Collection systemGetCollection (String id)
    {
       return collectionDao.read (id);
+   }
+
+   public Collection systemGetCollectionByName(String name)
+   {
+      return collectionDao.getByName(name);
    }
 }

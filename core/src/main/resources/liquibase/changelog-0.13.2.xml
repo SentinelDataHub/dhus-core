@@ -23,7 +23,7 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
          http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
 
-   <changeSet author="nico" id="createTableDeletedProducts">
+   <changeSet author="nico" id="createTableDeletedProducts" dbms="hsqldb">
       <createTable tableName="DELETED_PRODUCTS">
          <column autoIncrement="true" name="ID" type="BIGINT">
             <constraints primaryKey="true" primaryKeyName="SYS_PK_DP" />
@@ -84,4 +84,66 @@
          <column name="deletionCause" />
       </createIndex>
    </changeSet>
+
+    <changeSet author="nico" id="createTableDeletedProducts" dbms="postgresql">
+      <createTable tableName="DELETED_PRODUCTS">
+         <column autoIncrement="true" name="ID" type="BIGINT">
+            <constraints primaryKey="true" primaryKeyName="SYS_PK_DP" />
+         </column>
+         <column name="UUID" type="VARCHAR(36)">
+            <constraints nullable="false" />
+         </column>
+         <column name="CREATED" type="TIMESTAMP">
+            <constraints nullable="false" />
+         </column>
+         <column name="UPDATED" type="TIMESTAMP">
+            <constraints nullable="false" />
+         </column>
+         <column name="IDENTIFIER" type="VARCHAR(255)" />
+         <column name="FOOTPRINT" type="VARCHAR(8192)" />
+         <column name="ORIGIN" type="VARCHAR(2048)" />
+         <column name="DOWNLOAD_SIZE" type="BIGINT" />
+         <column name="SIZE" type="BIGINT" />
+         <column name="ingestiondate" type="TIMESTAMP" />
+         <column name="contentstart" type="TIMESTAMP" />
+         <column name="contentend" type="TIMESTAMP" />
+         <column name="ITEM_CLASS" type="varchar(255)" />
+         <column name="deletiondate" type="TIMESTAMP" />
+         <column name="deletioncause" type="varchar(255)" />
+         <column name="checksums" type="BLOB" />
+         <column name="metadataindexes" type="BLOB" />
+      </createTable>
+      <createIndex indexName="SYS_IDX_DP_UUID" tableName="DELETED_PRODUCTS" unique="true">
+         <column name="UUID" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_CREATED" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="CREATED" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_UPDATED" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="UPDATED" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_INGESTIONDATE" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="ingestiondate" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_CONTENTSTART" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="contentstart" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_CONTENTEND" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="contentend" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_DELETIONDATE" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="deletiondate" />
+      </createIndex>
+
+      <createIndex indexName="SYS_IDX_DP_DELETIONCAUSE" tableName="DELETED_PRODUCTS" unique="false">
+         <column name="deletioncause" />
+      </createIndex>
+   </changeSet>
+
 </databaseChangeLog>

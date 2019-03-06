@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -25,6 +25,7 @@ import fr.gael.dhus.olingo.v1.entityset.ClassEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.CollectionEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.ConnectionEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.DeletedProductEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.EventEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.IngestEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.ItemEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.NetworkEntitySet;
@@ -32,13 +33,19 @@ import fr.gael.dhus.olingo.v1.entityset.NetworkStatisticEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.NodeEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.ProductEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.RestrictionEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.ScannerEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.SynchronizerEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.SystemRoleEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.UserEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.UserSynchronizerEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.AbstractEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.EventSynchronizerEntitySet;
 import fr.gael.dhus.olingo.v1.operations.AbstractOperation;
+import fr.gael.dhus.olingo.v1.operations.LockUser;
 import fr.gael.dhus.olingo.v1.operations.Sparql;
+import fr.gael.dhus.olingo.v1.operations.StartScanner;
+import fr.gael.dhus.olingo.v1.operations.StopScanner;
+import fr.gael.dhus.olingo.v1.operations.UnlockUser;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -91,6 +98,9 @@ public class Model extends EdmProvider
    public static final SystemRoleEntitySet SYSTEM_ROLE = new SystemRoleEntitySet();
    public static final UserSynchronizerEntitySet USER_SYNCHRONIZER = new UserSynchronizerEntitySet();
    public static final IngestEntitySet INGEST = new IngestEntitySet();
+   public static final ScannerEntitySet SCANNER = new ScannerEntitySet();
+   public static final EventEntitySet EVENT = new EventEntitySet();
+   public static final EventSynchronizerEntitySet EVENT_SYNCHRONIZER = new EventSynchronizerEntitySet();
 
    /* Complex Types */
    public static final FullQualifiedName TIME_RANGE =
@@ -105,6 +115,10 @@ public class Model extends EdmProvider
 
    /* Service Operations */
    public static final Sparql SPARQL = new Sparql();
+   public static final StartScanner START_SCANNER = new StartScanner();
+   public static final StopScanner STOP_SCANNER = new StopScanner();
+   public static final LockUser LOCK_USER = new LockUser();
+   public static final UnlockUser UNLOCK_USER = new UnlockUser();
 
    /* Indexes */
    private static final Map<String, AbstractEntitySet<?>> ENTITYSETS;
@@ -129,6 +143,9 @@ public class Model extends EdmProvider
       addEntitySet(SYSTEM_ROLE);
       addEntitySet(USER_SYNCHRONIZER);
       addEntitySet(INGEST);
+      addEntitySet(SCANNER);
+      addEntitySet(EVENT);
+      addEntitySet(EVENT_SYNCHRONIZER);
 
       COMPLEX_TYPES = new HashMap<>();
       for (ComplexType ctype: getComplexTypes())
@@ -138,6 +155,10 @@ public class Model extends EdmProvider
 
       OPERATIONS = new HashMap<>();
       OPERATIONS.put(SPARQL.getName(), SPARQL);
+      OPERATIONS.put(START_SCANNER.getName(), START_SCANNER);
+      OPERATIONS.put(STOP_SCANNER.getName(), STOP_SCANNER);
+      OPERATIONS.put(LOCK_USER.getName(), LOCK_USER);
+      OPERATIONS.put(UNLOCK_USER.getName(), UNLOCK_USER);
    }
 
    private static void addEntitySet(AbstractEntitySet<?> entity_set)
@@ -306,7 +327,7 @@ public class Model extends EdmProvider
       }
       if (entity_container == null || entity_container.equals(ENTITY_CONTAINER))
       {
-         AbstractEntitySet aes = ENTITYSETS.get(name);
+         AbstractEntitySet<?> aes = ENTITYSETS.get(name);
          if (aes == null)
          {
             return null;

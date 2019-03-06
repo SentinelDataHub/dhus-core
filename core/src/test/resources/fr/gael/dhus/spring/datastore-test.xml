@@ -29,5 +29,12 @@
 
    <context:component-scan base-package="org.dhus.store.datastore" />
 
-   <bean id="dataStoreService" class="org.dhus.store.datastore.DefaultDataStoreService" />
+   <!-- services -->
+   <bean name="storeService" class="org.dhus.store.StoreService"></bean>
+   <bean name="dataStoreManager" class="org.dhus.store.datastore.DefaultDataStoreManager"></bean>
+   <bean name="metadataStoreService" class="org.dhus.store.metadatastore.MetadataStoreService"></bean>
+
+   <!-- stores -->
+   <bean name="relationalMetadataStore" class="org.dhus.store.metadatastore.RelationalMetadataStore"></bean>
+   <bean name="solrMetadataStore" class="org.dhus.store.metadatastore.SolrMetadataStore"></bean>
 </beans>

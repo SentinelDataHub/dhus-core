@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ * Copyright (C) 2015-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -37,6 +37,7 @@ import org.apache.catalina.connector.Response;
 import org.apache.catalina.util.RequestUtil;
 import org.apache.catalina.valves.ValveBase;
 import org.apache.http.HttpStatus;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -44,9 +45,11 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.crypto.codec.Base64;
 
+import fr.gael.dhus.olingo.v1.entity.Connection;
 import fr.gael.dhus.server.http.valve.AccessInformation.FailureConnectionStatus;
 import fr.gael.dhus.server.http.valve.AccessInformation.PendingConnectionStatus;
 import fr.gael.dhus.server.http.valve.AccessInformation.SuccessConnectionStatus;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.spring.context.SecurityContextProvider;
 import fr.gael.dhus.spring.security.CookieKey;
 import fr.gael.dhus.spring.security.authentication.ProxyWebAuthenticationDetails;
@@ -58,6 +61,8 @@ import net.sf.ehcache.Element;
 public class AccessValve extends ValveBase
 {
    private static final Logger LOGGER = LogManager.getLogger(AccessValve.class);
+   private static final SecurityContextProvider SEC_CTX_PROVIDER =
+         ApplicationContextProvider.getBean(SecurityContextProvider.class);
 
    /**
     * Filter pattern is passed as Tomcat parameter.
@@ -217,7 +222,7 @@ public class AccessValve extends ValveBase
          String integrity = integrityCookie.getValue ();
          if (integrity != null && !integrity.isEmpty ())
          {
-            ctx = SecurityContextProvider.getSecurityContext (integrity);
+            ctx = SEC_CTX_PROVIDER.getSecurityContext(integrity);
          }
       }
       if ((ctx!=null) && (ctx.getAuthentication()!=null))
@@ -332,6 +337,32 @@ public class AccessValve extends ValveBase
             if (key instanceof UUID && value instanceof AccessInformation)
             {
                map.put ((UUID) key, (AccessInformation)value);
+            }
+         }
+      }
+      return map;
+   }
+
+   public static Map<String, Connection> getConnections(String username)
+   {
+      @SuppressWarnings("rawtypes")
+      List keys = getCache().getKeysWithExpiryCheck();
+
+      Map<String, Connection> map = new HashMap<>();
+      for (Object key: keys)
+      {
+         if (getCache().isKeyInCache(key))
+         {
+            Object value = getCache().get(key).getObjectValue();
+            if (value != null && key instanceof UUID && value instanceof AccessInformation)
+            {
+               AccessInformation info = (AccessInformation) value;
+               String accessuser = info.getUsername();
+               if (username == null || username.isEmpty() || (accessuser != null && accessuser.equals(username)))
+               {
+                  String k = key.toString();
+                  map.put(k, new Connection(k, info));
+               }
             }
          }
       }

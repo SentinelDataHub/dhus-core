@@ -121,6 +121,14 @@ class ServiceLogger implements ODataDebugCallback,
                .status(HttpStatusCodes.INTERNAL_SERVER_ERROR)
                .build();
       }
+      if(ctx.getException() instanceof ExpectedException)
+      {
+         return ODataResponse
+               .fromResponse(EntityProvider.writeErrorDocument(ctx))
+               .header("cause-message", message)
+               .status(((ExpectedException) ctx.getException()).getStatusCode())
+               .build();
+      }
       return ODataResponse
             .fromResponse(EntityProvider.writeErrorDocument(ctx))
             .header("cause-message", message)

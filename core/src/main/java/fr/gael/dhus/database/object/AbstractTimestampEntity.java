@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,18 +19,22 @@
  */
 package fr.gael.dhus.database.object;
 
+import java.io.Serializable;
+import java.util.Date;
+
 import javax.persistence.Column;
 import javax.persistence.MappedSuperclass;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
-import java.util.Date;
 
 /**
  * Timestamp being applied to tables
  */
 @MappedSuperclass
-public abstract class AbstractTimestampEntity
+public abstract class AbstractTimestampEntity implements Serializable
 {
+   private static final long serialVersionUID = 1L;
+
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created", nullable = false)
     private Date created=new Date ();

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -63,7 +63,7 @@ public class Security
       User current = SECURITY_SERVICE.getCurrentUser();
       for (Role r: roles)
       {
-         if (current.getRoles().contains(r))
+         if (current != null && current.getRoles().contains(r))
          {
             return true;
          }

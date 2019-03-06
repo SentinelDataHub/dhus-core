@@ -139,7 +139,7 @@ public class UserSynchronizerEntitySet extends AbstractEntitySet<UserSynchronize
       );
 
       properties.add(new SimpleProperty().setName(PAGE_SIZE)
-            .setType(EdmSimpleTypeKind.Int64)
+            .setType(EdmSimpleTypeKind.Int32)
             .setFacets(
                   new Facets()
                         .setNullable(false)

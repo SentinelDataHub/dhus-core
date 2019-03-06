@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2014,2015,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -29,6 +29,7 @@ import fr.gael.dhus.olingo.v1.entity.Node;
 import fr.gael.dhus.olingo.v1.map.SubMap;
 import fr.gael.dhus.olingo.v1.map.SubMapBuilder;
 import fr.gael.drb.DrbNode;
+import fr.gael.drb.DrbNodeList;
 
 public class NodesMap implements Map<String, Node>, SubMap<String, Node>
 {
@@ -49,9 +50,12 @@ public class NodesMap implements Map<String, Node>, SubMap<String, Node>
             Map<String, Integer> indexes =
                new LinkedHashMap<String, Integer> ();
             Map<String, Node> nodesList = new LinkedHashMap<String, Node> ();
-            for (int i = 0; i < drbNode.getChildrenCount (); i++)
+
+            // get all children at once to limit the amount of DRB requests
+            DrbNodeList children = drbNode.getChildren();
+            for (int i = 0; i < children.getLength(); i++)
             {
-               Node n = new Node (drbNode.getChildAt (i));
+               Node n = new Node (children.item(i));
                if (nodesList.containsKey (n.getName ()))
                {
                   Node existing = nodesList.get (n.getName ());

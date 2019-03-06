@@ -34,11 +34,6 @@
    </xs:annotation>
 
    <xs:complexType name="jmsConfiguration">
-      <xs:annotation>
-         <xs:appinfo>
-            <inheritance:extends>fr.gael.dhus.database.object.config.ConfigurationPart</inheritance:extends>
-         </xs:appinfo>
-      </xs:annotation>
       <xs:sequence>
          <xs:choice maxOccurs="unbounded">
             <xs:annotation>
@@ -80,7 +75,6 @@
       <xs:annotation>
          <xs:appinfo>
             <jxb:class name="AbstractJmsDestination" implClass="fr.gael.dhus.database.object.config.messaging.jms.JmsDestination" />
-            <inheritance:extends>fr.gael.dhus.database.object.config.ConfigurationPart</inheritance:extends>
          </xs:appinfo>
       </xs:annotation>
       <xs:sequence>

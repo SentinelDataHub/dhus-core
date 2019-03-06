@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017 GAEL Systems
+ * Copyright (C) 2016,2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -29,8 +29,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.commons.io.FileUtils;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -45,7 +43,6 @@ import org.dhus.store.datastore.ReadOnlyDataStoreException;
 
 import org.jclouds.blobstore.domain.BlobMetadata;
 
-
 /**
  * Implementation of OpenStack DataStore.
  * This version only supports swift API, but regarding drbx-impl-swift implementation it could be
@@ -54,14 +51,12 @@ import org.jclouds.blobstore.domain.BlobMetadata;
 public class OpenStackDataStore extends AbstractDataStore
 {
    private static final Logger LOGGER = LogManager.getLogger();
-
    private static final String SUPPORTED_DIGEST_ALGORITHMS = "MD5,SHA-1,SHA-256,SHA-512";
 
    /**
     * Occurrence MetaData, allows to manage multiple references of the same object in a
     * Swift OpenStack container.
     */
-   private static final String MD_OCCURRENCE = "occurrence";
 
    private final String provider;
    private final String identity;
@@ -83,11 +78,16 @@ public class OpenStackDataStore extends AbstractDataStore
     * @param container
     * @param region
     * @param readOnly
+    * @param priority
+    * @param maximumSize
+    * @param currentSize
+    * @param autoEviction
     */
    public OpenStackDataStore(String name, String provider, String identity, String credential,
-         String url, String container, String region, boolean readOnly)
+         String url, String container, String region, boolean readOnly, int priority,
+         long maximumSize, long currentSize, boolean autoEviction)
    {
-      super(name, readOnly);
+      super(name, readOnly, priority, maximumSize, currentSize, autoEviction);
       this.provider = provider;
       this.identity = identity;
       this.credential = credential;
@@ -110,67 +110,6 @@ public class OpenStackDataStore extends AbstractDataStore
          this.ostack = new DrbSwiftObject(this.url, this.provider, this.identity, this.credential);
       }
       return this.ostack;
-   }
-
-   @Override
-   public void set(String id, Product product) throws DataStoreException
-   {
-      if (isReadOnly())
-      {
-         throw new ReadOnlyDataStoreException("DataStore " + getName() + " is read only");
-      }
-
-      if (exists(id))
-      {
-         throw new ProductAlreadyExist();
-      }
-
-      DrbSwiftObject open_stack = getOpenStackObject();
-      String object_name = product.getName();
-
-      if (open_stack.exists(object_name, container, region))
-      {
-         incrementOccurrence(product.getName(), 1);
-         putResource(id, new OpenStackLocation(region, container, object_name).toResourceLocation());
-      }
-      else
-      {
-         try
-         {
-            String path = put(product, false);
-            putResource(id, path);
-         }
-         catch (IOException e)
-         {
-            throw new RuntimeException(e);
-         }
-      }
-
-      if (!product.getPropertyNames().contains(ProductConstants.DATA_SIZE))
-      {
-         BlobMetadata md = open_stack.getMetadata(
-               container, region, object_name);
-         product.setProperty(ProductConstants.DATA_SIZE, md.getSize());
-      }
-   }
-
-   /**
-    * Updates occurrence MetaData value (by addition) of an object.
-    *
-    * @param object_name object name
-    * @param value       added value to the current occurrence of object
-    */
-   private void incrementOccurrence(String object_name, Integer value)
-   {
-      DrbSwiftObject openStack = getOpenStackObject();
-      Map<String, String> metadata = openStack.getMetadata(container, region, object_name).getUserMetadata();
-
-      String occurrence_value = metadata.get(MD_OCCURRENCE);
-      Integer occurrence = Integer.parseInt(occurrence_value) + value;
-
-      Map<String, String> input_metadata = new HashMap<>(metadata);
-      input_metadata.put(MD_OCCURRENCE, occurrence.toString());
-      getOpenStackObject().setMetadata(container, region, object_name, input_metadata);
    }
 
    /**
@@ -212,7 +151,6 @@ public class OpenStackDataStore extends AbstractDataStore
    {
       long product_size = productContentSize(product);
       Map<String, String> user_data = new HashMap<>();
-      user_data.put(MD_OCCURRENCE, "1");
 
       // Case of source file not supported
       if (product.hasImpl(InputStream.class))
@@ -245,9 +183,9 @@ public class OpenStackDataStore extends AbstractDataStore
    }
 
    @Override
-   public Product get(String id) throws DataStoreException
+   protected final Product internalGetProduct(String uuid, String tag) throws DataStoreException
    {
-      if (!exists(id))
+      if (!internalHasProduct(uuid, tag))
       {
          throw new ProductNotFoundException();
       }
@@ -255,87 +193,103 @@ public class OpenStackDataStore extends AbstractDataStore
       OpenStackLocation location;
       try
       {
-         location = new OpenStackLocation(getResource(id));
+         location = new OpenStackLocation(getResource(uuid, tag));
       }
       catch (IllegalArgumentException e)
       {
-         throw new DataStoreException("Invalid resource location for product: " + id, e);
+         throw new DataStoreException(
+               String.format("Invalid resource location for product: %s (%s)", uuid, tag), e);
       }
 
       return new OpenStackProduct(getOpenStackObject(), location);
    }
 
-   // FIXME isReadOnly is never called in this method because it relies on
-   // openstack's occurrence feature
-   // this approach may lead to incoherent situations and a proper read-only
-   // and data ownership approach should be adopted instead
    @Override
-   public void delete(String id) throws DataStoreException
+   protected final void internalAddProduct(String id, String tag, Product product) throws DataStoreException
    {
-      if (!exists(id))
+      if (isReadOnly())
       {
-         throw new ProductNotFoundException();
+         throw new ReadOnlyDataStoreException("DataStore " + getName() + " is read only");
       }
 
-      LOGGER.info("Deleting Product reference {}, from {} DataStore", id, getName());
-      DrbSwiftObject open_stack = getOpenStackObject ();
-      OpenStackLocation object_location = new OpenStackLocation(getResource(id));
-      String object_name = object_location.getObjectName();
-      removeResource(id);
-
-      if (open_stack.exists (object_name, container, region))
+      if (internalHasProduct(id, tag))
       {
-         Map<String, String> metadata =
-               open_stack.getMetadata(container, region, object_name).getUserMetadata();
-         String occurrence_value = metadata.get(MD_OCCURRENCE);
-
-         if (occurrence_value == null)
-         {
-            LOGGER.warn("Object not instantiated by a DHuS: {}", object_name);
-         }
-
-         int occurrence = Integer.parseInt(occurrence_value) - 1;
-         if (occurrence == 0)
-         {
-            LOGGER.info("Product data {} deleted from {} DataStore", id, getName());
-            getOpenStackObject().deleteObject(object_name, this.container, this.region);
-         }
-         else
-         {
-            incrementOccurrence(object_name, -1);
-         }
+         throw new ProductAlreadyExist();
       }
-   }
 
-   @Override
-   public void move(String id, Product product) throws DataStoreException
-   {
-      set(id, product);
-      if (product.hasImpl(File.class))
+      DrbSwiftObject open_stack = getOpenStackObject();
+      String object_name = product.getName();
+
+      boolean duplicate = open_stack.exists(object_name, container, region);
+      if (duplicate)
       {
-         FileUtils.deleteQuietly(product.getImpl(File.class));
+         LOGGER.warn("Product '{}' already found in '{}/{}', not pushing it again", object_name, container, region);
+         putResource(id, tag, new OpenStackLocation(region, container, object_name).toResourceLocation());
       }
       else
       {
-         LOGGER.warn("Cannot remove source stream");
+         try
+         {
+            // FIXME call "put" before "putResource" in order to keep a reference
+            // of the data before transferring it
+            String path = put(product, false);
+            putResource(id, tag, path);
+         }
+         catch (IOException e)
+         {
+            throw new DataStoreException(e);
+         }
+      }
+
+      long dataSize = open_stack.getMetadata(container, region, object_name).getSize();
+
+      if (!duplicate)
+      {
+         // evicts products if necessary
+         onInsertEviction(dataSize);
+         // report DataStore size increase
+         increaseCurrentSize(dataSize);
+      }
+
+      if (!product.getPropertyNames().contains(ProductConstants.DATA_SIZE))
+      {
+         product.setProperty(ProductConstants.DATA_SIZE, dataSize);
       }
    }
 
-   // FIXME should not increment product occurrence to respect product
-   // ownership, see comment delete method
    @Override
-   protected boolean onAddProductReference(String resource)
+   protected final void internalDeleteProduct(String resourceLocation)
+         throws ProductNotFoundException, ReadOnlyDataStoreException
    {
-      OpenStackLocation location = new OpenStackLocation(resource);
-      incrementOccurrence(location.getObjectName(), 1);
-      return true;
+      DrbSwiftObject open_stack = getOpenStackObject();
+
+      OpenStackLocation object_location = new OpenStackLocation(resourceLocation);
+      String object_name = object_location.getObjectName();
+
+      if (open_stack.exists(object_name, container, region))
+      {
+         BlobMetadata blobMetadata = open_stack.getMetadata(container, region, object_name);
+         long dataSize = blobMetadata.getSize();
+
+         getOpenStackObject().deleteObject(object_name, this.container, this.region);
+
+         // report DataStore size decrease
+         decreaseCurrentSize(dataSize);
+      }
    }
 
    @Override
    public boolean canAccess(String resource_location)
    {
-      OpenStackLocation location = new OpenStackLocation(resource_location);
-      return getOpenStackObject().exists(location.getObjectName(), container, region);
+      try
+      {
+         OpenStackLocation location = new OpenStackLocation(resource_location);
+         return getOpenStackObject().exists(location.getObjectName(), container, region);
+      }
+      catch (IllegalArgumentException ex)
+      {
+         return false;
+      }
    }
 
    @Override
@@ -363,5 +317,42 @@ public class OpenStackDataStore extends AbstractDataStore
    {
       return super.hashCode() + url.hashCode() + region.hashCode() +
             container.hashCode();
+   }
+
+   public String getProvider()
+   {
+      return provider;
+   }
+
+   public String getIdentity()
+   {
+      return identity;
+   }
+
+   public String getCredential()
+   {
+      return credential;
+   }
+
+   public String getUrl()
+   {
+      return url;
+   }
+
+   public String getContainer()
+   {
+      return container;
+   }
+
+   public String getRegion()
+   {
+      return region;
+   }
+
+   @Override
+   protected long getProductSize(String id) throws DataStoreException
+   {
+      Long size = ((OpenStackProduct) get(id)).getContentLength();
+      return size == null ? 0 : size;
    }
 }

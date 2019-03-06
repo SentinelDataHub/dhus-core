@@ -22,6 +22,8 @@
          xmlns="http://java.sun.com/xml/ns/j2ee" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd">
 
+   <distributable/>
+
    <!-- Spring Context -->
    <context-param>
       <param-name>contextConfigLocation</param-name>
@@ -70,4 +72,23 @@
       <servlet-name>DHuS_OData</servlet-name>
       <url-pattern>/*</url-pattern>
    </servlet-mapping>
+
+   <servlet>
+      <servlet-name>DHuS_OData_v2</servlet-name>
+      <servlet-class>org.dhus.olingo.v2.web.DHuSODataServlet</servlet-class>
+      <load-on-startup>1</load-on-startup>
+   </servlet>
+   <servlet-mapping>
+      <servlet-name>DHuS_OData_v2</servlet-name>
+      <url-pattern>/v2/*</url-pattern>
+   </servlet-mapping>
+
+   <!-- Force JSESSIONID cookie path to be / -->
+   <session-config>
+      <cookie-config>
+        <name>JSESSIONID</name>
+        <path>/</path>
+      </cookie-config>
+   </session-config>
+
 </web-app>

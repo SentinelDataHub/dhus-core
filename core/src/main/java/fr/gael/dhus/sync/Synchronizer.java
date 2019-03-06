@@ -21,7 +21,7 @@ package fr.gael.dhus.sync;
 
 import java.util.Objects;
 
-import fr.gael.dhus.database.object.SynchronizerConf;
+import fr.gael.dhus.database.object.config.synchronizer.SynchronizerConfiguration;
 
 /**
  * A Data synchronizer.
@@ -31,7 +31,7 @@ import fr.gael.dhus.database.object.SynchronizerConf;
 public abstract class Synchronizer implements AutoCloseable
 {
    /** A reference to the database object storing our configuration. */
-   protected final SynchronizerConf syncConf;
+   protected final SynchronizerConfiguration syncConf;
 
    /**
     * Creates a new Synchronizer.
@@ -39,7 +39,7 @@ public abstract class Synchronizer implements AutoCloseable
     * one parameter of type {@link SynchronizerConf}.
     * @param sc a non null database object.
     */
-   protected Synchronizer(SynchronizerConf sc)
+   protected Synchronizer(SynchronizerConfiguration sc)
    {
       Objects.requireNonNull(sc, "Parameter must not be null");
       this.syncConf = sc;
@@ -62,7 +62,7 @@ public abstract class Synchronizer implements AutoCloseable
     * Returns the configuration of this synchronizer.
     * @return the configuration of this synchronizer.
     */
-   public SynchronizerConf getSynchronizerConf()
+   public SynchronizerConfiguration getSynchronizerConf()
    {
       return this.syncConf;
    }
@@ -83,7 +83,7 @@ public abstract class Synchronizer implements AutoCloseable
     */
    public String getCronExpression()
    {
-      return syncConf.getCronExpression();
+      return syncConf.getSchedule();
    }
 
    @Override

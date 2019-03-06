@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -24,30 +24,26 @@ import fr.gael.dhus.database.object.Collection;
 import fr.gael.dhus.database.object.MetadataIndex;
 import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.User;
+import fr.gael.dhus.olingo.v1.SQLVisitor;
+import fr.gael.dhus.olingo.v1.SQLVisitor.SQLVisitorParameter;
 
-import java.math.BigInteger;
-import java.net.URL;
-import java.sql.SQLException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import org.dhus.store.LoggableProduct;
+
 import org.hibernate.FetchMode;
-import org.hibernate.HibernateException;
 import org.hibernate.Query;
-import org.hibernate.SQLQuery;
 import org.hibernate.Session;
 import org.hibernate.criterion.DetachedCriteria;
 
+import org.hibernate.type.StandardBasicTypes;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.support.DataAccessUtils;
-import org.springframework.orm.hibernate3.HibernateCallback;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -67,9 +63,6 @@ public class ProductDao extends HibernateDao<Product, Long>
 
    @Autowired
    private UserDao userDao;
-
-   @Autowired
-   private EvictionDao evictionDao;
 
    private final static Integer MAX_PRODUCT_PAGE_SIZE =
          Integer.getInteger("max.product.page.size", -1);
@@ -96,86 +89,6 @@ public class ProductDao extends HibernateDao<Product, Long>
    }
 
    /**
-    * Returns the maximum number of product that a page of request can handled.
-    *
-    * @return the max number of products.
-    */
-   public static int getMaxPageSize()
-   {
-      return MAX_PRODUCT_PAGE_SIZE;
-   }
-
-   public Product getProductByPath (final URL path)
-   {
-      if (path == null)
-         return null;
-
-      Product p = (Product)DataAccessUtils.uniqueResult(getHibernateTemplate().
-         find("from Product where path=? AND processed=true",path));
-      
-      return p;
-   }
-
-   /**
-    * Retrieve a list of products to their ids. returned list is not controlled
-    * with user rights nor processing completion.
-    * @param ids the list of ids to retrieve
-    * @return the list of products
-    */
-   @SuppressWarnings ("unchecked")
-   public List<Product> read(List<Long>ids)
-   {
-      if ((ids == null)|| ids.isEmpty ())
-      {
-         return Collections.emptyList();
-      }
-      String facet = "";
-      String logic_op="";
-      for (Long id: ids)
-      {
-         facet += " " + logic_op + " p.id=" + id;
-         logic_op = "or";
-      }
-      
-      return (List<Product>) find (
-         "from " + entityClass.getName () +
-         " p WHERE " + facet);
-   }
-
-   /**
-    * Does the product corresponding to the given url exist in the database ?
-    * Processed or not.
-    */
-   public boolean exists (URL url)
-   {
-      if (url == null)
-         return false;
-
-      Product p = (Product)DataAccessUtils.uniqueResult(getHibernateTemplate().
-         find("from Product where path=?", url));
-
-      return p != null;
-   }
-
-   /**
-    * Override Hibernate scroll to add the page size limitation.
-    * @see {@link HibernateDao#scroll(String, int, int)}
-    * @deprecated use of {@link #listCriteria(DetachedCriteria, int, int)}
-    */
-   @Override
-   @Deprecated
-   public List<Product> scroll(String clauses, int skip, int n)
-   {
-      checkProductNumber(n);
-      if (n < 0)
-      {
-         n = 100;
-      }
-
-      return super.scroll(clauses, skip, n);
-   }
-
-   /**
     * Paginated scroll.
     * @param filter substring of Product.Identifier, may be null.
     * @param collection_id may be null.
@@ -197,42 +110,12 @@ public class ProductDao extends HibernateDao<Product, Long>
 
       if (filter != null && !filter.isEmpty())
       {
-         sb.append("p.identifier LIKE '%").append(filter.toUpperCase()).append("%' AND ");
+         sb.append("p.identifier LIKE '%").append(filter.toUpperCase()).append("%' ");
       }
-
-      sb.append("p.processed=true");
 
       return new PagedIterator<>(this, sb.toString(), skip);
    }
 
-   /**
-    * Returns the number of Product records whose `processed` field is `true`.
-    * @param filter an optional additionnal `where` clause (without the "where" token).
-    * @param collection_uuid an optional parent collection ID.
-    * @return a number of rows in table `PRODUCTS`.
-    */
-   public int count (String filter, final String collection_uuid)
-   {
-      StringBuilder sb = new StringBuilder("select count(*) ");
-      if (collection_uuid != null)
-      {
-            sb.append("from Collection c left outer join c.products p ");
-            sb.append("where c.uuid='").append(collection_uuid).append("' and ");
-      }
-      else
-      {
-         sb.append("from Product p where ");
-      }
-      sb.append("p.processed=true");
-
-      if (filter != null && !filter.isEmpty())
-      {
-         sb.append(" and ").append(filter);
-      }
-
-      return DataAccessUtils.intResult(find(sb.toString()));
-   }
-   
     @Override
     public void deleteAll()
     {
@@ -243,7 +126,7 @@ public class ProductDao extends HibernateDao<Product, Long>
           it.remove ();
        }
     }
-   
+
    @Override
    public void delete (Product product)
    {
@@ -264,7 +147,6 @@ public class ProductDao extends HibernateDao<Product, Long>
       // Remove references
       productCartDao.deleteProductReferences(p);
       setIndexes (p.getId (), null);
-      evictionDao.removeProduct (p);
 
       super.delete (p);
    }
@@ -285,173 +167,19 @@ public class ProductDao extends HibernateDao<Product, Long>
    }
 
    /**
-    * Retrieve the list of product ordered by lowest access.
-    * The list of product is returned prior to the passed date argument.
-    * Currently processed and locked products are not returned.
-    * @return the ordered list of products.
+    * Returns a Product of UUID uuid, or null if it does not exist.
+    *
+    * @param uuid the UUID of a Product
+    * @return the Product of UUID uuid, or null if it does not exist
     */
-   public Iterator<Product>getProductsLowerAccess (Date max_date)
-   {
-      SimpleDateFormat sdf = new SimpleDateFormat ("yyyy-MM-dd HH:mm:ss.SSS");
-      String date = sdf.format (max_date);
-      String query = "FROM" + entityClass.getName () +
-            "WHERE created < '" + date + "' AND processed=true AND " +
-            "locked=false ORDER BY updated ASC, created ASC";
-      return new PagedIterator<> (this, query);
-   }
-
-   public static String getPathFromProduct (Product product)
-   {
-      return getPathFromURL(product.getPath ());
-   }
-   public static String getPathFromURL (URL product)
-   {
-      return product.toString();
-   }
-
-   /**
-    * THIS METHOD IS NOT SAFE: IT MUST BE REMOVED. 
-    * TODO: manage access by page.
-    * @param user_uuid
-    * @return
-    */
-   @SuppressWarnings ("unchecked")
-   public List<Long> getAuthorizedProducts (String user_uuid)
-   {
-      return (List<Long>) find (
-         "select id FROM " + entityClass.getName () +
-         " p WHERE p.processed=true");
-   }
-
-   @SuppressWarnings ("unchecked")
-   public Product getProductByDownloadableFilename (final String filename,
-         final Collection collection)
-   {
-      List<Product>products=null; 
-      if (collection == null)
-      {
-         products = (List<Product>)find(
-            "from Product where download.path LIKE '%" + filename +
-            "' AND processed = true");
-      }
-      else
-      {
-         products = (List<Product>)getHibernateTemplate ().find (
-            "select p from Collection c left outer join c.products p " +
-            "where c=? AND" +
-            "      p.download.path LIKE ? AND" +
-            "      processed=true", collection, "%"+filename +"%");
-      }
-
-      if ((products!=null) && (products.size ()>0))
-         return products.iterator ().next ();
-      return null;
-   }
-
    public Product getProductByUuid(final String uuid)
    {
-      Product result = null;
-      List list = getHibernateTemplate().find("FROM Product WHERE uuid=? AND processed=true", uuid);
-      if (!list.isEmpty())
-      {
-         result = (Product) list.get(0);
-      }
-      return result;
-   }
-
-   /**
-    * TODO: manage access by page.
-    * @param user
-    * @return
-    */
-   public List<Product> getNoCollectionProducts (User user)
-   {
-      ArrayList<Product> products = new ArrayList<> ();
-      StringBuilder sqlBuilder = new StringBuilder ();
-      sqlBuilder.append ("SELECT p.ID ");
-      sqlBuilder.append ("FROM PRODUCTS p ");
-      sqlBuilder.append ("LEFT OUTER JOIN COLLECTION_PRODUCT cp ")
-                .append ("ON p.ID = cp.PRODUCTS_ID ");
-      sqlBuilder.append ("WHERE cp.COLLECTIONS_UUID IS NULL");
-      final String sql = sqlBuilder.toString ();
-      List<BigInteger> queryResult =
-         getHibernateTemplate ().execute (
-            new HibernateCallback<List<BigInteger>> ()
-            {
-               @Override
-               @SuppressWarnings ("unchecked")
-               public List<BigInteger> doInHibernate (Session session)
-                  throws HibernateException, SQLException
-               {
-                  SQLQuery query = session.createSQLQuery (sql);
-                  return query.list ();
-               }
-            });
-
-      for (BigInteger pid : queryResult)
-      {
-         Product p = read (pid.longValue ());
-         if (p == null)
-         {
-            throw new IllegalStateException (
-               "Existing product is null ! product id = " + pid.longValue ());
-         }
-         products.add (p);
-      }
-
-      return products;
-   }
-
-   public List<Product> scrollUploadedProducts (final User user, final int skip,
-      final int top)
-   {
-      checkProductNumber(top);
-      return getHibernateTemplate ().execute (
-            new HibernateCallback<List<Product>>()
-      {
-         @Override
-         @SuppressWarnings ("unchecked")
-         public List<Product> doInHibernate (Session session)
-            throws HibernateException, SQLException
-         {
-            String hql = "SELECT p FROM Product p, User u" +
-                     " WHERE p.owner = u and u.uuid like ? AND p.processed = true";
-            Query query = session.createQuery (hql);
-            query.setString (0, user.getUUID ());
-            query.setFirstResult (skip);
-            query.setMaxResults (top);
-            return (List<Product>) query.list ();
-         }
+      return getHibernateTemplate().execute(session -> {
+         Query query = session.createQuery("FROM Product WHERE uuid=?");
+         query.setParameter(0, uuid, StandardBasicTypes.STRING);
+         List list = query.list();
+         return (Product) (list.isEmpty() ? null : list.get(0));
       });
-   }
-
-   @SuppressWarnings ("unchecked")
-   public List<Product> getUploadedProducts (final User user)
-   {
-      return (List<Product>) getHibernateTemplate ().find (
-         "FROM Product WHERE owner = ? AND processed = true", user);
-   }
-
-   public User getOwnerOfProduct (final Product product)
-   {
-      return (User)DataAccessUtils.uniqueResult(getHibernateTemplate().find(
-         "select p.owner from Product p where p=?", product));
-   }
-
-   public boolean isAuthorized (final String user_uuid, final long product_id)
-   {
-      if(userDao.read (user_uuid) == null || read (product_id) == null)
-      {
-         return false;
-      }
-      return true;
-   }
-
-   public Iterator<Product> getUnprocessedProducts ()
-   {
-      String query = "FROM " + entityClass.getName ()
-            + " WHERE processed is false";
-      return new PagedIterator<> (this, query);
    }
 
    public Iterator<Product> getAllProducts ()
@@ -462,22 +190,21 @@ public class ProductDao extends HibernateDao<Product, Long>
 
    public Product getProductByIdentifier(final String identifier)
    {
-      Product result = null;
-      List list = getHibernateTemplate()
-            .find("FROM Product WHERE identifier=? AND processed=true", identifier);
-      if (!list.isEmpty())
-      {
-         result = (Product) list.get(0);
-      }
-      return result;
+      return getHibernateTemplate().execute(session -> {
+         Query query = session.createQuery("FROM Product WHERE identifier=?");
+         query.setParameter(0, identifier, StandardBasicTypes.STRING);
+         List list = query.list();
+         return (Product) (list.isEmpty() ? null : list.get(0));
+      });
    }
 
    @Override
-   public Product create(Product p)
+   public synchronized Product create(Product p)
    {
       // Call the generation of uuid if null.
       p.getUuid();
       p.setCreated(new Date());
+      p.setOnline(true);
       return super.create(p);
    }
 
@@ -486,6 +213,55 @@ public class ProductDao extends HibernateDao<Product, Long>
    {
       detached.setFetchMode("download.checksums", FetchMode.SELECT);
       return super.listCriteria(detached, skip, top);
+   }
+
+   @Override
+   public List<Product> executeHQLQuery(final String hql,
+         final List<SQLVisitor.SQLVisitorParameter> parameters, final int skip, final int top)
+   {
+      checkProductNumber (top);
+      return super.executeHQLQuery (hql, parameters, skip, top);
+   }
+
+   /**
+    * Returns a list of LoggableProducts that match the given HQL String and HQL parameters.
+    * LoggableProduct contain the UUID, Identifier and Size of a Product.
+    * Skips the first {@code skip} products, and returns at most {@code top} products.
+    *
+    * @param hql and HQL query String
+    * @param hqlParameters the parameters of the HQL query
+    * @param skip the number of UUIDs to skip
+    * @param top the maximum number of UUIDs to return
+    * @return a list LoggableProducts
+    */
+   @SuppressWarnings("unchecked")
+   public List<LoggableProduct> getProductUUIDs(String hql, List<SQLVisitorParameter> hqlParameters, int skip, int top)
+   {
+      Session session = getSessionFactory().getCurrentSession();
+      Query query = session.createQuery("SELECT uuid, identifier, size "+hql);
+      for (int i = 0; i < hqlParameters.size(); i++)
+      {
+         SQLVisitor.SQLVisitorParameter param = hqlParameters.get(i);
+         query.setParameter(i, param.getValue(), param.getType());
+      }
+
+      if (skip > -1)
+      {
+         query.setFirstResult(skip);
+      }
+      if (top > -1)
+      {
+         query.setMaxResults(top);
+      }
+      query.setReadOnly(true);
+
+      return ((List<Object[]>) query.list())
+            .stream()
+            .map(row -> new LoggableProduct(
+                  (String) row[0], // uuid
+                  (String) row[1], // identifier
+                  (Long) row[2]))  // size
+            .collect(Collectors.toList());
    }
 
 }

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -35,10 +35,8 @@ import static fr.gael.dhus.olingo.v1.entityset.UserSynchronizerEntitySet.STATUS;
 import static fr.gael.dhus.olingo.v1.entityset.UserSynchronizerEntitySet.STATUS_DATE;
 import static fr.gael.dhus.olingo.v1.entityset.UserSynchronizerEntitySet.STATUS_MESSAGE;
 
-import fr.gael.dhus.database.object.SynchronizerConf;
 import fr.gael.dhus.olingo.v1.ExpectedException;
 import fr.gael.dhus.olingo.v1.ExpectedException.IncompleteDocException;
-import fr.gael.dhus.olingo.v1.ExpectedException.InvalidKeyException;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidValueException;
 import fr.gael.dhus.service.ISynchronizerService;
 import fr.gael.dhus.service.exception.InvokeSynchronizerException;
@@ -56,6 +54,8 @@ import org.apache.logging.log4j.Logger;
 import org.apache.olingo.odata2.api.ep.entry.ODataEntry;
 import org.apache.olingo.odata2.api.exception.ODataException;
 
+import org.quartz.CronExpression;
+
 /**
  * UserSynchronizer OData Entity.
  */
@@ -65,7 +65,7 @@ public final class UserSynchronizer extends AbstractEntity
    private static final Logger LOGGER = LogManager.getLogger(Synchronizer.class);
 
    /** Database Object. */
-   private final SynchronizerConf syncConf;
+   private final fr.gael.dhus.database.object.config.synchronizer.UserSynchronizer syncConf;
    /** Synchronizer Service, the underlying service. */
 
    private static final ISynchronizerService SYNC_SERVICE =
@@ -80,25 +80,21 @@ public final class UserSynchronizer extends AbstractEntity
     */
    public UserSynchronizer(long sync_id) throws ODataException
    {
-      this(SYNC_SERVICE.getSynchronizerConfById(sync_id));
+      this(SYNC_SERVICE.getSynchronizerConfById(sync_id,
+            fr.gael.dhus.database.object.config.synchronizer.UserSynchronizer.class));
    }
 
    /**
     * Creates a new UserSynchronizer from a database object.
     *
-    * @param sync_conf database object.
+    * @param userSynchronizer database object.
     * @throws ODataException if `sync_conf` is not an instance of ODataUserSynchronizer.
     */
-   public UserSynchronizer(SynchronizerConf sync_conf) throws ODataException
+   public UserSynchronizer(fr.gael.dhus.database.object.config.synchronizer.UserSynchronizer userSynchronizer)
+         throws ODataException
    {
-      Objects.requireNonNull(sync_conf);
-
-      if (!sync_conf.getType().equals("ODataUserSynchronizer"))
-      {
-         throw new InvalidKeyException(String.valueOf(sync_conf.getId()), this.getClass().getSimpleName());
-      }
-
-      this.syncConf = sync_conf;
+      Objects.requireNonNull(userSynchronizer);
+      this.syncConf = userSynchronizer;
    }
 
    /**
@@ -128,12 +124,31 @@ public final class UserSynchronizer extends AbstractEntity
 
       try
       {
-         this.syncConf = SYNC_SERVICE.createSynchronizer(label, "ODataUserSynchronizer", schedule);
+         this.syncConf = SYNC_SERVICE.createSynchronizer(label, schedule,
+               fr.gael.dhus.database.object.config.synchronizer.UserSynchronizer.class);
+         setDefaults(odata_entry);
          updateFromEntry(odata_entry);
       }
-      catch (ParseException e)
+      catch (ParseException | ReflectiveOperationException e)
       {
          throw new ExpectedException(e.getMessage());
+      }
+   }
+
+   /**
+    * Called by {@link #Synchronizer(ODataEntry)}, sets the default values for null properties
+    * from the create document.
+    *
+    * @param odataEntry create OData document
+    */
+   private void setDefaults(ODataEntry odataEntry)
+   {
+      Map<String, Object> props = odataEntry.getProperties ();
+
+      Integer page_size = (Integer) props.get(PAGE_SIZE);
+      if (page_size == null)
+      {
+         this.syncConf.setPageSize(500);
       }
    }
 
@@ -143,11 +158,11 @@ public final class UserSynchronizer extends AbstractEntity
 
       Map<String, Object> props = entry.getProperties ();
 
-      String schedule    = (String) props.remove(SCHEDULE);
-      String request     = (String) props.remove(REQUEST);
-      String service_url = (String) props.remove(SERVICE_URL);
-      Long   page_size   = (Long) props.remove(PAGE_SIZE);
-      Long   skip        = (Long) props.remove(CURSOR);
+      String schedule    =  (String) props.remove(SCHEDULE);
+      String request     =  (String) props.remove(REQUEST);
+      String service_url =  (String) props.remove(SERVICE_URL);
+      Integer page_size  = (Integer) props.remove(PAGE_SIZE);
+      Integer skip       = (Integer) props.remove(CURSOR);
       Boolean force      = (Boolean) props.remove (FORCE);
 
       // Nullable fields
@@ -164,11 +179,15 @@ public final class UserSynchronizer extends AbstractEntity
          LOGGER.debug ("Unknown or ReadOnly property: " + pname);
       }
 
+      // To avoid any side effects
+      SYNC_SERVICE.deactivateSynchronizer(this.syncConf.getId());
+
       if (schedule != null && !schedule.isEmpty())
       {
          try
          {
-            this.syncConf.setCronExpression(schedule);
+            CronExpression.validateExpression(schedule);
+            this.syncConf.setSchedule(schedule);
          }
          catch (ParseException ex)
          {
@@ -194,22 +213,22 @@ public final class UserSynchronizer extends AbstractEntity
 
       if (service_url != null && !service_url.isEmpty())
       {
-         this.syncConf.setConfig("service_uri", service_url);
+         this.syncConf.setServiceUrl(service_url);
       }
 
       if (page_size != null)
       {
-         this.syncConf.setConfig("page_size", page_size.toString());
+         this.syncConf.setPageSize(page_size);
       }
 
       if (skip != null)
       {
-         this.syncConf.setConfig("skip", skip.toString());
+         this.syncConf.setSkip(skip);
       }
 
       if (force != null)
       {
-         this.syncConf.setConfig("force", force.toString ());
+         this.syncConf.setForce(force);
       }
 
       if (has_label)
@@ -219,12 +238,12 @@ public final class UserSynchronizer extends AbstractEntity
 
       if (has_login)
       {
-         updateNullableProperty("service_username", service_login);
+         this.syncConf.setServiceLogin(service_login);
       }
 
       if (has_password)
       {
-         updateNullableProperty("service_password", service_password);
+         this.syncConf.setServicePassword(service_password);
       }
 
       try
@@ -245,27 +264,26 @@ public final class UserSynchronizer extends AbstractEntity
 
       res.put(ID,                this.syncConf.getId());
       res.put(LABEL,             this.syncConf.getLabel());
-      res.put(SCHEDULE,          this.syncConf.getCronExpression());
-      res.put(REQUEST,           this.syncConf.getActive() ? "start" : "stop");
+      res.put(SCHEDULE,          this.syncConf.getSchedule());
+      res.put(REQUEST,           this.syncConf.isActive() ? "start" : "stop");
       res.put(STATUS,            ss.status.toString());
       res.put(STATUS_DATE,       ss.since);
       res.put(STATUS_MESSAGE,    ss.message);
-      res.put(CREATION_DATE,     this.syncConf.getCreated());
-      res.put(MODIFICATION_DATE, this.syncConf.getModified());
-      res.put(SERVICE_URL,       this.syncConf.getConfig("service_uri"));
-      res.put(SERVICE_LOGIN,     this.syncConf.getConfig("service_username"));
+      res.put(CREATION_DATE,     this.syncConf.getCreated().toGregorianCalendar());
+      res.put(MODIFICATION_DATE, this.syncConf.getModified().toGregorianCalendar());
+      res.put(SERVICE_URL,       this.syncConf.getServiceUrl());
+      res.put(SERVICE_LOGIN,     this.syncConf.getServiceLogin());
       res.put(SERVICE_PASSWORD,  "***");
 
       // Handling of default values is not done by Olingo!
-      String skip = this.syncConf.getConfig("skip");
-      res.put(CURSOR, skip != null? Long.parseLong(skip): Long.valueOf(0));
+      Integer skip = this.syncConf.getSkip();
+      res.put(CURSOR, skip != null ? skip : Long.valueOf(0));
 
-      String page_size = this.syncConf.getConfig("page_size");
-      res.put(PAGE_SIZE, page_size != null? Long.parseLong(page_size): Long.valueOf(500));
+      res.put(PAGE_SIZE, this.syncConf.getPageSize());
 
-      String force = this.syncConf.getConfig("force");
-      res.put(FORCE, force != null? Boolean.parseBoolean (force): false);
-      
+      Boolean force = this.syncConf.isForce();
+      res.put(FORCE, force != null ? force : false);
+
       return res;
    }
 
@@ -277,52 +295,58 @@ public final class UserSynchronizer extends AbstractEntity
 
       switch (prop_name)
       {
-         case ID:                res = this.syncConf.getId();                        break;
-         case LABEL:             res = this.syncConf.getLabel();                     break;
-         case SCHEDULE:          res = this.syncConf.getCronExpression();            break;
-         case REQUEST:           res = this.syncConf.getActive() ? "start" : "stop"; break;
-         case STATUS:            res = ss.status.toString();                         break;
-         case STATUS_DATE:       res = ss.since;                                     break;
-         case STATUS_MESSAGE:    res = ss.message;                                   break;
-         case CREATION_DATE:     res = this.syncConf.getCreated();                   break;
-         case MODIFICATION_DATE: res = this.syncConf.getModified();                  break;
-         case SERVICE_URL:       res = this.syncConf.getConfig("service_uri");       break;
-         case SERVICE_LOGIN:     res = this.syncConf.getConfig("service_username");  break;
-         case SERVICE_PASSWORD:  res = this.syncConf.getConfig("service_password");  break;
+         case ID:
+            res = this.syncConf.getId();
+            break;
+         case LABEL:
+            res = this.syncConf.getLabel();
+            break;
+         case SCHEDULE:
+            res = this.syncConf.getSchedule();
+            break;
+         case REQUEST:
+            res = this.syncConf.isActive() ? "start" : "stop";
+            break;
+         case STATUS:
+            res = ss.status.toString();
+            break;
+         case STATUS_DATE:
+            res = ss.since;
+            break;
+         case STATUS_MESSAGE:
+            res = ss.message;
+            break;
+         case CREATION_DATE:
+            res = this.syncConf.getCreated().toGregorianCalendar();
+            break;
+         case MODIFICATION_DATE:
+            res = this.syncConf.getModified().toGregorianCalendar();
+            break;
+         case SERVICE_URL:
+            res = this.syncConf.getServiceUrl();
+            break;
+         case SERVICE_LOGIN:
+            res = this.syncConf.getServiceLogin();
+            break;
+         case SERVICE_PASSWORD:
+            res = this.syncConf.getServicePassword();
+            break;
 
          // Handling of default values is not done by Olingo!
          case CURSOR:
-            String skip = this.syncConf.getConfig("skip");
-            res = skip != null? Long.parseLong(skip): Long.valueOf(0);
+            Integer skip = this.syncConf.getSkip();
+            res = skip != null ? skip : Long.valueOf(0);
             break;
          case PAGE_SIZE:
-            String page_size = this.syncConf.getConfig("page_size");
-            res = page_size != null? Long.parseLong(page_size): Long.valueOf(500);
+            res = this.syncConf.getPageSize();
             break;
          case FORCE:
-            String force = this.syncConf.getConfig ("force");
-            res = force != null ? Boolean.parseBoolean (force): false;
+            Boolean force = this.syncConf.isForce();
+            res = force != null ? force : false;
             break;
-         default: throw new ODataException("Unknown property: "+prop_name);
+         default: throw new ODataException("Unknown property: " + prop_name);
       }
 
       return res;
-   }
-
-   /**
-    * If `value` is null or empty, remove `key` from the configuration.
-    * @param key of config entry to update.
-    * @param value to set, if null its entry will be removed from the config.
-    */
-   private void updateNullableProperty(final String key, final String value)
-   {
-      if (value == null || value.isEmpty())
-      {
-         this.syncConf.removeConfig(key);
-      }
-      else
-      {
-         this.syncConf.setConfig(key, value);
-      }
    }
 }

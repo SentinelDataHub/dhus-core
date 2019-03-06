@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2013,2014,2015 GAEL Systems
+   Copyright (C) 2013-2018 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -32,13 +32,13 @@
       <solr.version>5.5.3</solr.version>
       <spring.version>4.1.4.RELEASE</spring.version>
       <spring_security.version>3.2.5.RELEASE</spring_security.version>
-      <log4j.version>2.6.2-symds</log4j.version>
+      <log4j.version>2.8.2</log4j.version>
       <project.build.sourceEncoding>ISO-8859-1</project.build.sourceEncoding>
    </properties>
 
    <artifactId>dhus-core</artifactId>
    <groupId>fr.gael.dhus</groupId>
-   <version>1.0.1-15-osf</version>
+   <version>1.3.5-osf</version>
    <packaging>jar</packaging>
 
    <name>DHuS - Core</name>
@@ -46,6 +46,20 @@
    <inceptionYear>2016</inceptionYear>
 
    <dependencies>
+      <!-- TMP for retrocompatibility -->
+      <dependency>
+         <scope>runtime</scope>
+         <groupId>org.jumpmind.symmetric</groupId>
+         <artifactId>symmetric-client</artifactId>
+         <version>3.7.33</version>
+         <exclusions>
+            <exclusion>
+               <groupId>*</groupId>
+               <artifactId>*</artifactId>
+            </exclusion>
+         </exclusions>
+      </dependency>
+
       <!-- Cache -->
       <dependency>
          <groupId>net.sf.ehcache</groupId>
@@ -101,19 +115,19 @@
       <dependency>
          <groupId>org.hsqldb</groupId>
          <artifactId>hsqldb</artifactId>
-         <version>2.3.3</version>
+         <version>2.4.0</version>
       </dependency>
       <dependency>
          <groupId>org.liquibase</groupId>
          <artifactId>liquibase-core</artifactId>
-         <version>3.1.1</version>
+         <version>3.5.2</version>
       </dependency>
 
       <!-- DRB -->
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drb</artifactId>
-         <version>2.5.2</version>
+         <version>2.5.7</version>
          <exclusions>
             <exclusion>
                <groupId>log4j</groupId>
@@ -128,7 +142,7 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-cortex</artifactId>
-         <version>1.0.4</version>
+         <version>1.0.5</version>
          <exclusions>
             <exclusion>
                <groupId>fr.gael.drb</groupId>
@@ -151,7 +165,14 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-image</artifactId>
-         <version>1.7</version>
+         <version>1.10</version>
+         <exclusions>
+            <!-- replaced by GPL compatible com.github.jai-imageio:jai-imageio-core -->
+            <exclusion>
+               <groupId>javax.media</groupId>
+               <artifactId>jai_imageio</artifactId><!-- contains bugged jp2k support provided by JJ2000 -->
+            </exclusion>
+         </exclusions>
       </dependency>
 
       <!-- DRB Implementations -->
@@ -168,7 +189,7 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-impl-tar</artifactId>
-         <version>1.0.6</version>
+         <version>1.0.11</version>
          <exclusions>
             <exclusion>
                <groupId>fr.gael.drb</groupId>
@@ -188,16 +209,27 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-impl-tiff</artifactId>
-         <version>1.2.2</version>
+         <version>1.2.4</version>
+         <exclusions>
+            <!-- replaced by GPL compatible com.github.jai-imageio:jai-imageio-core -->
+            <exclusion>
+               <groupId>javax.media</groupId>
+               <artifactId>jai_imageio</artifactId><!-- contains bugged jp2k support provided by JJ2000 -->
+            </exclusion>
+         </exclusions>
       </dependency>
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-impl-zip</artifactId>
-         <version>1.1.9</version>
+         <version>1.1.25</version>
          <exclusions>
             <exclusion>
                <groupId>fr.gael.drb</groupId>
                <artifactId>drb</artifactId>
+            </exclusion>
+            <exclusion>
+               <groupId>log4j</groupId>
+               <artifactId>log4j</artifactId>
             </exclusion>
          </exclusions>
       </dependency>
@@ -205,7 +237,7 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-impl-swift</artifactId>
-         <version>1.0.7</version>
+         <version>1.0.15</version>
          <exclusions>
             <exclusion>
                <groupId>fr.gael.drb</groupId>
@@ -222,19 +254,6 @@
          </exclusions>
       </dependency>
 
-      <!-- FTP -->
-      <dependency>
-         <groupId>org.apache.ftpserver</groupId>
-         <artifactId>ftpserver-core</artifactId>
-         <version>1.0.6</version>
-         <exclusions>
-            <exclusion>
-               <groupId>org.slf4j</groupId>
-               <artifactId>slf4j-api</artifactId>
-            </exclusion>
-         </exclusions>
-      </dependency>
-
       <!-- Geometry for nominatim -->
       <dependency>
          <groupId>com.vividsolutions</groupId>
@@ -247,6 +266,11 @@
          <groupId>org.geonames</groupId>
          <artifactId>geonames</artifactId>
          <version>1.0</version>
+      </dependency>
+      <dependency>
+         <groupId>com.esri.geometry</groupId>
+         <artifactId>esri-geometry-api</artifactId>
+         <version>2.0.0</version>
       </dependency>
 
       <!-- Geotools -->
@@ -285,19 +309,9 @@
 
       <!-- JAI -->
       <dependency>
-         <groupId>javax.media</groupId>
-         <artifactId>jai_core</artifactId>
-         <version>1.1.3</version>
-      </dependency>
-      <dependency>
-         <groupId>javax.media</groupId>
-         <artifactId>jai_codec</artifactId>
-         <version>1.1.3</version>
-      </dependency>
-      <dependency>
-         <groupId>javax.media</groupId>
-         <artifactId>jai_imageio</artifactId>
-         <version>1.1</version>
+         <groupId>com.github.jai-imageio</groupId>
+         <artifactId>jai-imageio-core</artifactId>
+         <version>1.4.0</version>
       </dependency>
 
       <!-- JAXB -->
@@ -311,7 +325,7 @@
          <artifactId>jaxb-impl</artifactId>
          <version>2.2.11</version>
       </dependency>
-      
+
       <!-- JMS -->
       <!-- <dependency>
          <groupId>org.apache.activemq</groupId>
@@ -523,6 +537,11 @@
          <artifactId>spring-security-config</artifactId>
          <version>${spring_security.version}</version>
       </dependency>
+      <dependency>
+         <groupId>org.springframework.security.extensions</groupId>
+         <artifactId>spring-security-saml2-core</artifactId>
+         <version>1.0.2.RELEASE</version>
+      </dependency>
 
       <!-- AspectJ -->
       <dependency>
@@ -571,6 +590,13 @@
       <dependency>
          <groupId>org.apache.tomcat</groupId>
          <artifactId>tomcat-jasper</artifactId>
+         <version>8.0.36</version>
+      </dependency>
+
+      <!-- Tomcat cluster -->
+      <dependency>
+         <groupId>org.apache.tomcat</groupId>
+         <artifactId>tomcat-catalina-ha</artifactId>
          <version>8.0.36</version>
       </dependency>
 
@@ -646,64 +672,53 @@
          <version>4.1</version>
       </dependency>
 
-      <!-- Symmetric DS -->
-      <dependency>
-         <groupId>org.jumpmind.symmetric</groupId>
-         <artifactId>symmetric-client</artifactId>
-         <version>3.7.33-dhus</version>
-         <exclusions>
-            <exclusion>
-               <groupId>org.slf4j</groupId>
-               <artifactId>slf4j-log4j12</artifactId>
-            </exclusion>
-            <exclusion>
-               <groupId>org.slf4j</groupId>
-               <artifactId>jul-to-slf4j</artifactId>
-            </exclusion>
-            <exclusion>
-               <groupId>org.slf4j</groupId>
-               <artifactId>jcl-over-slf4j</artifactId>
-            </exclusion>
-            <exclusion>
-               <groupId>log4j</groupId>
-               <artifactId>log4j</artifactId>
-            </exclusion>
-         </exclusions>
-      </dependency>
-      <dependency>
-         <groupId>org.jumpmind.symmetric</groupId>
-         <artifactId>symmetric-jdbc</artifactId>
-         <version>3.7.33</version>
-         <exclusions>
-            <exclusion>
-               <groupId>org.slf4j</groupId>
-               <artifactId>slf4j-log4j12</artifactId>
-            </exclusion>
-            <exclusion>
-               <groupId>org.slf4j</groupId>
-               <artifactId>jul-to-slf4j</artifactId>
-            </exclusion>
-            <exclusion>
-               <groupId>org.slf4j</groupId>
-               <artifactId>jcl-over-slf4j</artifactId>
-            </exclusion>
-            <exclusion>
-               <groupId>log4j</groupId>
-               <artifactId>log4j</artifactId>
-            </exclusion>
-         </exclusions>
-      </dependency>
-
       <dependency>
          <groupId>de.odysseus.staxon</groupId>
          <artifactId>staxon</artifactId>
          <version>1.4-dhus</version>
       </dependency>
 
+      <!-- Apache Commons -->
       <dependency>
          <groupId>org.apache.commons</groupId>
          <artifactId>commons-math3</artifactId>
          <version>3.6.1</version>
+      </dependency>
+
+      <!-- GMP Store -->
+      <dependency>
+         <groupId>mysql</groupId>
+         <artifactId>mysql-connector-java</artifactId>
+         <version>6.0.6</version>
+      </dependency>
+
+      <!-- OData v4 -->
+      <dependency>
+         <groupId>fr.gael.odata</groupId>
+         <artifactId>odata-engine</artifactId>
+         <version>1.0.7</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.olingo</groupId>
+         <artifactId>odata-commons-api</artifactId>
+         <version>4.4.0</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.olingo</groupId>
+         <artifactId>odata-commons-core</artifactId>
+         <version>4.4.0</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.olingo</groupId>
+         <artifactId>odata-server-api</artifactId>
+         <version>4.4.0</version>
+         <scope>compile</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.olingo</groupId>
+         <artifactId>odata-server-core</artifactId>
+         <version>4.4.0</version>
+         <scope>runtime</scope>
       </dependency>
 
    </dependencies>
@@ -721,8 +736,8 @@
             <artifactId>maven-compiler-plugin</artifactId>
             <version>3.2</version>
             <configuration>
-               <source>1.7</source>
-               <target>1.7</target>
+               <source>1.8</source>
+               <target>1.8</target>
                <encoding>ISO-8859-1</encoding>
                <compilerArgs>
                   <arg>-Xlint:all,-options,-path</arg>
@@ -744,8 +759,8 @@
             </executions>
          </plugin>
 
-         <!-- solr.war and symDS.war are not required from compilation but for execution and packaging -->
-         <!-- This plugin is not required in dhus-core compilation file but in dhus package assembly -->
+         <!-- solr.war is not required from compilation but for execution and packaging -->
+         <!-- This component is not required in dhus-core compilation file but in dhus package assembly -->
          <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-dependency-plugin</artifactId>
@@ -767,14 +782,6 @@
                      <type>war</type>
                      <outputDirectory>${project.build.outputDirectory}</outputDirectory>
                      <destFileName>dhus-solr.war</destFileName>
-                  </artifactItem>
-                  <artifactItem>
-                     <groupId>org.jumpmind.symmetric</groupId>
-                     <artifactId>symmetric-war</artifactId>
-                     <version>3.7.33</version>
-                     <type>war</type>
-                     <outputDirectory>${project.build.outputDirectory}</outputDirectory>
-                     <destFileName>dhus-symds.war</destFileName>
                   </artifactItem>
                </artifactItems>
             </configuration>
@@ -814,6 +821,8 @@
                         <arg>-Xannotate</arg>
                         <arg>-Xsetters</arg>
                         <arg>-Xsetters-mode=direct</arg>
+                        <arg>-Xdefault-value</arg>
+                        <arg>-Xnamespace-prefix</arg>
                      </args>
                      <locale>en</locale>
                      <schemaDirectory>${basedir}/src/main/resources</schemaDirectory>
@@ -821,16 +830,29 @@
                         <include>fr/gael/dhus/system/config/dhus-configuration.xsd</include>
                         <include>fr/gael/dhus/service/metadata/metadata-types.xsd</include>
                      </schemaIncludes>
+                     <bindingIncludes>
+                        <include>fr/gael/dhus/system/config/bindings.xml</include>
+                     </bindingIncludes>
                      <plugins>
                         <plugin>
                            <groupId>org.jvnet.jaxb2_commons</groupId>
                            <artifactId>jaxb2-basics</artifactId>
-                           <version>0.9.1</version>
+                           <version>0.11.1</version>
                         </plugin>
                         <plugin>
                            <groupId>org.jvnet.jaxb2_commons</groupId>
                            <artifactId>jaxb2-basics-annotate</artifactId>
-                           <version>1.0.1</version>
+                           <version>1.0.2</version>
+                        </plugin>
+                        <plugin>
+                           <groupId>org.jvnet.jaxb2_commons</groupId>
+                           <artifactId>jaxb2-default-value</artifactId>
+                           <version>1.1</version>
+                        </plugin>
+                        <plugin>
+                           <groupId>org.jvnet.jaxb2_commons</groupId>
+                           <artifactId>jaxb2-namespace-prefix</artifactId>
+                           <version>1.3</version>
                         </plugin>
                      </plugins>
                   </configuration>
@@ -860,7 +882,7 @@
                <systemPropertyVariables>
                   <user.timezone>UTC</user.timezone>
                </systemPropertyVariables>
-               <argLine>-Xmx2048m -XX:MaxPermSize=128m</argLine>
+               <argLine>-Xmx2048m</argLine>
             </configuration>
          </plugin>
       </plugins>
@@ -897,6 +919,4 @@
       <tag>HEAD</tag>
       <url>https://github.com/SentinelDataHub/dhus-core/core</url>
    </scm>
-
-
 </project>

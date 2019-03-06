@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,24 +19,12 @@
  */
 package fr.gael.dhus.service;
 
-import fr.gael.dhus.DHuS;
-import fr.gael.dhus.database.dao.ConfigurationDao;
-import fr.gael.dhus.database.dao.UserDao;
-import fr.gael.dhus.database.dao.interfaces.DHusDumpException;
-import fr.gael.dhus.database.object.User;
-import fr.gael.dhus.database.object.User.PasswordEncryption;
-import fr.gael.dhus.database.object.config.Configuration;
-import fr.gael.dhus.database.object.config.search.SolrConfiguration;
-import fr.gael.dhus.service.exception.UserBadEncryptionException;
-import fr.gael.dhus.system.config.ConfigurationManager;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Paths;
@@ -48,24 +36,23 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.annotation.PostConstruct;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.comparator.NameFileComparator;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
 import org.apache.solr.core.CoreContainer;
-
 import org.hibernate.HibernateException;
 import org.hibernate.Session;
-
 import org.hsqldb.lib.tar.DbBackupMain;
 import org.hsqldb.lib.tar.TarMalformatException;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
@@ -75,6 +62,19 @@ import org.springframework.security.crypto.codec.Hex;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import fr.gael.dhus.DHuS;
+import fr.gael.dhus.database.dao.UserDao;
+import fr.gael.dhus.database.dao.interfaces.DHusDumpException;
+import fr.gael.dhus.database.object.User;
+import fr.gael.dhus.database.object.User.PasswordEncryption;
+import fr.gael.dhus.database.object.config.Configuration;
+import fr.gael.dhus.database.object.config.messaging.MailConfiguration;
+import fr.gael.dhus.database.object.config.search.SolrConfiguration;
+import fr.gael.dhus.database.object.config.system.SupportConfiguration;
+import fr.gael.dhus.service.exception.UserBadEncryptionException;
+import fr.gael.dhus.system.config.ConfigurationException;
+import fr.gael.dhus.system.config.ConfigurationManager;
 
 @Service
 public class SystemService extends WebService
@@ -87,49 +87,80 @@ public class SystemService extends WebService
       "dhus-restoration-system.properties";
    
    private static int SOLR_VERSION=4;
-   
-   @Autowired
-   private ConfigurationDao cfgDao;
 
    @Autowired
    private UserDao userDao;
 
    @Autowired
    private ConfigurationManager cfgManager;
-   
+
+   /** True if the database is an embedded HSQLDB instance. */
+   private boolean isEmbeddedHsqldb = false;
+
+   /** if `isEmbeddedHsqldb` is true, Path to the database's directory. */
+   private String dbDirPath = null;
+
+   /** Sets `isEmbeddedHsqldb` and `dbDirPath`. */
+   @PostConstruct
+   @SuppressWarnings("unused")
+   private void init()
+   {
+      String jdbcUrl = cfgManager.getDatabaseConfiguration().getJDBCUrl();
+      Matcher matcher = Pattern.compile("^jdbc:hsqldb:file:([^;]+).*$").matcher(jdbcUrl);
+      if (matcher.matches())
+      {
+         isEmbeddedHsqldb = true;
+         dbDirPath = Paths.get(matcher.group(1)).getParent().toString();
+      }
+   }
+
    @PreAuthorize ("hasRole('ROLE_SYSTEM_MANAGER')")
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public Configuration getCurrentConfiguration ()
    {
-      return cfgDao.getCurrentConfiguration ();
+      return cfgManager.getConfiguration();
+   }
+
+   /**
+    * @deprecated use {@link #saveSystemSettings()}
+    */
+   @PreAuthorize ("hasRole('ROLE_SYSTEM_MANAGER')")
+   @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
+   @Deprecated
+   public Configuration saveSystemSettings(Configuration toSave) throws ConfigurationException
+   {
+      // Support Configuration
+      SupportConfiguration supportConfToUpdate = cfgManager.getSupportConfiguration();
+      SupportConfiguration suppConf = toSave.getSystemConfiguration().getSupportConfiguration();
+      supportConfToUpdate.setMail(suppConf.getMail());
+      supportConfToUpdate.setName(suppConf.getName());
+      supportConfToUpdate.setRegistrationMail(suppConf.getRegistrationMail());
+
+      // Mail Configuration
+      MailConfiguration mailConfToUpdate = cfgManager.getMailConfiguration();
+      MailConfiguration mailConf = toSave.getMessagingConfiguration().getMailConfiguration();
+      mailConfToUpdate.setOnUserCreate(mailConf.isOnUserCreate());
+      mailConfToUpdate.setOnUserUpdate(mailConf.isOnUserUpdate());
+      mailConfToUpdate.setOnUserDelete(mailConf.isOnUserDelete());
+      mailConfToUpdate.setServerConfiguration(mailConf.getServerConfiguration());
+
+      return saveSystemSettings();
    }
 
    @PreAuthorize ("hasRole('ROLE_SYSTEM_MANAGER')")
    @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
-   public Configuration saveSystemSettings (Configuration cfg) throws
-         IllegalArgumentException, IllegalAccessException,
-         InvocationTargetException, CloneNotSupportedException
+   public Configuration saveSystemSettings() throws ConfigurationException
    {
-      Configuration db_cfg = cfgDao.getCurrentConfiguration ();
-      cfg = cfg.completeWith (db_cfg);
-      db_cfg.setCronConfiguration (cfg.getCronConfiguration ());
-      db_cfg.setGuiConfiguration (cfg.getGuiConfiguration ());
-      db_cfg.setMessagingConfiguration (cfg.getMessagingConfiguration ());
-      db_cfg.setNetworkConfiguration (cfg.getNetworkConfiguration ());
-      db_cfg.setProductConfiguration (cfg.getProductConfiguration ());
-      db_cfg.setSearchConfiguration (cfg.getSearchConfiguration ());
-      db_cfg.setServerConfiguration (cfg.getServerConfiguration ());
-      db_cfg.setSystemConfiguration (cfg.getSystemConfiguration ());
-      cfgDao.update (db_cfg);
-      return cfgDao.getCurrentConfiguration ();
+      cfgManager.saveConfiguration();
+      return cfgManager.getConfiguration();
    }
 
    @PreAuthorize ("hasRole('ROLE_SYSTEM_MANAGER')")
    @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
    public Configuration resetToDefaultConfiguration () throws Exception
    {
-      cfgManager.reloadConfiguration ();
-      return cfgDao.getCurrentConfiguration ();
+      cfgManager.reloadConfiguration();
+      return cfgManager.getConfiguration();
    }
 
    @PreAuthorize ("hasRole('ROLE_SYSTEM_MANAGER')")
@@ -174,6 +205,10 @@ public class SystemService extends WebService
    @PreAuthorize ("hasRole('ROLE_SYSTEM_MANAGER')")
    public List<Date> getDumpDatabaseList ()
    {
+      if (!isEmbeddedHsqldb)
+      {
+         return Collections.<Date>emptyList();
+      }
       List<Date>timestamps = new ArrayList<Date> ();
       
       File path_file = new File (cfgManager.getDatabaseConfiguration ()
@@ -219,6 +254,11 @@ public class SystemService extends WebService
     */
    public void restoreDumpDatabase (Date date)
    {
+      if (!isEmbeddedHsqldb)
+      {
+         // Should never happen
+         throw new IllegalStateException("dump not supported");
+      }
       File retorationDir = new File (
             cfgManager.getDatabaseConfiguration ().getDumpPath (),
             String.format ("dump-%020d", date.getTime ()));
@@ -238,7 +278,7 @@ public class SystemService extends WebService
                .append (path).append ("/")
                .append (BACKUP_DATABASE_NAME).append (".tar.gz");
          writer.append ('\n');
-         writer.append ("dhus.db.location=").append (getDBDirectory ());
+         writer.append("dhus.db.location=").append(dbDirPath);
          writer.append ('\n');
 
          // Solr index
@@ -263,21 +303,15 @@ public class SystemService extends WebService
       DHuS.stop (8);
    }
 
-   private String getDBDirectory ()
-   {      
-      String hsqlpath = cfgManager.getDatabaseConfiguration ().getPath ();
-
-      File db =
-         new File (hsqlpath.replace ('/', File.separatorChar)).getParentFile ();
-      
-      return db.getPath ();
-   }
-
    /**
     * Generate a backup of DHuS system (database and Solr index)
     */
    public void dumpDatabase()
    {
+      if (!isEmbeddedHsqldb)
+      {
+         throw new IllegalStateException("Cannot dump non embed, non HSQLDB databases");
+      }
       Date date = new Date ();
       String dirName = String.format ("dump-%020d", date.getTime ());
       File dir = new File (

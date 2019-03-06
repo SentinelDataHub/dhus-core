@@ -2,9 +2,6 @@ package fr.gael.dhus.database.dao;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertTrue;
-
-import java.util.Iterator;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.DirtiesContext;
@@ -14,7 +11,6 @@ import org.testng.Assert;
 import fr.gael.dhus.database.dao.interfaces.HibernateDao;
 import fr.gael.dhus.database.object.restriction.AccessRestriction;
 import fr.gael.dhus.database.object.restriction.LockedAccessRestriction;
-import fr.gael.dhus.util.CheckIterator;
 import fr.gael.dhus.util.TestContextLoader;
 
 @ContextConfiguration (locations = "classpath:fr/gael/dhus/spring/context-test.xml", loader = TestContextLoader.class)
@@ -91,14 +87,6 @@ public class TestAccessRestrictionDao extends
       dao.delete (ar);
       Assert.assertEquals (dao.count (), expected);
       Assert.assertNull (dao.read (id));
-   }
-
-   @Override
-   public void scroll ()
-   {
-      String hql = "WHERE blockingReason LIKE 'punition%'";
-      Iterator<AccessRestriction> it = dao.scroll (hql, -1, -1).iterator ();
-      assertTrue (CheckIterator.checkElementNumber (it, 3));
    }
 
    @Override

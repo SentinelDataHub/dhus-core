@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -38,10 +38,8 @@ import fr.gael.drb.DrbAttributeList;
 import fr.gael.drb.DrbFactory;
 import fr.gael.drb.DrbNode;
 import fr.gael.drb.impl.DrbNodeImpl;
-import fr.gael.drb.impl.spi.DrbNodeSpi;
 import fr.gael.drb.impl.xml.XmlFactory;
 import fr.gael.drb.value.Value;
-import fr.gael.drbx.cortex.DrbCortexModel;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
@@ -56,6 +54,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.commons.io.IOUtils;
 
 import org.apache.commons.net.io.CopyStreamAdapter;
 import org.apache.commons.net.io.CopyStreamListener;
@@ -93,7 +93,7 @@ public class Node extends Item implements Closeable
       super (getNodeId (path));
       this.path=path;
    }
-   
+
    public Node (DrbNode node)
    {
       super (getNodeId (node));
@@ -106,7 +106,7 @@ public class Node extends Item implements Closeable
    {
       super.id = id;
    }
-   
+
    private void initNode ()
    {
       if (this.drbNode == null)
@@ -121,7 +121,7 @@ public class Node extends Item implements Closeable
       if (this.drbNode==null)
          throw new NullPointerException ("Node cannot be null");
    }
-   
+
 
    @Override
    public String getName ()
@@ -136,15 +136,7 @@ public class Node extends Item implements Closeable
       initNode ();
       if (contentType == null)
       {
-         try
-         {
-            DrbCortexModel model = DrbCortexModel.getDefaultModel ();
-            contentType = model.getClassOf (drbNode).getLabel ();
-         }
-         catch (Exception e)
-         {
-            contentType = "Item";
-         }
+         contentType = ProcessingUtils.getClassLabelFromNode(drbNode);
       }
       return contentType;
    }
@@ -156,7 +148,21 @@ public class Node extends Item implements Closeable
       if (contentLength == null)
       {
          contentLength = -1L;
-         if (hasStream ())
+         DrbAttribute attr = this.drbNode.getAttribute("size");
+         if (attr != null)
+         {
+            try
+            {
+               contentLength = Long.decode(attr.getValue().toString());
+            }
+            catch (NumberFormatException nfe)
+            {
+               // Error in attribute...
+            }
+         }
+
+         // Still not initialized ?
+         if (contentLength == -1L && hasStream())
          {
             InputStream stream = getStream ();
             if (stream instanceof FileInputStream)
@@ -171,24 +177,9 @@ public class Node extends Item implements Closeable
                   // Error while accessing file size: using -1L
                }
             }
-            // Still not initialized ?
-            if (contentLength == -1)
-            {
-               DrbAttribute attr = this.drbNode.getAttribute ("size");
-               if (attr != null)
-               {
-                  try
-                  {
-                     contentLength = Long.decode (attr.getValue ().toString ());
-                  }
-                  catch (NumberFormatException nfe)
-                  {
-                     // Error in attribute...
-                  }
-               }
-            }
          }
-         else
+
+         if (contentLength == -1L)
          {
             contentLength = 0L;
          }
@@ -203,20 +194,27 @@ public class Node extends Item implements Closeable
 
       if (ns.getEntitySet().getName().equals(Model.NODE.getName()))
       {
-         res = getNodes();
-         if (!ns.getKeyPredicates().isEmpty())
+         if (ns.getKeyPredicates().isEmpty())
          {
-            res = ((NodesMap)res).get(
-               ns.getKeyPredicates().get(0).getLiteral());
+            res = getNodes();
+         }
+         else
+         {
+            res = new Node(drbNode.getNamedChild(ns.getKeyPredicates().get(0).getLiteral(), 1));
          }
       }
       else if (ns.getEntitySet().getName().equals(Model.ATTRIBUTE.getName()))
       {
-         res = getAttributes();
-         if (!ns.getKeyPredicates().isEmpty())
+         if (ns.getKeyPredicates().isEmpty())
          {
-            res = Map.class.cast(res).get(
-               ns.getKeyPredicates().get(0).getLiteral());
+            res = getAttributes();
+         }
+         else
+         {
+            String name = ns.getKeyPredicates().get(0).getLiteral();
+            Value attributeValue = drbNode.getAttribute(name).getValue();
+            String valueString = attributeValue == null ? "" : attributeValue.toString();
+            res = new Attribute(name, valueString, null);
          }
       }
       else if (ns.getEntitySet().getName().equals(Model.CLASS.getName()))
@@ -296,7 +294,7 @@ public class Node extends Item implements Closeable
       }
       return attributes;
    }
-   
+
    /**
     * Retrieve the Class from this Node entity.
     * @return the Class entity.
@@ -325,7 +323,7 @@ public class Node extends Item implements Closeable
       }
       return this.itemClass;
    }
-   
+
    /**
     * Calls the superclass entity response not aggregated to this response.
     * @param root_url
@@ -340,7 +338,7 @@ public class Node extends Item implements Closeable
    public Map<String, Object> toEntityResponse (String root_url)
    {
       Map<String, Object> res = itemToEntityResponse  (root_url);
-      
+
       initNode ();
       res.put (NodeEntitySet.CHILDREN_NUMBER, getChildrenNumber ());
       res.put (NodeEntitySet.VALUE, getValue ());
@@ -368,12 +366,12 @@ public class Node extends Item implements Closeable
       initNode ();
       if (hasStream ())
       {
+         InputStream is = null;
          try
          {
             User u = Security.getCurrentUser();
             String user_name = (u == null ? null : u.getUsername ());
 
-            InputStream is = null;
             if (attach_stream)
             {
                is = new BufferedInputStream(getStream());
@@ -411,6 +409,7 @@ public class Node extends Item implements Closeable
          }
          catch (Exception e)
          {
+            IOUtils.closeQuietly(is);
             throw new ODataException (
                "An exception occured while creating the stream for node " + 
                getName(), e);
@@ -425,9 +424,9 @@ public class Node extends Item implements Closeable
    public boolean hasStream ()
    {
       initNode ();
-      if (drbNode instanceof DrbNodeSpi)
+      if (drbNode instanceof DrbNodeImpl)
       {
-         return ((DrbNodeSpi) drbNode).hasImpl (InputStream.class);
+         return ((DrbNodeImpl) drbNode).hasImpl(InputStream.class);
       }
       return false;
    }
@@ -435,10 +434,9 @@ public class Node extends Item implements Closeable
    public InputStream getStream ()
    {
       initNode ();
-      if (drbNode instanceof DrbNodeSpi)
+      if (drbNode instanceof DrbNodeImpl)
       {
-         return (InputStream) ((DrbNodeSpi) drbNode)
-            .getImpl (InputStream.class);
+         return (InputStream) ((DrbNodeImpl) drbNode).getImpl(InputStream.class);
       }
       return null;
    }
@@ -455,7 +453,7 @@ public class Node extends Item implements Closeable
     * Computes the unique identifier within this parent node context. The
     * retrieved identifier is computed from the XPath that includes the name of
     * this node, and the occurrence of this node within the parent if any.
-    * 
+    *
     * @param node this node to compute the id.
     * @return the unique identifier within this node.
     */
@@ -470,7 +468,7 @@ public class Node extends Item implements Closeable
       if ( (id == null) || "".equals (id)) id = (new File (path)).getName ();
       return id;
    }
-   
+
    public static String getNodeId (DrbNode node)
    {
       return getNodeId (node.getPath ());
@@ -480,7 +478,7 @@ public class Node extends Item implements Closeable
     * From xml spec valid chars:<br>
     * #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]<br>
     * any Unicode character, excluding the surrogate blocks, FFFE, and FFFF.<br>
-    * 
+    *
     * @param text The String to clean
     * @param replacement The string to be substituted for each match
     * @return The resulting String

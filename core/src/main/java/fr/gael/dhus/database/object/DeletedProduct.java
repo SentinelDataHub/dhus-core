@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -72,9 +72,6 @@ public class DeletedProduct implements Serializable
 
    @Column(name = "ORIGIN")
    private String origin;
-
-   @Column(name = "DOWNLOAD_SIZE")
-   private Long downloadSize;
 
    @Column(name = "SIZE")
    private Long size;
@@ -254,16 +251,6 @@ public class DeletedProduct implements Serializable
    public void setItemClass(String item_class)
    {
       this.itemClass = item_class;
-   }
-
-   public Long getDownloadSize()
-   {
-      return downloadSize;
-   }
-
-   public void setDownloadSize(Long downloadSize)
-   {
-      this.downloadSize = downloadSize;
    }
 
    public Date getDeletionDate()

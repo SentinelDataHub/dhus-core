@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,20 +22,39 @@ package fr.gael.dhus.datastore.scanner;
 public class ScannerException extends Exception
 {
    private static final long serialVersionUID = -1023764626340271980L;
-   public ScannerException ()
+
+   public ScannerException()
    {
-      super ();
-   }
-   
-   public ScannerException (String message)
-   {
-      super (message);
-   }
-   
-   public ScannerException (String message, Throwable cause)
-   {
-      super (message,cause);
+      super();
    }
 
+   public ScannerException(String message)
+   {
+      super(message);
+   }
 
+   public ScannerException(String message, Throwable cause)
+   {
+      super(message, cause);
+   }
+
+   public static class ScannerNotFoundException extends ScannerException
+   {
+      private static final long serialVersionUID = 1L;
+
+      public ScannerNotFoundException(Long scannerId)
+      {
+         super("Scanner #" + scannerId + " not found");
+      }
+   }
+
+   public static class ScannerAlreadyRunningException extends ScannerException
+   {
+      private static final long serialVersionUID = 1L;
+
+      public ScannerAlreadyRunningException(Long scannerId)
+      {
+         super("Scanner #" + scannerId + " already running");
+      }
+   }
 }

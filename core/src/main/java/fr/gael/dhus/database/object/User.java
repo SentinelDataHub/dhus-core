@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -53,6 +53,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.codec.Hex;
 
 import fr.gael.dhus.database.object.restriction.AccessRestriction;
+import fr.gael.dhus.network.CurrentQuotas;
 import fr.gael.dhus.service.exception.UserBadEncryptionException;
 
 @Entity
@@ -63,6 +64,10 @@ public class User extends AbstractTimestampEntity implements Serializable,
    private static final long serialVersionUID = -5230880505052446856L;
    private static final Random RANDOM = new Random ();
    private static final char[] SYMBOLS = new char[73];
+
+   /** Quota informations. */
+   @Transient
+   private final CurrentQuotas currentQuotas = new CurrentQuotas();
 
    /**
     * Generating password.
@@ -145,9 +150,6 @@ public class User extends AbstractTimestampEntity implements Serializable,
 
    @Column (name = "ADDRESS", nullable = true)
    private String address;
-
-   @Column (name = "DELETED", columnDefinition = "BOOLEAN", nullable = false)
-   private boolean deleted = false;
 
    @ElementCollection (targetClass = Role.class, fetch = FetchType.EAGER)
    @CollectionTable (name = "USER_ROLES",
@@ -414,22 +416,6 @@ public class User extends AbstractTimestampEntity implements Serializable,
       return preferences;
    }
 
-   /**
-    * @param deleted the deleted to set
-    */
-   public void setDeleted (boolean deleted)
-   {
-      this.deleted = deleted;
-   }
-
-   /**
-    * @return the deleted
-    */
-   public boolean isDeleted ()
-   {
-      return deleted;
-   }
-
    public void addRestriction (AccessRestriction restriction)
    {
       if (restrictions == null)
@@ -662,5 +648,10 @@ public class User extends AbstractTimestampEntity implements Serializable,
       else
          if ( !username.equals (other.username)) return false;
       return true;
+   }
+
+   public CurrentQuotas getCurrentQuotas()
+   {
+      return currentQuotas;
    }
 }

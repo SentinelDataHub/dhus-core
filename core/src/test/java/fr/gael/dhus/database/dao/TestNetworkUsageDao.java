@@ -2,7 +2,6 @@ package fr.gael.dhus.database.dao;
 
 import java.util.Calendar;
 import java.util.Date;
-import java.util.Iterator;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.DirtiesContext;
@@ -14,7 +13,6 @@ import org.testng.annotations.Test;
 import fr.gael.dhus.database.dao.interfaces.HibernateDao;
 import fr.gael.dhus.database.object.NetworkUsage;
 import fr.gael.dhus.database.object.User;
-import fr.gael.dhus.util.CheckIterator;
 import fr.gael.dhus.util.TestContextLoader;
 
 /*
@@ -112,14 +110,6 @@ public class TestNetworkUsageDao extends
       Assert.assertEquals (dao.count (), (howMany () - 1));
       Assert.assertNull (dao.read (id));
       Assert.assertNotNull (udao.read ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3"));
-   }
-
-   @Override
-   public void scroll ()
-   {
-      String hql = "WHERE isDownload IS FALSE";
-      Iterator<NetworkUsage> it = dao.scroll (hql, -1, -1).iterator ();
-      Assert.assertTrue (CheckIterator.checkElementNumber (it, 3));
    }
 
    @Override
