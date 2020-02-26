@@ -65,7 +65,7 @@ public class OpenStackDataStore extends AbstractDataStore
    private final String container;
    private final String region;
 
-   private DrbSwiftObject ostack;
+   private volatile DrbSwiftObject ostack;
 
    /**
     * Build an open-stack storage API for DHuS data store. Currently only swift is supported.
@@ -102,12 +102,30 @@ public class OpenStackDataStore extends AbstractDataStore
     *
     * @return the object to manipulate OpenStack
     */
-   private DrbSwiftObject getOpenStackObject()
+   private synchronized DrbSwiftObject getOpenStackObject()
    {
-      boolean reset = false;
-      if (reset || (this.ostack == null))
+      if (this.ostack == null)
       {
-         this.ostack = new DrbSwiftObject(this.url, this.provider, this.identity, this.credential);
+         // Handles the small differences between Keystone V2 and Keystone V3
+         if (url.contains("/v3"))
+         {
+            String[] splitIdentity = this.identity.split(":");
+            if (splitIdentity.length != 3)
+            {
+               LOGGER.error("Invalid identity format, must be: <domain>:<project>:<username>");
+            }
+            else
+            {
+               String domain   = splitIdentity[0];
+               String project  = splitIdentity[1];
+               String username = splitIdentity[2];
+               this.ostack = new DrbSwiftObject(this.url, this.provider, username, project, this.credential, domain);
+            }
+         }
+         else
+         {
+            this.ostack = new DrbSwiftObject(this.url, this.provider, this.identity, this.credential);
+         }
       }
       return this.ostack;
    }
