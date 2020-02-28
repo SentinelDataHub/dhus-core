@@ -65,7 +65,7 @@ public class OpenStackDataStore extends AbstractDataStore
    private final String container;
    private final String region;
 
-   private volatile DrbSwiftObject ostack;
+   private volatile DrbSwiftObject ostack = null;
 
    /**
     * Build an open-stack storage API for DHuS data store. Currently only swift is supported.
@@ -102,32 +102,53 @@ public class OpenStackDataStore extends AbstractDataStore
     *
     * @return the object to manipulate OpenStack
     */
-   private synchronized DrbSwiftObject getOpenStackObject()
+   private DrbSwiftObject getOpenStackObject()
    {
-      if (this.ostack == null)
+      // Double-checked locking using a local variable for better performances
+      DrbSwiftObject res = this.ostack;
+      if (res == null)
       {
-         // Handles the small differences between Keystone V2 and Keystone V3
-         if (url.contains("/v3"))
+         synchronized (this)
          {
-            String[] splitIdentity = this.identity.split(":");
-            if (splitIdentity.length != 3)
+            res = this.ostack;
+            if (res == null)
             {
-               LOGGER.error("Invalid identity format, must be: <domain>:<project>:<username>");
+               res = createOpenStackObject();
+               if (res != null)
+               {
+                  this.ostack = res;
+               }
             }
-            else
-            {
-               String domain   = splitIdentity[0];
-               String project  = splitIdentity[1];
-               String username = splitIdentity[2];
-               this.ostack = new DrbSwiftObject(this.url, this.provider, username, project, this.credential, domain);
-            }
+         }
+      }
+      return res;
+   }
+
+   /**
+    * Always create a new DrbSwiftObject, use {@link #getOpenStackObject()} instead (lazy loading).
+    * @return a new instance or null of the configuration is invalid (error logged)
+    */
+   private DrbSwiftObject createOpenStackObject()
+   {
+      // Keystone v3 API
+      if (url.contains("/v3"))
+      {
+         String[] splitIdentity = this.identity.split(":");
+         if (splitIdentity.length != 3)
+         {
+            LOGGER.error("Invalid identity format, must be: <domain>:<project>:<username>");
+            return null;
          }
          else
          {
-            this.ostack = new DrbSwiftObject(this.url, this.provider, this.identity, this.credential);
+            String domain   = splitIdentity[0];
+            String project  = splitIdentity[1];
+            String username = splitIdentity[2];
+            return new DrbSwiftObject(this.url, this.provider, username, project, this.credential, domain);
          }
       }
-      return this.ostack;
+      // Keystone v3 API
+      return new DrbSwiftObject(this.url, this.provider, this.identity, this.credential);
    }
 
    /**
