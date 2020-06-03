@@ -38,7 +38,7 @@
 
    <artifactId>dhus-core</artifactId>
    <groupId>fr.gael.dhus</groupId>
-   <version>1.3.5-osf</version>
+   <version>1.3.5-1-osf</version>
    <packaging>jar</packaging>
 
    <name>DHuS - Core</name>
@@ -237,7 +237,7 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-impl-swift</artifactId>
-         <version>1.0.15</version>
+         <version>1.0.21</version>
          <exclusions>
             <exclusion>
                <groupId>fr.gael.drb</groupId>
@@ -892,7 +892,7 @@
       <repository>
          <id>external dependencies</id>
 <!-- repository https://copernicus.serco.eu/repository/nexus/content/repositories/releases used to proxy gael's resources requires credentials using origin -->
-         <url>https://repository.gael.fr/nexus/content/groups/public</url>
+         <url>https://repository.gael-systems.com/repository/public/</url>
       </repository>
    </repositories>
 
