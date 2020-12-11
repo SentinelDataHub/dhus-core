@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -28,6 +28,7 @@ import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.Search;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.database.object.User.PasswordEncryption;
+import fr.gael.dhus.database.object.config.system.AdministratorConfiguration;
 import fr.gael.dhus.database.object.restriction.AccessRestriction;
 import fr.gael.dhus.database.object.restriction.LockedAccessRestriction;
 import fr.gael.dhus.messaging.mail.MailServer;
@@ -48,6 +49,7 @@ import fr.gael.dhus.system.config.ConfigurationManager;
 
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -960,5 +962,40 @@ public class UserService extends WebService
       userDao.update(user);
       accessRestrictionDao.delete(toRemove);
       return true;
+   }
+
+   /**
+    * Called by DatabasePostInit.
+    */
+   @Transactional
+   public void systemCreateOrUpdateRootAccount()
+   {
+      // Root account
+      AdministratorConfiguration cfg = cfgManager.getAdministratorConfiguration();
+      User rootUser = userDao.getByName(cfg.getName());
+      if (rootUser != null)
+      {
+         // If root User exists, update his roles by security
+         ArrayList<Role> roles = new ArrayList<>();
+         roles.addAll(Arrays.asList(Role.values()));
+         rootUser.setRoles(roles);
+         userDao.update(rootUser);
+      }
+      else
+      {
+         // Create it
+         rootUser = new User();
+         rootUser.setUsername(cfg.getName());
+         rootUser.setPassword(cfg.getPassword());
+         rootUser.setCreated(new Date());
+         ArrayList<Role> roles = new ArrayList<>();
+         roles.addAll(Arrays.asList(Role.values()));
+         rootUser.setRoles(roles);
+         rootUser.setDomain("Other");
+         rootUser.setSubDomain("System");
+         rootUser.setUsage("Other");
+         rootUser.setSubUsage("System");
+         userDao.create(rootUser);
+      }
    }
 }

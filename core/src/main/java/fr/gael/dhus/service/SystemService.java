@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ * Copyright (C) 2013-2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -29,7 +29,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,14 +50,18 @@ import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
 import org.apache.solr.core.CoreContainer;
 import org.hibernate.HibernateException;
 import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+import org.hibernate.query.NativeQuery;
 import org.hsqldb.lib.tar.DbBackupMain;
 import org.hsqldb.lib.tar.TarMalformatException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
-import org.springframework.orm.hibernate3.HibernateCallback;
+import org.springframework.orm.hibernate5.HibernateCallback;
+import org.springframework.orm.hibernate5.support.HibernateDaoSupport;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.codec.Hex;
+import org.springframework.stereotype.Repository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -73,6 +76,7 @@ import fr.gael.dhus.database.object.config.messaging.MailConfiguration;
 import fr.gael.dhus.database.object.config.search.SolrConfiguration;
 import fr.gael.dhus.database.object.config.system.SupportConfiguration;
 import fr.gael.dhus.service.exception.UserBadEncryptionException;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.system.config.ConfigurationException;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
@@ -129,6 +133,9 @@ public class SystemService extends WebService
    @Deprecated
    public Configuration saveSystemSettings(Configuration toSave) throws ConfigurationException
    {
+      StackTraceElement stackElement = new Exception().getStackTrace()[2];
+      LOGGER.warn("Call to deprecated method saveSystemSettings(Configuration), use saveSystemSettings() instead (caller: {}.{})",
+            stackElement.getClassName(), stackElement.getMethodName());
       // Support Configuration
       SupportConfiguration supportConfToUpdate = cfgManager.getSupportConfiguration();
       SupportConfiguration suppConf = toSave.getSystemConfiguration().getSupportConfiguration();
@@ -306,6 +313,7 @@ public class SystemService extends WebService
    /**
     * Generate a backup of DHuS system (database and Solr index)
     */
+   @Transactional
    public void dumpDatabase()
    {
       if (!isEmbeddedHsqldb)
@@ -351,7 +359,7 @@ public class SystemService extends WebService
             {
                @Override
                public Boolean doInHibernate (Session session) throws
-                     HibernateException, SQLException
+                     HibernateException
                {
                   String backup = backupDirectory + "/" + 
                                   BACKUP_DATABASE_NAME + ".tar.gz";
@@ -359,7 +367,7 @@ public class SystemService extends WebService
                                "' NOT BLOCKING";
                   try
                   {
-                     session.createSQLQuery (sql).executeUpdate ();
+                     session.createNativeQuery (sql).executeUpdate ();
                   }
                   catch (HibernateException e)
                   {
@@ -585,5 +593,35 @@ public class SystemService extends WebService
      FileUtils.copyDirectory(index_path, target_path);
      
      LOGGER.info("SolR indexes restored.");
+  }
+   
+  @Transactional
+  public void optimize ()
+  {
+     HibernateDaoLocalSupport support = ApplicationContextProvider.getBean (
+           HibernateDaoLocalSupport.class);
+     support.getHibernateTemplate ().flush ();
+     support.getHibernateTemplate ().executeWithNativeSession (
+        new HibernateCallback<Void> ()
+        {
+           @Override
+           public Void doInHibernate (Session session) throws
+                 HibernateException
+           {
+              NativeQuery query = session.createNativeQuery ("CHECKPOINT DEFRAG");
+              query.executeUpdate ();
+              return null;
+           }
+        });
+  }
+  
+  @Repository ("hibernateDaoLocalSupport")
+  private static class HibernateDaoLocalSupport extends HibernateDaoSupport
+  {           
+     @Autowired
+     public void init (SessionFactory session_factory)
+     {
+        setSessionFactory (session_factory);
+     }
   }
 }

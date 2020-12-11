@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017,2018 GAEL Systems
+ * Copyright (C) 2017-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -38,23 +38,44 @@ public class ParallelProductSetter
    /** Thread pool. */
    private final ThreadPoolExecutor threadPool;
 
-   public ParallelProductSetter(int core_pool_size, int max_pool_size, long keep_alive, TimeUnit time_unit)
+   public ParallelProductSetter(String threadName, int core_pool_size, int max_pool_size, long keep_alive, TimeUnit time_unit)
    {
       BlockingQueue<Runnable> work_queue = new LinkedBlockingDeque<>();
       this.threadPool = new ThreadPoolExecutor(core_pool_size, max_pool_size, keep_alive, time_unit,
-            work_queue, new DaemonThreadFactory());
+            work_queue, new DaemonThreadFactory(threadName));
    }
 
-   public Future<?> submitProduct(StoreService targetStore, IngestibleProduct product, List<String> targetCollections)
+   public Future<?> submitProduct(StoreService targetStore, IngestibleProduct product, List<String> targetCollections, boolean sourceRemove)
    {
-      return this.threadPool.submit(AddTask.get(targetStore, product, targetCollections));
+      return this.threadPool.submit(AddTask.get(targetStore, product, null, targetCollections, sourceRemove));
+   }
+
+   public Future<?> submitProduct(StoreService targetStore, IngestibleProduct product,
+         String targetDataStore, List<String> targetCollections, boolean sourceRemove)
+   {
+      return this.threadPool.submit(AddTask.get(targetStore, product, targetDataStore, targetCollections, sourceRemove));
    }
 
    /**
-    * Calls `shutdownNow` on the {@link ThreadPoolExecutor} backing this manager.
-    * @see ThreadPoolExecutor#shutdownNow()
+    * Shutdown and waits (maximum 1 hour), let tasks terminate gracefully.
+    * /!\ To be used by other scenarios not using the DownloadableProduct.
     */
-   public void shutdownNow()
+   public void shutdownBlockingIO()
+   {
+      try
+      {
+         this.threadPool.shutdown();
+         this.threadPool.awaitTermination(1, TimeUnit.HOURS);
+      }
+      catch (InterruptedException suppressed) {}
+   }
+
+   /**
+    * Shutdown and waits (max 20 seconds), let tasks terminate gracefully.
+    * /!\ To be used by the sync with copy scenario (products must be DownloadableProducts.
+    * the timeout is short because IO operations have already been interrupted by the close method of the ODataProdSync.
+    */
+   public void shutdownNonBlockingIO()
    {
       try
       {
@@ -69,24 +90,30 @@ public class ParallelProductSetter
    {
       private final StoreService targetStore;
       private final IngestibleProduct productToAdd;
+      private final String targetDataStore;
       private final List<String> targetCollections;
+      private final boolean sourceRemove;
 
-      public static AddTask get(StoreService target, IngestibleProduct product, List<String> targetCollections)
+      public static AddTask get(StoreService target, IngestibleProduct product, String targetDataStore,
+            List<String> targetCollections, boolean sourceRemove)
       {
-         return new AddTask(target, product, targetCollections);
+         return new AddTask(target, product, targetDataStore, targetCollections, sourceRemove);
       }
 
-      public AddTask(StoreService target, IngestibleProduct product, List<String> targetCollections)
+      public AddTask(StoreService target, IngestibleProduct product, String targetDataStore,
+            List<String> targetCollections, boolean sourceRemove)
       {
          this.productToAdd = product;
          this.targetStore = target;
+         this.targetDataStore = targetDataStore;
          this.targetCollections = targetCollections;
+         this.sourceRemove = sourceRemove;
       }
 
       @Override
       public Void call() throws StoreException
       {
-         targetStore.addProduct(productToAdd, targetCollections, false);
+         targetStore.addProduct(productToAdd, targetDataStore, targetCollections, sourceRemove);
          return null;
       }
    }
@@ -94,10 +121,18 @@ public class ParallelProductSetter
    /** Creates only daemon threads. */
    private static class DaemonThreadFactory implements ThreadFactory
    {
+      private final String threadName;
+      private long threadNumber = 0;
+
+      public DaemonThreadFactory(String threadName)
+      {
+         this.threadName = threadName;
+      }
+
       @Override
       public Thread newThread(Runnable r)
       {
-         Thread thread = new Thread(r, "sync-ingestion");
+         Thread thread = new Thread(r, threadName+"#"+threadNumber++);
          thread.setDaemon(true);
          return thread;
       }

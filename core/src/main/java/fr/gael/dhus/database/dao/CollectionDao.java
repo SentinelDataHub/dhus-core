@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -28,24 +28,21 @@ import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import org.hibernate.Hibernate;
-import org.hibernate.Query;
+import org.hibernate.query.Query;
 import org.hibernate.type.StandardBasicTypes;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
-/**
- * @author pidancier
- */
 @Repository
 public class CollectionDao extends HibernateDao<Collection, String>
 {
@@ -151,38 +148,30 @@ public class CollectionDao extends HibernateDao<Collection, String>
    {
       return getHibernateTemplate().execute(session -> {
          String hql = "select c from Collection c "
-                    + "left outer join c.products p where p.id = ? ORDER BY c.name";
+                    + "left outer join c.products p where p.id = ?1 ORDER BY c.name";
          Query query = session.createQuery(hql);
          query.setFetchSize(10_000);
-         query.setParameter(0, product_id, StandardBasicTypes.LONG);
+         query.setParameter(1, product_id, StandardBasicTypes.LONG);
          return (List<Collection>) query.list();
       });
    }
 
    /**
-    * Retrieves all product id from a given collection
-    * @param collection_uuid
-    * @param user unused parameter.
-    * @return
+    * Retrieves all product id that are in the given collection.
+    *
+    * @param collectionUUID UUID of collection, returns an empty list if null
+    * @return a non null, possibly empty, list of product IDs
     */
-   public List<Long> getProductIds (final String collection_uuid, User user)
+   public List<Long> getProductIds(final String collectionUUID)
    {
-      if (collection_uuid == null)
+      if (collectionUUID == null)
       {
-         return Collections.emptyList ();
+         return Collections.emptyList();
       }
 
-      List<Long> result = new ArrayList<> ();
-      Iterator<Product> it = read (collection_uuid).getProducts ().iterator ();
-      while (it.hasNext ())
-      {
-         Product product = it.next ();
-         if (product != null)
-         {
-            result.add (product.getId ());
-         }
-      }
-      return result;
+      return read(collectionUUID).getProducts().stream()
+            .map((Product p) -> p.getId())
+            .collect(Collectors.toList());
    }
 
    void fireProductAdded (DaoEvent<Collection> e, Product p)
@@ -219,10 +208,10 @@ public class CollectionDao extends HibernateDao<Collection, String>
    public String getCollectionUUIDByName(final String collection_name)
    {
       return getHibernateTemplate().execute(session -> {
-         String hql = "SELECT uuid FROM " + entityClass.getName() + " WHERE name=?";
+         String hql = "SELECT uuid FROM " + entityClass.getName() + " WHERE name=?1";
          Query query = session.createQuery(hql);
          query.setReadOnly(true);
-         query.setParameter(0, collection_name, StandardBasicTypes.STRING);
+         query.setParameter(1, collection_name, StandardBasicTypes.STRING);
          return (String) query.uniqueResult();
       });
    }
@@ -230,9 +219,9 @@ public class CollectionDao extends HibernateDao<Collection, String>
    public Collection getByName(final String name)
    {
       Collection collection = getHibernateTemplate().execute(session -> {
-         String hql = "From Collection c where c.name=?";
+         String hql = "From Collection c where c.name=?1";
          Query query = session.createQuery(hql);
-         query.setParameter(0, name, StandardBasicTypes.STRING);
+         query.setParameter(1, name, StandardBasicTypes.STRING);
          return (Collection) query.uniqueResult();
       });
 
@@ -240,9 +229,9 @@ public class CollectionDao extends HibernateDao<Collection, String>
       if (collection == null)
       {
          collection = getHibernateTemplate().execute(session -> {
-            String hql = "From Collection c where LOWER(c.name)=?";
+            String hql = "From Collection c where LOWER(c.name)=?1";
             Query query = session.createQuery(hql);
-            query.setParameter(0, name.toLowerCase(), StandardBasicTypes.STRING);
+            query.setParameter(1, name.toLowerCase(), StandardBasicTypes.STRING);
             List list = query.list();
 
             return (Collection) (list.isEmpty() ? null : list.get(0));

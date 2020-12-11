@@ -30,6 +30,7 @@ public class TestSource
    public void concurrentDownload()
    {
       Source source = new Source();
+      source.setId(0);
       Assert.assertEquals(source.concurrentDownload(), 0);
 
       String calculatorId = UUID.randomUUID().toString();
@@ -40,59 +41,50 @@ public class TestSource
       Assert.assertEquals(source.concurrentDownload(), 0);
    }
 
+
    @Test(timeOut = 10_000)
    public void downloadBandwidth()
    {
       Source source = new Source();
+      source.setId(1);
       Assert.assertEquals(source.getBandwidth(), -1);
 
       long transferredBytes1 = 1024;
       String calculator1 = UUID.randomUUID().toString();
       Assert.assertTrue(source.generateBandwidthCalculator(calculator1));
 
-      // populate 10 times to compute bandwidth, otherwise bandwidth is not computed (equals -1)
-      source.populateBandwidthCalculator(calculator1, transferredBytes1);
-      source.populateBandwidthCalculator(calculator1, transferredBytes1);
-      source.populateBandwidthCalculator(calculator1, transferredBytes1);
-      source.populateBandwidthCalculator(calculator1, transferredBytes1);
-      source.populateBandwidthCalculator(calculator1, transferredBytes1);
-      source.populateBandwidthCalculator(calculator1, transferredBytes1);
-      source.populateBandwidthCalculator(calculator1, transferredBytes1);
-      source.populateBandwidthCalculator(calculator1, transferredBytes1);
-      source.populateBandwidthCalculator(calculator1, transferredBytes1);
+      // populate 100 times to compute bandwidth, otherwise bandwidth is not computed (equals -1)
+      for (int i = 0; i < 99; i++)
+      {
+         source.populateBandwidthCalculator(calculator1, transferredBytes1);
+      }
       Assert.assertEquals(source.getBandwidth(), -1);
       Assert.assertEquals(source.getCalculatedBandwidth(calculator1), -1);
 
       source.populateBandwidthCalculator(calculator1, transferredBytes1);
-      Assert.assertEquals(source.getCalculatedBandwidth(calculator1), transferredBytes1);
-      Assert.assertEquals(source.getBandwidth(), transferredBytes1);
+      long expectedBandwidth1 = transferredBytes1 * 100;
+      Assert.assertEquals(source.getCalculatedBandwidth(calculator1), expectedBandwidth1);
+      Assert.assertEquals(source.getBandwidth(), expectedBandwidth1);
 
       long transferredBytes2 = 512;
       String calculator2 = UUID.randomUUID().toString();
       Assert.assertTrue(source.generateBandwidthCalculator(calculator2));
-      source.populateBandwidthCalculator(calculator2, transferredBytes2);
-      source.populateBandwidthCalculator(calculator2, transferredBytes2);
-      source.populateBandwidthCalculator(calculator2, transferredBytes2);
-      source.populateBandwidthCalculator(calculator2, transferredBytes2);
-      source.populateBandwidthCalculator(calculator2, transferredBytes2);
-      source.populateBandwidthCalculator(calculator2, transferredBytes2);
-      source.populateBandwidthCalculator(calculator2, transferredBytes2);
-      source.populateBandwidthCalculator(calculator2, transferredBytes2);
-      source.populateBandwidthCalculator(calculator2, transferredBytes2);
-      source.populateBandwidthCalculator(calculator2, transferredBytes2);
-      Assert.assertEquals(source.getCalculatedBandwidth(calculator2), transferredBytes2);
-
-      long expectedBandwidth = (transferredBytes1 + transferredBytes2) / 2;
-      Assert.assertEquals(source.getBandwidth(), expectedBandwidth);
+      for (int i = 0; i < 100; i++)
+      {
+         source.populateBandwidthCalculator(calculator2, transferredBytes2);
+      }
+      Assert.assertEquals(source.getCalculatedBandwidth(calculator2), transferredBytes2 * 100);
+      Assert.assertTrue(source.getBandwidth() > expectedBandwidth1);
 
       source.removeBandwidthCalculator(calculator1);
       source.removeBandwidthCalculator(calculator2);
    }
 
-   @Test(expectedExceptions = {IllegalArgumentException.class})
+   @Test
    public void removeCalculator()
    {
       Source source = new Source();
+      source.setId(2);
       String calculatorId = UUID.randomUUID().toString();
       Assert.assertTrue(source.generateBandwidthCalculator(calculatorId));
       source.removeBandwidthCalculator(calculatorId);

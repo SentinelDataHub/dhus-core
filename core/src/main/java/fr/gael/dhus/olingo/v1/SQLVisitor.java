@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2014-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -49,7 +49,7 @@ import org.apache.olingo.odata2.api.uri.expression.SortOrder;
 import org.apache.olingo.odata2.api.uri.expression.UnaryExpression;
 import org.apache.olingo.odata2.api.uri.expression.UnaryOperator;
 import org.apache.olingo.odata2.api.uri.expression.Visitable;
-
+import org.dhus.olingo.v2.visitor.SQLVisitorParameter;
 import org.hibernate.type.StandardBasicTypes;
 import org.hibernate.type.Type;
 
@@ -74,6 +74,8 @@ public abstract class SQLVisitor implements ExpressionVisitor, Serializable
    private String hqlFilter;
    private String hqlOrder;
 
+   private int positionToUse = 1;
+
    protected SQLVisitor(Class<?> entity, FilterExpression filter, OrderByExpression order)
          throws ExceptionVisitExpression, ODataApplicationException
    {
@@ -82,6 +84,25 @@ public abstract class SQLVisitor implements ExpressionVisitor, Serializable
       this.orderExpression = order;
       this.hqlParameters = new LinkedList<>();
       compute();
+   }
+
+   /**
+    * Calls accept method on the visitable expressions `filter` and `order by`.
+    *
+    * @throws ExceptionVisitExpression Exception occurred the OData library while traversing the tree
+    * @throws ODataApplicationException Exception thrown by the application who implemented the visitor
+    * @see Visitable#accept(ExpressionVisitor)
+    */
+   private void compute() throws ExceptionVisitExpression, ODataApplicationException
+   {
+      if (filterExpression != null)
+      {
+         filterExpression.accept(this);
+      }
+      if (orderExpression != null)
+      {
+         orderExpression.accept(this);
+      }
    }
 
    /* Builds the WHERE clause (not prefixed with the WHERE statement). */
@@ -314,8 +335,8 @@ public abstract class SQLVisitor implements ExpressionVisitor, Serializable
          return result;
       }
 
-      hqlParameters.add(new SQLVisitorParameter(result, resultType));
-      return "?";
+      hqlParameters.add(new SQLVisitorParameter(positionToUse, result, resultType));
+      return "?" + positionToUse++;
    }
 
    /* Translates to an SQL function. */
@@ -386,7 +407,8 @@ public abstract class SQLVisitor implements ExpressionVisitor, Serializable
          {
             StringBuilder sb = new StringBuilder();
             sb.append(parameters.get(0));
-            Object value = hqlParameters.remove(hqlParameters.size() - 1).value;
+            Object value = hqlParameters.remove(hqlParameters.size() - 1).getValue();
+            positionToUse--;
             String valueString = value.toString();
             if (valueString.contains("_"))
             {
@@ -403,7 +425,8 @@ public abstract class SQLVisitor implements ExpressionVisitor, Serializable
          {
             StringBuilder sb = new StringBuilder();
             sb.append(parameters.get(0));
-            Object value = hqlParameters.remove(hqlParameters.size() - 1).value;
+            Object value = hqlParameters.remove(hqlParameters.size() - 1).getValue();
+            positionToUse--;
             String valueString = value.toString();
             if (valueString.contains("_"))
             {
@@ -420,7 +443,8 @@ public abstract class SQLVisitor implements ExpressionVisitor, Serializable
          {
             StringBuilder sb = new StringBuilder();
             sb.append(parameters.get(1));
-            Object value = hqlParameters.remove(hqlParameters.size() - 1).value;
+            Object value = hqlParameters.remove(hqlParameters.size() - 1).getValue();
+            positionToUse--;
             String valueString = value.toString();
             if (valueString.contains("_"))
             {
@@ -557,25 +581,6 @@ public abstract class SQLVisitor implements ExpressionVisitor, Serializable
       return hqlOrder;
    }
 
-   /**
-    * Calls accept method on the visitable expressions `filter` and `order by`.
-    *
-    * @throws ExceptionVisitExpression Exception occurred the OData library while traversing the tree
-    * @throws ODataApplicationException Exception thrown by the application who implemented the visitor
-    * @see Visitable#accept(ExpressionVisitor)
-    */
-   private void compute() throws ExceptionVisitExpression, ODataApplicationException
-   {
-      if (filterExpression != null)
-      {
-         filterExpression.accept(this);
-      }
-      if (orderExpression != null)
-      {
-         orderExpression.accept(this);
-      }
-   }
-
    protected static class Member
    {
       private final String name;
@@ -594,67 +599,6 @@ public abstract class SQLVisitor implements ExpressionVisitor, Serializable
       public String toString()
       {
          return this.name;
-      }
-   }
-
-   public static final class SQLVisitorParameter implements Serializable
-   {
-      private static final long serialVersionUID = 1L;
-      private final Type type;
-      private final Object value;
-
-      private SQLVisitorParameter(Object value, Type type)
-      {
-         this.value = value;
-         this.type = type;
-      }
-
-      public Type getType()
-      {
-         return type;
-      }
-
-      public Object getValue()
-      {
-         return value;
-      }
-
-      @Override
-      public boolean equals(Object o)
-      {
-         if (this == o)
-         {
-            return true;
-         }
-         if (o == null || getClass() != o.getClass())
-         {
-            return false;
-         }
-
-         SQLVisitorParameter that = (SQLVisitorParameter) o;
-
-         if (!type.equals(that.type))
-         {
-            return false;
-         }
-         return value.equals(that.value);
-      }
-
-      @Override
-      public int hashCode()
-      {
-         int result = type.hashCode();
-         result = 31 * result + value.hashCode();
-         return result;
-      }
-
-      @Override
-      public String toString()
-      {
-         return new StringBuilder("{")
-               .append(value).append(',')
-               .append(type)
-               .append("}").toString();
       }
    }
 }

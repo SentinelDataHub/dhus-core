@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,6 +20,7 @@
 package org.dhus.olingo.v2;
 
 import fr.gael.dhus.database.object.Role;
+import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.service.SecurityService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 
@@ -37,9 +38,18 @@ public class ODataSecurityManager
    {
       if (!SECURITY_SERVICE.getCurrentUser().getRoles().contains(role))
       {
-         throw new ODataApplicationException("Unsufficient to perform this operation",
-               HttpStatusCode.UNAUTHORIZED.getStatusCode(),
-               Locale.ENGLISH);
+         throw new ODataApplicationException("Insufficient permission to perform this operation",
+               HttpStatusCode.UNAUTHORIZED.getStatusCode(), Locale.ENGLISH);
       }
+   }
+
+   public static boolean hasPermission(Role role)
+   {
+      return SECURITY_SERVICE.getCurrentUser().getRoles().contains(role);
+   }
+
+   public static User getCurrentUser()
+   {
+      return SECURITY_SERVICE.getCurrentUser();
    }
 }

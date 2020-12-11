@@ -21,7 +21,7 @@ package fr.gael.dhus.database.dao.interfaces;
 
 import java.util.List;
 
-import org.hibernate.Query;
+import org.hibernate.query.Query;
 
 /**
  * This interface represents a list that can be accessed by limited blocks of 

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,7 +22,6 @@ package fr.gael.dhus.olingo.v1.operations;
 import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.datastore.scanner.ScannerException;
-import fr.gael.dhus.datastore.scanner.ScannerFactory;
 import fr.gael.dhus.olingo.v1.ExpectedException;
 import fr.gael.dhus.olingo.v1.entityset.ScannerEntitySet;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
@@ -40,13 +39,15 @@ import org.apache.olingo.odata2.api.edm.provider.FunctionImportParameter;
 import org.apache.olingo.odata2.api.edm.provider.ReturnType;
 import org.apache.olingo.odata2.api.exception.ODataException;
 
+import org.dhus.scanner.ScannerContainer;
+
 /**
  *
  */
 public class StartScanner extends AbstractOperation
 {
-   private static final ScannerFactory SCANNER_FACTORY =
-         ApplicationContextProvider.getBean(ScannerFactory.class);
+   private static final ScannerContainer SCANNER_CONTAINER =
+         ApplicationContextProvider.getBean(ScannerContainer.class);
 
    // operation name
    public static final String NAME = "StartScanner";
@@ -96,7 +97,7 @@ public class StartScanner extends AbstractOperation
 
       try
       {
-         SCANNER_FACTORY.processScan(scannerId);
+         SCANNER_CONTAINER.processScan(scannerId);
       }
       catch (ScannerException.ScannerNotFoundException e)
       {

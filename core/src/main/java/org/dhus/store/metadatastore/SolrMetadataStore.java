@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -25,15 +25,22 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import org.apache.solr.client.solrj.SolrServerException;
 
 import org.dhus.Product;
+import org.dhus.ProductConstants;
 import org.dhus.store.StoreException;
 import org.dhus.store.ingestion.IngestibleProduct;
+
 import org.springframework.beans.factory.annotation.Autowired;
 
 public class SolrMetadataStore implements MetadataStore
 {
+   private static final Logger LOGGER = LogManager.getLogger();
+
    @Autowired
    private SearchService searchService;
 
@@ -50,7 +57,24 @@ public class SolrMetadataStore implements MetadataStore
    {
       try
       {
+         // TODO put collection names in product property for cleaner method signature?
          searchService.index(inProduct, targetCollectionNames);
+      }
+      catch (IOException | SolrServerException e)
+      {
+         throw new StoreException(e);
+      }
+   }
+
+   @SuppressWarnings("unchecked")
+   @Override
+   public void repairProduct(IngestibleProduct inProduct) throws StoreException
+   {
+      LOGGER.debug("Repairing Solr index entry for product {}", inProduct.getUuid());
+
+      try
+      {
+         searchService.index(inProduct, (List<String>) inProduct.getProperty(ProductConstants.DATABASE_COLLECTION_NAMES));
       }
       catch (IOException | SolrServerException e)
       {
@@ -62,12 +86,6 @@ public class SolrMetadataStore implements MetadataStore
    public void deleteProduct(String uuid) throws StoreException
    {
       searchService.removeProduct(uuid);
-   }
-
-   @Override
-   public boolean isReadOnly()
-   {
-      return false;
    }
 
    @Override

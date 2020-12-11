@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017,2018 GAEL Systems
+ * Copyright (C) 2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -28,11 +28,13 @@ import fr.gael.odata.engine.data.DataHandlerUtil;
 import java.util.List;
 import java.util.Locale;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import org.apache.olingo.commons.api.data.ComplexValue;
 import org.apache.olingo.commons.api.data.Entity;
 import org.apache.olingo.commons.api.data.EntityCollection;
 import org.apache.olingo.commons.api.data.Property;
-import org.apache.olingo.commons.api.data.ValueType;
 import org.apache.olingo.commons.api.edm.EdmNavigationProperty;
 import org.apache.olingo.commons.api.http.HttpMethod;
 import org.apache.olingo.commons.api.http.HttpStatusCode;
@@ -40,282 +42,74 @@ import org.apache.olingo.server.api.ODataApplicationException;
 import org.apache.olingo.server.api.uri.UriParameter;
 
 import org.dhus.olingo.v2.ODataSecurityManager;
+import org.dhus.olingo.v2.datamodel.AsyncDataStoreModel;
 import org.dhus.olingo.v2.datamodel.DataStoreModel;
-import org.dhus.olingo.v2.datamodel.RemoteDhusDataStoreModel;
 import org.dhus.olingo.v2.datamodel.EvictionModel;
 import org.dhus.olingo.v2.datamodel.GmpDataStoreModel;
 import org.dhus.olingo.v2.datamodel.HfsDataStoreModel;
+import org.dhus.olingo.v2.datamodel.ParamPdgsDataStoreModel;
 import org.dhus.olingo.v2.datamodel.OpenstackDataStoreModel;
+import org.dhus.olingo.v2.datamodel.PdgsDataStoreModel;
+import org.dhus.olingo.v2.datamodel.RemoteDhusDataStoreModel;
 import org.dhus.olingo.v2.datamodel.complex.GMPConfigurationComplexType;
-import org.dhus.olingo.v2.datamodel.complex.GMPQuotasComplexType;
 import org.dhus.olingo.v2.datamodel.complex.MySQLConnectionInfoComplexType;
-
+import org.dhus.olingo.v2.datamodel.complex.PatternReplaceComplexType;
+import org.dhus.olingo.v2.entity.TypeStore;
 import org.dhus.store.datastore.DataStore;
 import org.dhus.store.datastore.DataStoreFactory;
 import org.dhus.store.datastore.DataStoreFactory.InvalidConfigurationException;
 import org.dhus.store.datastore.DataStoreManager;
+import org.dhus.store.datastore.config.AsyncDataStoreConf;
 import org.dhus.store.datastore.config.DataStoreManager.UnavailableNameException;
-import org.dhus.store.datastore.config.RemoteDhusDataStoreConf;
+import org.dhus.store.datastore.config.DataStoreRestriction;
 import org.dhus.store.datastore.config.GmpDataStoreConf;
 import org.dhus.store.datastore.config.GmpDataStoreConf.Configuration;
 import org.dhus.store.datastore.config.GmpDataStoreConf.MysqlConnectionInfo;
 import org.dhus.store.datastore.config.HfsDataStoreConf;
+import org.dhus.store.datastore.config.ParamPdgsDataStoreConf;
 import org.dhus.store.datastore.config.NamedDataStoreConf;
 import org.dhus.store.datastore.config.OpenStackDataStoreConf;
+import org.dhus.store.datastore.config.PatternReplace;
+import org.dhus.store.datastore.config.PdgsDataStoreConf;
+import org.dhus.store.datastore.config.RemoteDhusDataStoreConf;
 
 /**
  * Provides data for DataStore entities.
  */
 public class DataStoreDataHandler implements DataHandler
 {
+   private static final Logger LOGGER = LogManager.getLogger();
+
    private static final DataStoreManager DS_MANAGER =
          ApplicationContextProvider.getBean(DataStoreManager.class);
 
    private static final DataStoreService DS_SERVICE =
          ApplicationContextProvider.getBean(DataStoreService.class);
 
-   private Entity toOlingoEntity(NamedDataStoreConf dataStore)
+   /** Entity producer for abstract type NamedDataStoreConf. */
+   private final TypeStore.Node dataStoreEntityProducerNode;
+
+   public DataStoreDataHandler(TypeStore typeStore)
    {
-      if (dataStore == null)
-      {
-         return null;
-      }
-
-      Entity dataStoreEntity = new Entity()
-            .addProperty(new Property(
-                  null,
-                  DataStoreModel.PROPERTY_NAME,
-                  ValueType.PRIMITIVE,
-                  dataStore.getName()))
-            .addProperty(new Property(
-                  null,
-                  DataStoreModel.PROPERTY_READONLY,
-                  ValueType.PRIMITIVE,
-                  dataStore.isReadOnly()))
-            .addProperty(new Property(
-                  null,
-                  DataStoreModel.PROPERTY_PRIORITY,
-                  ValueType.PRIMITIVE,
-                  dataStore.getPriority()))
-            .addProperty(new Property(
-                  null,
-                  DataStoreModel.PROPERTY_MAXIMUMSIZE,
-                  ValueType.PRIMITIVE,
-                  dataStore.getMaximumSize()))
-            .addProperty(new Property(
-                  null,
-                  DataStoreModel.PROPERTY_CURRENTSIZE,
-                  ValueType.PRIMITIVE,
-                  dataStore.getCurrentSize()))
-            .addProperty(new Property(
-                  null,
-                  DataStoreModel.PROPERTY_AUTOEVICTION,
-                  ValueType.PRIMITIVE,
-                  dataStore.isAutoEviction()));
-
-      dataStoreEntity.setId(DataHandlerUtil.createEntityId(
-            DataStoreModel.ABSTRACT_ENTITY_SET_NAME,
-            dataStore.getName()));
-
-      if (dataStore instanceof HfsDataStoreConf)
-      {
-         HfsDataStoreConf hfsDataStore = (HfsDataStoreConf) dataStore;
-
-         dataStoreEntity.setType(HfsDataStoreModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString());
-
-         dataStoreEntity
-               .addProperty(new Property(
-                     null,
-                     HfsDataStoreModel.PROPERTY_PATH,
-                     ValueType.PRIMITIVE,
-                     hfsDataStore.getPath()))
-               .addProperty(new Property(
-                     null,
-                     HfsDataStoreModel.PROPERTY_MAXFILEDEPTH,
-                     ValueType.PRIMITIVE,
-                     hfsDataStore.getMaxFileNo()))
-               .addProperty(new Property(
-                     null,
-                     HfsDataStoreModel.PROPERTY_MAXITEMS,
-                     ValueType.PRIMITIVE,
-                     hfsDataStore.getMaxItems()));
-      }
-
-      if (dataStore instanceof OpenStackDataStoreConf)
-      {
-         OpenStackDataStoreConf openStackDataStore = (OpenStackDataStoreConf) dataStore;
-
-         dataStoreEntity.setType(OpenstackDataStoreModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString());
-
-         dataStoreEntity
-               .addProperty(new Property(
-                     null,
-                     OpenstackDataStoreModel.PROPERTY_PROVIDER,
-                     ValueType.PRIMITIVE,
-                     openStackDataStore.getProvider()))
-               .addProperty(new Property(
-                     null,
-                     OpenstackDataStoreModel.PROPERTY_IDENTITY,
-                     ValueType.PRIMITIVE,
-                     openStackDataStore.getIdentity()))
-               .addProperty(new Property(
-                     null,
-                     OpenstackDataStoreModel.PROPERTY_CREDENTIAL,
-                     ValueType.PRIMITIVE,
-                     openStackDataStore.getCredential()))
-               .addProperty(new Property(
-                     null,
-                     OpenstackDataStoreModel.PROPERTY_URL,
-                     ValueType.PRIMITIVE,
-                     openStackDataStore.getUrl()))
-               .addProperty(new Property(
-                     null,
-                     OpenstackDataStoreModel.PROPERTY_REGION,
-                     ValueType.PRIMITIVE,
-                     openStackDataStore.getRegion()))
-               .addProperty(new Property(
-                     null,
-                     OpenstackDataStoreModel.PROPERTY_CONTAINER,
-                     ValueType.PRIMITIVE,
-                     openStackDataStore.getContainer()));
-      }
-
-      if (dataStore instanceof GmpDataStoreConf)
-      {
-         GmpDataStoreConf gmpDataStore = (GmpDataStoreConf) dataStore;
-
-         dataStoreEntity.setType(GmpDataStoreModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString());
-
-         dataStoreEntity
-               .addProperty(new Property(
-                     null,
-                     GmpDataStoreModel.PROPERTY_REPO_LOCATION,
-                     ValueType.PRIMITIVE,
-                     gmpDataStore.getGmpRepoLocation()))
-               .addProperty(new Property(
-                     null,
-                     GmpDataStoreModel.PROPERTY_HFS_LOCATION,
-                     ValueType.PRIMITIVE,
-                     gmpDataStore.getHfsLocation()))
-               .addProperty(new Property(
-                     null,
-                     GmpDataStoreModel.PROPERTY_MAX_QUEUED_REQUESTS,
-                     ValueType.PRIMITIVE,
-                     gmpDataStore.getMaxQueuedRequest()))
-               .addProperty(new Property(
-                     null,
-                     GmpDataStoreModel.PROPERTY_IS_MASTER,
-                     ValueType.PRIMITIVE,
-                     gmpDataStore.isIsMaster()))
-               .addProperty(makeMySQLConnectionInfoProperty(
-                     gmpDataStore.getMysqlConnectionInfo()));
-
-         if (gmpDataStore.getQuotas() != null)
-         {
-            dataStoreEntity.addProperty(makeQuotasProperty(gmpDataStore.getQuotas()));
-         }
-
-         if(gmpDataStore.getConfiguration() != null)
-         {
-            dataStoreEntity.addProperty(makeConfigurationProperty(gmpDataStore.getConfiguration()));
-         }
-      }
-
-      if(dataStore instanceof RemoteDhusDataStoreConf)
-      {
-         RemoteDhusDataStoreConf dhusDataStore = (RemoteDhusDataStoreConf) dataStore;
-
-         dataStoreEntity.setType(RemoteDhusDataStoreModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString());
-
-         dataStoreEntity
-            .addProperty(new Property(
-                  null,
-                  RemoteDhusDataStoreModel.PROPERTY_SERVICE_URL,
-                  ValueType.PRIMITIVE,
-                  dhusDataStore.getServiceUrl()))
-            .addProperty(new Property(
-                  null,
-                  RemoteDhusDataStoreModel.PROPERTY_LOGIN,
-                  ValueType.PRIMITIVE,
-                  dhusDataStore.getLogin()))
-            .addProperty(new Property(
-                  null,
-                  RemoteDhusDataStoreModel.PROPERTY_PASSWORD,
-                  ValueType.PRIMITIVE,
-                  "******"));
-      }
-
-      return dataStoreEntity;
+      this.dataStoreEntityProducerNode = typeStore.get(NamedDataStoreConf.class);
    }
 
-   private Property makeMySQLConnectionInfoProperty(MysqlConnectionInfo mysql)
+   private Entity toOlingoEntity(NamedDataStoreConf dsConf)
    {
-      ComplexValue complexValue = new ComplexValue();
-      complexValue.getValue().add(new Property(
-            null,
-            MySQLConnectionInfoComplexType.PROPERTY_DATABASE_URL,
-            ValueType.PRIMITIVE,
-            mysql.getValue()));
-      complexValue.getValue().add(new Property(
-            null,
-            MySQLConnectionInfoComplexType.PROPERTY_USER,
-            ValueType.PRIMITIVE,
-            mysql.getUser()));
-      complexValue.getValue().add(new Property(
-            null,
-            MySQLConnectionInfoComplexType.PROPERTY_PASSWORD,
-            ValueType.PRIMITIVE,
-            mysql.getPassword()));
+      Entity res;
 
-      return new Property(
-            null,
-            GmpDataStoreModel.PROPERTY_MYSQLCONNECTIONINFO,
-            ValueType.COMPLEX,
-            complexValue);
-   }
+      // Get specialised entity producer for the given input type
+      TypeStore.Node entityProducerNode = dataStoreEntityProducerNode.get(dsConf.getClass());
+      if (entityProducerNode != null)
+      {
+         res = entityProducerNode.getEntityProducer().toOlingoEntity(dsConf);
+      }
+      else
+      {
+         res = dataStoreEntityProducerNode.getEntityProducer().toOlingoEntity(dsConf);
+      }
 
-   private Property makeQuotasProperty(GmpDataStoreConf.Quotas quotas)
-   {
-      ComplexValue complexValue = new ComplexValue();
-      complexValue.getValue().add(new Property(
-            null,
-            GMPQuotasComplexType.PROPERTY_MAX_QPU,
-            ValueType.PRIMITIVE,
-            quotas.getMaxQueryPerUser()));
-
-      complexValue.getValue().add(new Property(
-            null,
-            GMPQuotasComplexType.PROPERTY_TIMESPAN,
-            ValueType.PRIMITIVE,
-            quotas.getTimespan()));
-
-      return new Property(
-            null,
-            GmpDataStoreModel.PROPERTY_QUOTAS,
-            ValueType.COMPLEX,
-            complexValue);
-   }
-
-   private Property makeConfigurationProperty(GmpDataStoreConf.Configuration configuration)
-   {
-      ComplexValue configurationValue = new ComplexValue();
-      configurationValue.getValue().add(new Property(
-            null,
-            GMPConfigurationComplexType.PROPERTY_AGENTID,
-            ValueType.PRIMITIVE,
-            configuration.getAgentid()));
-
-      configurationValue.getValue().add(new Property(
-            null,
-            GMPConfigurationComplexType.PROPERTY_TARGETID,
-            ValueType.PRIMITIVE,
-            configuration.getTargetid()));
-
-      return new Property(
-            null,
-            GmpDataStoreModel.PROPERTY_CONFIGURATION,
-            ValueType.COMPLEX,
-            configurationValue);
+      return res;
    }
 
    /**
@@ -350,24 +144,34 @@ public class DataStoreDataHandler implements DataHandler
       return mysqlConnectionInfo;
    }
 
-   private GmpDataStoreConf.Quotas extractQuotas(Entity quotaEntity,  GmpDataStoreConf.Quotas quotas )
+   private PatternReplace extractPatternReplace(Entity entity, PatternReplace patternReplace, boolean in)
    {
-      Property quotasProperty = quotaEntity.getProperty(GmpDataStoreModel.PROPERTY_QUOTAS);
-      if (quotasProperty != null && quotasProperty.getValue() != null)
+      Property property;
+      if (in)
       {
-         for (Property prop: ComplexValue.class.cast(quotasProperty.getValue()).getValue())
+         property = entity.getProperty(AsyncDataStoreModel.PROPERTY_PATRE_IN);
+      }
+      else
+      {
+         property = entity.getProperty(AsyncDataStoreModel.PROPERTY_PATRE_OUT);
+      }
+
+      if (property != null && property.getValue() != null)
+      {
+         for (Property prop: ComplexValue.class.cast(property.getValue()).getValue())
          {
-            switch(prop.getName())
+            switch (prop.getName())
             {
-               case GMPQuotasComplexType.PROPERTY_MAX_QPU:
-                  quotas.setMaxQueryPerUser(Integer.class.cast(prop.getValue()));
+               case PatternReplaceComplexType.PROPERTY_PATTERN:
+                  patternReplace.setPattern(String.class.cast(prop.getValue()));
                   break;
-               case GMPQuotasComplexType.PROPERTY_TIMESPAN:
-                  quotas.setTimespan(Long.class.cast(prop.getValue()));
+
+               case PatternReplaceComplexType.PROPERTY_REPLACEMENT:
+                  patternReplace.setReplacement(String.class.cast(prop.getValue()));
                   break;
             }
          }
-         return quotas;
+         return patternReplace;
       }
       return null;
    }
@@ -375,11 +179,11 @@ public class DataStoreDataHandler implements DataHandler
    private GmpDataStoreConf.Configuration extractConfiguration(Entity entity, Configuration configuration)
    {
       Property configurationProperty = entity.getProperty(GmpDataStoreModel.PROPERTY_CONFIGURATION);
-      if(configurationProperty != null && configurationProperty.getValue() != null)
+      if (configurationProperty != null && configurationProperty.getValue() != null)
       {
-         for(Property property : ((ComplexValue) configurationProperty.getValue()).getValue())
+         for (Property property: ((ComplexValue) configurationProperty.getValue()).getValue())
          {
-            switch(property.getName())
+            switch (property.getName())
             {
                case GMPConfigurationComplexType.PROPERTY_AGENTID:
                   configuration.setAgentid((String) property.getValue());
@@ -420,7 +224,8 @@ public class DataStoreDataHandler implements DataHandler
          if (keyParameter.getName().equals(DataStoreModel.PROPERTY_NAME))
          {
             String dataStoreName = DataHandlerUtil.trimStringKeyParameter(keyParameter);
-            return toOlingoEntity(DS_SERVICE.getNamedDataStore(dataStoreName));
+            NamedDataStoreConf dsConf = DS_SERVICE.getNamedDataStore(dataStoreName);
+            return toOlingoEntity(dsConf);
          }
       }
       return null;
@@ -430,6 +235,9 @@ public class DataStoreDataHandler implements DataHandler
    public Entity createEntityData(Entity entity) throws ODataApplicationException
    {
       ODataSecurityManager.checkPermission(Role.SYSTEM_MANAGER);
+
+      // Required properties
+      String datastoreName = DataHandlerUtil.<String>getRequiredProperty(entity, DataStoreModel.PROPERTY_NAME, String.class);
 
       NamedDataStoreConf dataStore = null;
 
@@ -473,29 +281,60 @@ public class DataStoreDataHandler implements DataHandler
 
          dataStore = openstackDataStore;
       }
-      else if (entity.getType().equals(GmpDataStoreModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString()))
-      {
-         GmpDataStoreConf gmpDataStore = new GmpDataStoreConf();
-         gmpDataStore.setGmpRepoLocation((String) DataHandlerUtil.getPropertyValue(entity, GmpDataStoreModel.PROPERTY_REPO_LOCATION));
-         gmpDataStore.setHfsLocation((String) DataHandlerUtil.getPropertyValue(entity, GmpDataStoreModel.PROPERTY_HFS_LOCATION));
-         gmpDataStore.setMaxQueuedRequest((Integer) DataHandlerUtil.getPropertyValue(entity, GmpDataStoreModel.PROPERTY_MAX_QUEUED_REQUESTS));
-         gmpDataStore.setIsMaster(((Boolean) DataHandlerUtil.getPropertyValue(entity, GmpDataStoreModel.PROPERTY_IS_MASTER)));
 
-         // extract mysql complex property
-         gmpDataStore.setMysqlConnectionInfo(extractMySQLConnectionInfo(entity, new GmpDataStoreConf.MysqlConnectionInfo()));
-         // extract quotas complex property
-         gmpDataStore.setQuotas(extractQuotas(entity, new GmpDataStoreConf.Quotas()));
-         // extract GMP configuration
-         gmpDataStore.setConfiguration(extractConfiguration(entity, new GmpDataStoreConf.Configuration()));
-         dataStore = gmpDataStore;
-      }
       else if (entity.getType().equals(RemoteDhusDataStoreModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString()))
       {
          RemoteDhusDataStoreConf remoteDhusDataStore = new RemoteDhusDataStoreConf();
          remoteDhusDataStore.setServiceUrl((String) DataHandlerUtil.getPropertyValue(entity, RemoteDhusDataStoreModel.PROPERTY_SERVICE_URL));
          remoteDhusDataStore.setLogin((String) DataHandlerUtil.getPropertyValue(entity, RemoteDhusDataStoreModel.PROPERTY_LOGIN));
          remoteDhusDataStore.setPassword((String) DataHandlerUtil.getPropertyValue(entity, RemoteDhusDataStoreModel.PROPERTY_PASSWORD));
+         remoteDhusDataStore.setAliveInterval((Long) DataHandlerUtil.getPropertyValue(entity, RemoteDhusDataStoreModel.PROPERTY_ALIVE_INTERVAL));
          dataStore = remoteDhusDataStore;
+      }
+
+      else if (entity.getType().equals(GmpDataStoreModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString()))
+      {
+         GmpDataStoreConf gmpDataStore = new GmpDataStoreConf();
+
+         // common async
+         createAsyncDataStoreConf(gmpDataStore, entity);
+
+         gmpDataStore.setRepoLocation((String) DataHandlerUtil.getPropertyValue(entity, GmpDataStoreModel.PROPERTY_REPO_LOCATION));
+
+         // extract mysql complex property
+         gmpDataStore.setMysqlConnectionInfo(extractMySQLConnectionInfo(entity, new GmpDataStoreConf.MysqlConnectionInfo()));
+         // extract GMP configuration
+         gmpDataStore.setConfiguration(extractConfiguration(entity, new GmpDataStoreConf.Configuration()));
+         dataStore = gmpDataStore;
+      }
+      else if (entity.getType().equals(PdgsDataStoreModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString())
+            || entity.getType().equals(ParamPdgsDataStoreModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString()))
+      {
+         PdgsDataStoreConf pdgsDhusDataStore;
+
+         // metadata pdgs datastore
+         if(entity.getType().equals(ParamPdgsDataStoreModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString()))
+         {
+            ParamPdgsDataStoreConf conf = new ParamPdgsDataStoreConf();
+            conf.setUrlParamPattern((String) DataHandlerUtil.getPropertyValue(entity, ParamPdgsDataStoreModel.PROPERTY_GPUP_PATTERN));
+            conf.setProductNamePattern((String) DataHandlerUtil.getPropertyValue(entity, ParamPdgsDataStoreModel.PROPERTY_PNAME_PATTERN));
+            pdgsDhusDataStore = conf;
+         }
+         else
+         {
+            pdgsDhusDataStore = new PdgsDataStoreConf();
+         }
+
+         // common async
+         createAsyncDataStoreConf(pdgsDhusDataStore, entity);
+
+         pdgsDhusDataStore.setServiceUrl((String) DataHandlerUtil.getPropertyValue(entity, PdgsDataStoreModel.PROPERTY_SERVICE_URL));
+         pdgsDhusDataStore.setLogin((String) DataHandlerUtil.getPropertyValue(entity, PdgsDataStoreModel.PROPERTY_LOGIN));
+         pdgsDhusDataStore.setPassword((String) DataHandlerUtil.getPropertyValue(entity, PdgsDataStoreModel.PROPERTY_PASSWORD));
+         pdgsDhusDataStore.setMaxConcurrentsDownloads(((int) DataHandlerUtil.getPropertyValue(entity, PdgsDataStoreModel.PROPERTY_MAX_CONCURRENTS_DOWNLOADS)));
+         pdgsDhusDataStore.setInterval(((long) DataHandlerUtil.getPropertyValue(entity, PdgsDataStoreModel.PROPERTY_INTERVAL)));
+
+         dataStore = pdgsDhusDataStore;
       }
 
       // this means none of the expected type instantiated it
@@ -506,12 +345,17 @@ public class DataStoreDataHandler implements DataHandler
       }
 
       // set properties common to all dataStore subtypes
-      dataStore.setName((String) DataHandlerUtil.getPropertyValue(entity, DataStoreModel.PROPERTY_NAME));
-      dataStore.setReadOnly((Boolean) DataHandlerUtil.getPropertyValue(entity, DataStoreModel.PROPERTY_READONLY));
+      dataStore.setName(datastoreName);
+      String restriction = (String) DataHandlerUtil.getPropertyValue(entity, DataStoreModel.PROPERTY_RESTRICTION);
+      if (restriction != null)
+      {
+         dataStore.setRestriction(DataStoreRestriction.fromValue(restriction));
+      }
       dataStore.setPriority((Integer) DataHandlerUtil.getPropertyValue(entity, DataStoreModel.PROPERTY_PRIORITY));
       dataStore.setMaximumSize((Long) DataHandlerUtil.getPropertyValue(entity, DataStoreModel.PROPERTY_MAXIMUMSIZE));
       dataStore.setCurrentSize((Long) DataHandlerUtil.getPropertyValue(entity, DataStoreModel.PROPERTY_CURRENTSIZE));
       dataStore.setAutoEviction((Boolean) DataHandlerUtil.getPropertyValue(entity, DataStoreModel.PROPERTY_AUTOEVICTION));
+      dataStore.setFilter((String) DataHandlerUtil.getPropertyValue(entity, DataStoreModel.PROPERTY_FILTER));
 
       DataStore liveDataStore;
       try
@@ -523,12 +367,32 @@ public class DataStoreDataHandler implements DataHandler
       {
          throw new ODataApplicationException(e.getMessage(), HttpStatusCode.BAD_REQUEST.getStatusCode(), Locale.ENGLISH);
       }
+
+      // add live data store as part of the store hierarchy
       DS_MANAGER.add(liveDataStore);
+
       return toOlingoEntity(dataStore);
    }
 
+   private void createAsyncDataStoreConf(AsyncDataStoreConf asyncDataStore, Entity entity)
+   {
+      asyncDataStore.setHfsLocation((String) DataHandlerUtil.getPropertyValue(entity, AsyncDataStoreModel.PROPERTY_HFS_LOCATION));
+      asyncDataStore.setIsMaster(((Boolean) DataHandlerUtil.getPropertyValue(entity, AsyncDataStoreModel.PROPERTY_IS_MASTER)));
+
+      // extract product naming
+      asyncDataStore.setPatternReplaceIn(extractPatternReplace(entity, new PatternReplace(), true));
+      asyncDataStore.setPatternReplaceOut(extractPatternReplace(entity, new PatternReplace(), false));
+
+      // max concurrent requests per datastore
+      asyncDataStore.setMaxPendingRequests((Integer) DataHandlerUtil.getPropertyValue(entity, AsyncDataStoreModel.PROPERTY_MAX_PENDING_REQUESTS));
+      asyncDataStore.setMaxRunningRequests((Integer) DataHandlerUtil.getPropertyValue(entity, AsyncDataStoreModel.PROPERTY_MAX_RUNNING_REQUESTS));
+
+      // max concurrent requests per user
+      asyncDataStore.setMaxParallelFetchRequestsPerUser((Integer) DataHandlerUtil.getPropertyValue(entity, AsyncDataStoreModel.PROPERTY_MAX_PFRPU));
+   }
+
    @Override
-   public void updateEntityData(List<UriParameter> keyParameters, Entity updatedEntity,  HttpMethod httpMethod)
+   public void updateEntityData(List<UriParameter> keyParameters, Entity updatedEntity, HttpMethod httpMethod)
          throws ODataApplicationException
    {
       ODataSecurityManager.checkPermission(Role.SYSTEM_MANAGER);
@@ -537,11 +401,12 @@ public class DataStoreDataHandler implements DataHandler
 
       // read only
       // String name = (String) DataHandlerUtil.getPropertyValue(updatedEntity, DataStoreModel.PROPERTY_NAME);
-      Boolean readOnly = (Boolean) DataHandlerUtil.getPropertyValue(updatedEntity, DataStoreModel.PROPERTY_READONLY);
+      String restriction = (String) DataHandlerUtil.getPropertyValue(updatedEntity, DataStoreModel.PROPERTY_RESTRICTION);
       Integer priority = (Integer) DataHandlerUtil.getPropertyValue(updatedEntity, DataStoreModel.PROPERTY_PRIORITY);
       Long maximumSize = (Long) DataHandlerUtil.getPropertyValue(updatedEntity, DataStoreModel.PROPERTY_MAXIMUMSIZE);
       // NOTE: the CurrentSize property is read only from an OData standpoint
       Boolean autoEviction = (Boolean) DataHandlerUtil.getPropertyValue(updatedEntity, DataStoreModel.PROPERTY_AUTOEVICTION);
+      String filter = (String) DataHandlerUtil.getPropertyValue(updatedEntity, DataStoreModel.PROPERTY_FILTER);
 
       // get updated properties
       List<Property> updatedProperties = updatedEntity.getProperties();
@@ -551,9 +416,9 @@ public class DataStoreDataHandler implements DataHandler
          String propertyName = updatedproperty.getName();
 
          // set properties common to all datastores
-         if (propertyName.equals(DataStoreModel.PROPERTY_READONLY))
+         if (propertyName.equals(DataStoreModel.PROPERTY_RESTRICTION))
          {
-            dataStoreConf.setReadOnly(readOnly);
+            dataStoreConf.setRestriction(DataStoreRestriction.fromValue(restriction));
          }
          if (propertyName.equals(DataStoreModel.PROPERTY_PRIORITY))
          {
@@ -566,6 +431,10 @@ public class DataStoreDataHandler implements DataHandler
          if (propertyName.equals(DataStoreModel.PROPERTY_AUTOEVICTION))
          {
             dataStoreConf.setAutoEviction(autoEviction);
+         }
+         if (propertyName.equals(DataStoreModel.PROPERTY_FILTER))
+         {
+            dataStoreConf.setFilter(filter);
          }
 
          if (dataStoreConf instanceof HfsDataStoreConf)
@@ -623,29 +492,43 @@ public class DataStoreDataHandler implements DataHandler
                openstackDataStore.setRegion(region);
             }
          }
+         else if (dataStoreConf instanceof RemoteDhusDataStoreConf)
+         {
+            RemoteDhusDataStoreConf remoteDhusDataStore = (RemoteDhusDataStoreConf) dataStoreConf;
+
+            if (propertyName.equals(RemoteDhusDataStoreModel.PROPERTY_SERVICE_URL))
+            {
+               String serviceUrl = (String) DataHandlerUtil.getPropertyValue(updatedEntity, RemoteDhusDataStoreModel.PROPERTY_SERVICE_URL);
+               remoteDhusDataStore.setServiceUrl(serviceUrl);
+            }
+            if (propertyName.equals(RemoteDhusDataStoreModel.PROPERTY_LOGIN))
+            {
+               String login = (String) DataHandlerUtil.getPropertyValue(updatedEntity, RemoteDhusDataStoreModel.PROPERTY_LOGIN);
+               remoteDhusDataStore.setLogin(login);
+            }
+            if (propertyName.equals(RemoteDhusDataStoreModel.PROPERTY_PASSWORD))
+            {
+               String password = (String) DataHandlerUtil.getPropertyValue(updatedEntity, RemoteDhusDataStoreModel.PROPERTY_PASSWORD);
+               remoteDhusDataStore.setPassword(password);
+            }
+            if (propertyName.equals(RemoteDhusDataStoreModel.PROPERTY_ALIVE_INTERVAL))
+            {
+               Long aliveInterval = (Long) DataHandlerUtil.getPropertyValue(updatedEntity, RemoteDhusDataStoreModel.PROPERTY_ALIVE_INTERVAL);
+               remoteDhusDataStore.setAliveInterval(aliveInterval);
+            }
+         }
+
          else if (dataStoreConf instanceof GmpDataStoreConf)
          {
             GmpDataStoreConf gmpDataStore = (GmpDataStoreConf) dataStoreConf;
 
+            // common async
+            updateAsyncDataStoreProperty(updatedEntity, gmpDataStore, propertyName);
+
             if (propertyName.equals(GmpDataStoreModel.PROPERTY_REPO_LOCATION))
             {
                String repoLocation = (String) DataHandlerUtil.getPropertyValue(updatedEntity, GmpDataStoreModel.PROPERTY_REPO_LOCATION);
-               gmpDataStore.setGmpRepoLocation(repoLocation);
-            }
-            if (propertyName.equals(GmpDataStoreModel.PROPERTY_HFS_LOCATION))
-            {
-               String hfsLocation = (String) DataHandlerUtil.getPropertyValue(updatedEntity, GmpDataStoreModel.PROPERTY_HFS_LOCATION);
-               gmpDataStore.setHfsLocation(hfsLocation);
-            }
-            if (propertyName.equals(GmpDataStoreModel.PROPERTY_MAX_QUEUED_REQUESTS))
-            {
-               Integer maxQueuedRequest = (Integer) DataHandlerUtil.getPropertyValue(updatedEntity, GmpDataStoreModel.PROPERTY_MAX_QUEUED_REQUESTS);
-               gmpDataStore.setMaxQueuedRequest(maxQueuedRequest);
-            }
-            if (propertyName.equals(GmpDataStoreModel.PROPERTY_IS_MASTER))
-            {
-               Boolean isMaster = (Boolean) DataHandlerUtil.getPropertyValue(updatedEntity, GmpDataStoreModel.PROPERTY_IS_MASTER);
-               gmpDataStore.setIsMaster(isMaster);
+               gmpDataStore.setRepoLocation(repoLocation);
             }
             if (gmpDataStore.getMysqlConnectionInfo() == null)
             {
@@ -654,44 +537,66 @@ public class DataStoreDataHandler implements DataHandler
             if (propertyName.equals(GmpDataStoreModel.PROPERTY_MYSQLCONNECTIONINFO))
             {
                // extract mysql complex property
-               MysqlConnectionInfo mysqlConnectionInfo = extractMySQLConnectionInfo(updatedEntity,gmpDataStore.getMysqlConnectionInfo() );
+               MysqlConnectionInfo mysqlConnectionInfo = extractMySQLConnectionInfo(updatedEntity, gmpDataStore.getMysqlConnectionInfo());
                gmpDataStore.setMysqlConnectionInfo(mysqlConnectionInfo);
             }
-            if (propertyName.equals(GmpDataStoreModel.PROPERTY_QUOTAS))
-            {
-               // extract quotas complex property
-               GmpDataStoreConf.Quotas quotas = extractQuotas(updatedEntity, gmpDataStore.getQuotas());
-               gmpDataStore.setQuotas(quotas);
-            }
-            if(gmpDataStore.getConfiguration() == null)
-            {
-               gmpDataStore.setConfiguration(new Configuration());
-            }
-            if(propertyName.equals(GmpDataStoreModel.PROPERTY_CONFIGURATION))
+            if (propertyName.equals(GmpDataStoreModel.PROPERTY_CONFIGURATION))
             {
                // extract gmp configuration
-               Configuration configuration = extractConfiguration(updatedEntity, gmpDataStore.getConfiguration());
+               Configuration configuration = extractConfiguration(
+                     updatedEntity,
+                     gmpDataStore.getConfiguration() == null ? new Configuration() : gmpDataStore.getConfiguration());
+
                gmpDataStore.setConfiguration(configuration);
             }
          }
-         else if (dataStoreConf instanceof RemoteDhusDataStoreConf)
+         else if (dataStoreConf instanceof PdgsDataStoreConf)
          {
-            RemoteDhusDataStoreConf remoteDhusDataStore = (RemoteDhusDataStoreConf) dataStoreConf;
+            PdgsDataStoreConf pdgsDataStore = (PdgsDataStoreConf) dataStoreConf;
 
-            if(propertyName.equals(RemoteDhusDataStoreModel.PROPERTY_SERVICE_URL))
+            // common async
+            updateAsyncDataStoreProperty(updatedEntity, pdgsDataStore, propertyName);
+
+            if (propertyName.equals(PdgsDataStoreModel.PROPERTY_SERVICE_URL))
             {
-               String serviceUrl = (String) DataHandlerUtil.getPropertyValue(updatedEntity, RemoteDhusDataStoreModel.PROPERTY_SERVICE_URL);
-               remoteDhusDataStore.setServiceUrl(serviceUrl);
+               String serviceUrl = (String) DataHandlerUtil.getPropertyValue(updatedEntity, PdgsDataStoreModel.PROPERTY_SERVICE_URL);
+               pdgsDataStore.setServiceUrl(serviceUrl);
             }
-            if(propertyName.equals(RemoteDhusDataStoreModel.PROPERTY_LOGIN))
+            if (propertyName.equals(PdgsDataStoreModel.PROPERTY_LOGIN))
             {
-               String login = (String) DataHandlerUtil.getPropertyValue(updatedEntity, RemoteDhusDataStoreModel.PROPERTY_LOGIN);
-               remoteDhusDataStore.setLogin(login);
+               String login = (String) DataHandlerUtil.getPropertyValue(updatedEntity, PdgsDataStoreModel.PROPERTY_LOGIN);
+               pdgsDataStore.setLogin(login);
             }
-            if(propertyName.equals(RemoteDhusDataStoreModel.PROPERTY_PASSWORD))
+            if (propertyName.equals(PdgsDataStoreModel.PROPERTY_PASSWORD))
             {
-               String password = (String) DataHandlerUtil.getPropertyValue(updatedEntity, RemoteDhusDataStoreModel.PROPERTY_PASSWORD);
-               remoteDhusDataStore.setPassword(password);
+               String password = (String) DataHandlerUtil.getPropertyValue(updatedEntity, PdgsDataStoreModel.PROPERTY_PASSWORD);
+               pdgsDataStore.setPassword(password);
+            }
+            if (propertyName.equals(PdgsDataStoreModel.PROPERTY_MAX_CONCURRENTS_DOWNLOADS))
+            {
+               int maxConcurrentsDownloads = (int) DataHandlerUtil.getPropertyValue(updatedEntity, PdgsDataStoreModel.PROPERTY_MAX_CONCURRENTS_DOWNLOADS);
+               pdgsDataStore.setMaxConcurrentsDownloads(maxConcurrentsDownloads);
+            }
+            if (propertyName.equals(PdgsDataStoreModel.PROPERTY_INTERVAL))
+            {
+               long interval = (long) DataHandlerUtil.getPropertyValue(updatedEntity, PdgsDataStoreModel.PROPERTY_INTERVAL);
+               pdgsDataStore.setInterval(interval);
+            }
+
+            if (dataStoreConf instanceof ParamPdgsDataStoreConf)
+            {
+               ParamPdgsDataStoreConf paramDataStore = (ParamPdgsDataStoreConf) dataStoreConf;
+
+               if (propertyName.equals(ParamPdgsDataStoreModel.PROPERTY_GPUP_PATTERN))
+               {
+                  String gpup = (String) DataHandlerUtil.getPropertyValue(updatedEntity, ParamPdgsDataStoreModel.PROPERTY_GPUP_PATTERN);
+                  paramDataStore.setUrlParamPattern(gpup);
+               }
+               if (propertyName.equals(ParamPdgsDataStoreModel.PROPERTY_PNAME_PATTERN))
+               {
+                  String pname = (String) DataHandlerUtil.getPropertyValue(updatedEntity, ParamPdgsDataStoreModel.PROPERTY_PNAME_PATTERN);
+                  paramDataStore.setProductNamePattern(pname);
+               }
             }
          }
          else
@@ -716,9 +621,57 @@ public class DataStoreDataHandler implements DataHandler
       {
          DS_MANAGER.remove(dataStoreConf.getName()).close();
       }
-      catch (Exception suppressed) {}
+      catch (Exception ex)
+      {
+         LOGGER.warn("DataStore.close() has thrown an exception", ex);
+      }
       DS_SERVICE.update(dataStoreConf);
       DS_MANAGER.add(newLiveDataStore);
+   }
+
+   private void updateAsyncDataStoreProperty(Entity updatedEntity, AsyncDataStoreConf asyncDataStore, String propertyName)
+   {
+      if (propertyName.equals(AsyncDataStoreModel.PROPERTY_HFS_LOCATION))
+      {
+         String hfsLocation = (String) DataHandlerUtil.getPropertyValue(updatedEntity, AsyncDataStoreModel.PROPERTY_HFS_LOCATION);
+         asyncDataStore.setHfsLocation(hfsLocation);
+      }
+      if (propertyName.equals(AsyncDataStoreModel.PROPERTY_IS_MASTER))
+      {
+         Boolean isMaster = (Boolean) DataHandlerUtil.getPropertyValue(updatedEntity, AsyncDataStoreModel.PROPERTY_IS_MASTER);
+         asyncDataStore.setIsMaster(isMaster);
+      }
+      if (propertyName.equals(AsyncDataStoreModel.PROPERTY_MAX_PFRPU))
+      {
+         asyncDataStore.setMaxParallelFetchRequestsPerUser((Integer) DataHandlerUtil.getPropertyValue(updatedEntity, AsyncDataStoreModel.PROPERTY_MAX_PFRPU));
+      }
+      if (propertyName.equals(AsyncDataStoreModel.PROPERTY_PATRE_IN))
+      {
+         // extract productNaming complex property
+         PatternReplace patterReplaceIn = extractPatternReplace(
+               updatedEntity,
+               asyncDataStore.getPatternReplaceIn() == null ? new PatternReplace() : asyncDataStore.getPatternReplaceIn(),
+               true);
+         asyncDataStore.setPatternReplaceIn(patterReplaceIn);
+      }
+      if (propertyName.equals(AsyncDataStoreModel.PROPERTY_PATRE_OUT))
+      {
+         PatternReplace patterReplaceOut = extractPatternReplace(
+               updatedEntity,
+               asyncDataStore.getPatternReplaceOut() == null ? new PatternReplace() : asyncDataStore.getPatternReplaceOut(),
+               false);
+         asyncDataStore.setPatternReplaceOut(patterReplaceOut);
+      }
+      if (propertyName.equals(AsyncDataStoreModel.PROPERTY_MAX_PENDING_REQUESTS))
+      {
+         Integer maxPendingRequests = (Integer) DataHandlerUtil.getPropertyValue(updatedEntity, AsyncDataStoreModel.PROPERTY_MAX_PENDING_REQUESTS);
+         asyncDataStore.setMaxPendingRequests(maxPendingRequests);
+      }
+      if (propertyName.equals(AsyncDataStoreModel.PROPERTY_MAX_RUNNING_REQUESTS))
+      {
+         Integer maxRunningRequest = (Integer) DataHandlerUtil.getPropertyValue(updatedEntity, AsyncDataStoreModel.PROPERTY_MAX_RUNNING_REQUESTS);
+         asyncDataStore.setMaxRunningRequests(maxRunningRequest);
+      }
    }
 
    @Override
@@ -733,7 +686,10 @@ public class DataStoreDataHandler implements DataHandler
       {
          DS_MANAGER.remove(dataStoreConf.getName()).close();
       }
-      catch (Exception suppressed) {}
+      catch (Exception ex)
+      {
+         LOGGER.warn("DataStore.close() has thrown an exception", ex);
+      }
    }
 
    private NamedDataStoreConf getDataStoreFromService(List<UriParameter> keyParameters)

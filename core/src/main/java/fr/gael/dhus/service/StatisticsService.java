@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -37,14 +37,7 @@ public class StatisticsService extends WebService
    
    @Autowired
    private JobScheduler jobScheduler;
-   
-   public Date getNextScheduleFileScanner () throws SchedulerException
-   {
-      if (!cfgManager.getFileScannersCronConfiguration ().isActive ())
-         return null;
-      return jobScheduler.getNextFileScannerJobSchedule ();
-   }
-   
+
    public Date getNextScheduleSearch () throws SchedulerException
    {
       if (!cfgManager.getSearchesCronConfiguration ().isActive ())

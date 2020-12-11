@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2014-2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -92,6 +92,8 @@ public class Collection extends AbstractEntity
 
       if (prop_name.equals (CollectionEntitySet.DESCRIPTION))
          return getDescription ();
+      
+      if (prop_name.equals (CollectionEntitySet.UUID)) return getUUID ();
 
       throw new ODataException ("Property '" + prop_name +
          "' not found in entity Collection.");
@@ -125,7 +127,7 @@ public class Collection extends AbstractEntity
    }
 
    @Override
-   public List<Map<String, Object>> expand(String navlink_name, String self_url)
+   public List<Map<String, Object>> expand(String navlink_name, String self_url) throws ODataException
    {
       if (navlink_name.equals("Products"))
       {

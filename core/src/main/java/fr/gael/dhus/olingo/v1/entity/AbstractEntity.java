@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -153,10 +153,13 @@ public abstract class AbstractEntity
     *
     * @param navlink_name name of the navigation link to expand.
     * @param self_url the absolute url to address this entity.
+    *
     * @return a non null list that may be empty.
+    *
+    * @throws ODataException cannot expand
     */
-   public List<Map<String, Object>> expand(String navlink_name, String self_url)
+   public List<Map<String, Object>> expand(String navlink_name, String self_url) throws ODataException
    {
-      throw new IllegalStateException("NavLink " + navlink_name + " cannot be expanded");
+      throw new ODataException("NavLink " + navlink_name + " cannot be expanded");
    }
 }

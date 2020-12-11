@@ -34,6 +34,9 @@ import com.esri.core.geometry.SpatialReference;
 import com.esri.core.geometry.WktExportFlags;
 import com.esri.core.geometry.WktImportFlags;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,6 +54,8 @@ public class WKTFootprintParser
    private static final int WKID_WGS84 = 4326;
    private static final SpatialReference WGS84 = SpatialReference.create(WKID_WGS84);
 
+   private static final Logger LOGGER = LogManager.getLogger();
+
    /**
     * Check WKT Footprint validity.
     *
@@ -59,20 +64,36 @@ public class WKTFootprintParser
     */
    public static String reformatWKTFootprint(String wkt)
    {
+      if (!wkt.contains("POLYGON")) // Other kinds of geometry don't need reformatting
+      {
+         return wkt;
+      }
+
       Geometry original = OperatorImportFromWkt.local()
             .execute(WktImportFlags.wktImportDefaults, Geometry.Type.Unknown, wkt.replaceAll("(?<!\\d)180 ","179.999999 "), null);
 
       Geometry geometry = original;
+//      LOGGER.info("wkt: {}",wkt);
 
       geometry = deletePointsOverThePoles(original);
+//      String deletePointsOverThePoles=OperatorExportToWkt.local().execute(WktExportFlags.wktExportDefaults, geometry, null);
+//      LOGGER.info("deletePointsOverThePoles: {}",deletePointsOverThePoles);
 
       geometry = addSplittingPointsOnEastWestBorder(geometry, original);
+//      String addSplittingPointsOnEastWestBorder=OperatorExportToWkt.local().execute(WktExportFlags.wktExportDefaults, geometry, null);
+//      LOGGER.info("addSplittingPointsOnEastWestBorder: {}",addSplittingPointsOnEastWestBorder);
 
       geometry = separateLoops(geometry);
+//      String separateLoops=OperatorExportToWkt.local().execute(WktExportFlags.wktExportDefaults, geometry, null);
+//      LOGGER.info("separateLoops: {}",separateLoops);
 
       geometry = trimToFrame(geometry);
+//      String trimToFrame=OperatorExportToWkt.local().execute(WktExportFlags.wktExportDefaults, geometry, null);
+//      LOGGER.info("trimToFrame: {}",trimToFrame);
 
       geometry = invertIfNecessary(geometry);
+//      String invertIfNecessary=OperatorExportToWkt.local().execute(WktExportFlags.wktExportDefaults, geometry, null);
+//      LOGGER.info("invertIfNecessary: {}",invertIfNecessary);
 
       return OperatorExportToWkt.local().execute(WktExportFlags.wktExportDefaults, geometry, null);
    }
@@ -249,6 +270,11 @@ public class WKTFootprintParser
 
          int phase = 0;
 
+         int phase0=1;
+         int phase1=0;
+         int phase2=0;
+         int phase3=0;
+
          int indexPoint = firstPosition;
          for (int counter = 0; counter < pointsToProcess; counter++)
          {
@@ -263,6 +289,7 @@ public class WKTFootprintParser
                   if (cross(prev, p, original))
                   {
                      phase = 1;
+                     phase1++;
                      current = startNewPolygon(polygons, p);
                   }
                   else
@@ -270,6 +297,7 @@ public class WKTFootprintParser
                      if (crossZero(prev, p))
                      {
                         phase = 2;
+                        phase2++;
                         current.closePathWithLine();
                         current = startNewPolygon(polygons, prev);
                         current.lineTo(p);
@@ -287,6 +315,7 @@ public class WKTFootprintParser
                   if (cross(prev, p, original))
                   {
                      phase = 0;
+                     phase0++;
                      current.closePathWithLine();
                      current = polygons.get(0);
                      current.lineTo(p);
@@ -303,6 +332,7 @@ public class WKTFootprintParser
                   if (cross(prev, p, original))
                   {
                      phase = 3;
+                     phase3++;
                      current = startNewPolygon(polygons, p);
                   }
                   else
@@ -326,6 +356,7 @@ public class WKTFootprintParser
                   if (cross(prev, p, original))
                   {
                      phase = 2;
+                     phase2++;
                      current.closePathWithLine();
                      current = polygons.get(2);
                      current.lineTo(p);
@@ -343,7 +374,7 @@ public class WKTFootprintParser
 
          }
 
-         if (polygons.size() != 4)
+         if (polygons.size() != 4 || phase0 != 2 || phase1 != 1 || phase2 != 2 || phase3 != 1)
          {
             return separateLoopsValid(geometry);
          }

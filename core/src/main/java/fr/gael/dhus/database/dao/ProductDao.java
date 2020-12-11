@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -24,8 +24,6 @@ import fr.gael.dhus.database.object.Collection;
 import fr.gael.dhus.database.object.MetadataIndex;
 import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.User;
-import fr.gael.dhus.olingo.v1.SQLVisitor;
-import fr.gael.dhus.olingo.v1.SQLVisitor.SQLVisitorParameter;
 
 import java.util.Date;
 import java.util.Iterator;
@@ -34,11 +32,11 @@ import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
+import org.dhus.olingo.v2.visitor.SQLVisitorParameter;
 import org.dhus.store.LoggableProduct;
 
 import org.hibernate.FetchMode;
-import org.hibernate.Query;
+import org.hibernate.query.Query;
 import org.hibernate.Session;
 import org.hibernate.criterion.DetachedCriteria;
 
@@ -98,19 +96,21 @@ public class ProductDao extends HibernateDao<Product, Long>
    public Iterator<Product> scrollFiltered(String filter, final Long collection_id, int skip)
    {
       StringBuilder sb = new StringBuilder("SELECT p ");
+      boolean whereApplied = false;
       if (collection_id != null)
       {
          sb.append("FROM Collection c LEFT OUTER JOIN c.products p ");
-         sb.append("WHERE c.id=").append(collection_id).append(" AND ");
+         sb.append("WHERE c.id=").append(collection_id);
+         whereApplied = true;
       }
       else
       {
-         sb.append("FROM ").append(entityClass.getName()).append(" p WHERE ");
+         sb.append("FROM ").append(entityClass.getName()).append(" p ");
       }
 
       if (filter != null && !filter.isEmpty())
       {
-         sb.append("p.identifier LIKE '%").append(filter.toUpperCase()).append("%' ");
+         sb.append(whereApplied?" AND ":" WHERE ").append(" p.identifier LIKE '%").append(filter.toUpperCase()).append("%' ");
       }
 
       return new PagedIterator<>(this, sb.toString(), skip);
@@ -175,9 +175,9 @@ public class ProductDao extends HibernateDao<Product, Long>
    public Product getProductByUuid(final String uuid)
    {
       return getHibernateTemplate().execute(session -> {
-         Query query = session.createQuery("FROM Product WHERE uuid=?");
-         query.setParameter(0, uuid, StandardBasicTypes.STRING);
-         List list = query.list();
+         Query query = session.createQuery("FROM Product WHERE uuid=?1");
+         query.setParameter(1, uuid, StandardBasicTypes.STRING);
+         List<?> list = query.list();
          return (Product) (list.isEmpty() ? null : list.get(0));
       });
    }
@@ -188,12 +188,25 @@ public class ProductDao extends HibernateDao<Product, Long>
       return new PagedIterator<> (this, query);
    }
 
+   public Product getFilteredProductByUuid(final String uuid, String filter, List<SQLVisitorParameter> parameters)
+   {
+      // TODO merge this method and getProductByUuid
+      return getHibernateTemplate().execute(session ->
+      {
+         Query query = session.createQuery("FROM Product WHERE uuid=:uuid AND " + filter);
+         query.setParameter ("uuid", uuid, StandardBasicTypes.STRING);
+         parameters.forEach((t) -> query.setParameter(t.getPosition(), t.getValue(), t.getType()));
+         List<?> list = query.list();
+         return (Product) (list.isEmpty() ? null : list.get(0));
+      });
+   }
+
    public Product getProductByIdentifier(final String identifier)
    {
       return getHibernateTemplate().execute(session -> {
-         Query query = session.createQuery("FROM Product WHERE identifier=?");
-         query.setParameter(0, identifier, StandardBasicTypes.STRING);
-         List list = query.list();
+         Query query = session.createQuery("FROM Product WHERE identifier=?1");
+         query.setParameter(1, identifier, StandardBasicTypes.STRING);
+         List<?> list = query.list();
          return (Product) (list.isEmpty() ? null : list.get(0));
       });
    }
@@ -204,7 +217,9 @@ public class ProductDao extends HibernateDao<Product, Long>
       // Call the generation of uuid if null.
       p.getUuid();
       p.setCreated(new Date());
+      p.setUpdated(p.getCreated());
       p.setOnline(true);
+      p.setOnDemand(p.isOnDemand());
       return super.create(p);
    }
 
@@ -217,7 +232,7 @@ public class ProductDao extends HibernateDao<Product, Long>
 
    @Override
    public List<Product> executeHQLQuery(final String hql,
-         final List<SQLVisitor.SQLVisitorParameter> parameters, final int skip, final int top)
+         final List<SQLVisitorParameter> parameters, final int skip, final int top)
    {
       checkProductNumber (top);
       return super.executeHQLQuery (hql, parameters, skip, top);
@@ -239,11 +254,7 @@ public class ProductDao extends HibernateDao<Product, Long>
    {
       Session session = getSessionFactory().getCurrentSession();
       Query query = session.createQuery("SELECT uuid, identifier, size "+hql);
-      for (int i = 0; i < hqlParameters.size(); i++)
-      {
-         SQLVisitor.SQLVisitorParameter param = hqlParameters.get(i);
-         query.setParameter(i, param.getValue(), param.getType());
-      }
+      hqlParameters.forEach((t) -> query.setParameter(t.getPosition(), t.getValue(), t.getType()));
 
       if (skip > -1)
       {

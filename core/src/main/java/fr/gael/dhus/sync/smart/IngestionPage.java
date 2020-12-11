@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -202,7 +202,7 @@ public class IngestionPage implements AutoCloseable
    {
       int pageSize = productList.size();
 
-      this.taskExecutor = new ParallelProductSetter(pageSize, pageSize, 0, TimeUnit.SECONDS);
+      this.taskExecutor = new ParallelProductSetter("smartsync-ingestion", pageSize, pageSize, 0, TimeUnit.SECONDS);
       this.storeService = storeService;
       this.products = productList;
       this.targetCollections = targetCollections;
@@ -224,7 +224,7 @@ public class IngestionPage implements AutoCloseable
          }
          else
          {
-            ingestionTask.setProductDownload(taskExecutor.submitProduct(storeService, product, targetCollections));
+            ingestionTask.setProductDownload(taskExecutor.submitProduct(storeService, product, targetCollections, false));
             GLOBAL_DOWNLOADS.add(ingestionTask);
             localDownloads.add(ingestionTask);
             LOGGER.debug("Starting synchronization of product {}", product.getUuid());
@@ -304,6 +304,6 @@ public class IngestionPage implements AutoCloseable
          catch (IOException | CancellationException | ExecutionException suppressed) {}
          GLOBAL_DOWNLOADS.remove(task);
       }
-      taskExecutor.shutdownNow();
+      taskExecutor.shutdownNonBlockingIO();
    }
 }

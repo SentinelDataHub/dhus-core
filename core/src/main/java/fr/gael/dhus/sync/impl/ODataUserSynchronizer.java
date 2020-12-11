@@ -324,7 +324,7 @@ public class ODataUserSynchronizer extends Synchronizer
                      }
                      else
                      {
-                        user.setRestrictions(Collections.EMPTY_SET);
+                        user.setRestrictions(Collections.emptySet());
                      }
                      changed = true;
                   }

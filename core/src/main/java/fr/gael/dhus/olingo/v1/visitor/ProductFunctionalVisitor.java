@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -65,6 +65,11 @@ public class ProductFunctionalVisitor extends FunctionalVisitor
          case ProductEntitySet.INGESTION_DATE:
          {
             res = (prod) -> prod.getIngestionDate();
+            break;
+         }
+         case ProductEntitySet.MODIFICATION_DATE:
+         {
+            res = (prod) -> prod.getUpdated();
             break;
          }
          case ProductEntitySet.CONTENT_GEOMETRY:

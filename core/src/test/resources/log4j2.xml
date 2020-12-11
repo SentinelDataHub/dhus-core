@@ -1,30 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2015,2018-2020 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses />.
+-->
 <Configuration>
- 	<Properties>
-		<Property name="pattern"    >[%d{DEFAULT}{UTC}][%-5p] %m (%file:%line - %t)%n%throwable </Property>
-	</Properties>
-	<Appenders>
-		<Console name="stdout" target="SYSTEM_OUT">
-			<PatternLayout pattern="${pattern}" />
-			<Filters>
-			    <ThresholdFilter level="DEBUG"/>
-			    <ThresholdFilter level="WARN" onMatch="DENY" onMismatch="NEUTRAL"/>
-			</Filters>
-		</Console>
-		<Console name="stderr" target="SYSTEM_ERR">
-			<PatternLayout pattern="${pattern}" />
-			<Filters>
-			    <ThresholdFilter level="WARN"/>
-			</Filters>
-		</Console>
-	</Appenders>
-	<Loggers>
-		<logger name="fr.gael.dhus" level="info"/>
-		<logger name="fr.gael.drb.query.FunctionCallExpression" level="debug"/>
-		<logger name="org.apache.solr" level="error"/>
-		<Root level="info">
-			<AppenderRef ref="stderr" />
-			<AppenderRef ref="stdout" />
-		</Root>
-	</Loggers>
+    <Appenders>
+        <Console name="stdout" target="SYSTEM_OUT">
+            <PatternLayout pattern="[%d{DEFAULT}{UTC}][%-5p] %m (%file:%line - %t)%n%throwable" />
+        </Console>
+    </Appenders>
+    <Loggers>
+        <!-- DHuS -->
+        <logger name="fr.gael.dhus" level="trace"/>
+        <logger name="org.dhus" level="trace"/>
+        <logger name="fr.gael.odata.engine" level="trace"/>
+
+        <!-- Drb -->
+        <logger name="fr.gael.drb.query.FunctionCallExpression" level="debug"/>
+
+        <!-- Hibernate, SQL, JPA -->
+        <logger name="org.springframework.orm.hibernate5" level="debug"/>
+        <logger name="org.springframework.jdbc.datasource" level="debug"/>
+
+        <Root level="info">
+            <AppenderRef ref="stdout" />
+        </Root>
+    </Loggers>
 </Configuration>

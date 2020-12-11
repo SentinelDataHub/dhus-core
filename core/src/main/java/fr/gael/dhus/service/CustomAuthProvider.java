@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2014-2016,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,22 +19,20 @@
  */
 package fr.gael.dhus.service;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
-import org.springframework.security.authentication
-      .UsernamePasswordAuthenticationToken;
-import org.springframework.security.authentication.dao
-      .DaoAuthenticationProvider;
-import org.springframework.security.authentication.encoding
-      .MessageDigestPasswordEncoder;
-import org.springframework.security.authentication.encoding
-      .PlaintextPasswordEncoder;
-import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.userdetails.UserDetails;
-
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.database.object.User.PasswordEncryption;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.MessageDigestPasswordEncoder;
+import org.springframework.security.crypto.password.NoOpPasswordEncoder;
+
+// TODO: migrate to https://www.baeldung.com/spring-security-5-password-storage
 public class CustomAuthProvider extends DaoAuthenticationProvider
 {
    private static final Logger LOGGER = LogManager.getLogger(CustomAuthProvider.class);
@@ -61,7 +59,7 @@ public class CustomAuthProvider extends DaoAuthenticationProvider
       }
       else
       {
-         super.setPasswordEncoder (new PlaintextPasswordEncoder ());
+         super.setPasswordEncoder(NoOpPasswordEncoder.getInstance());
       }
       super.additionalAuthenticationChecks (user_details, authentication);
    }

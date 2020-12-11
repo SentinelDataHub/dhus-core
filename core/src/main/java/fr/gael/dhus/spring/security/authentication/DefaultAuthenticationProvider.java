@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ * Copyright (C) 2015-2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -43,8 +43,6 @@ import org.springframework.transaction.annotation.Transactional;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.database.object.User.PasswordEncryption;
 import fr.gael.dhus.database.object.restriction.AccessRestriction;
-import fr.gael.dhus.messaging.jms.Message;
-import fr.gael.dhus.messaging.jms.Message.MessageType;
 import fr.gael.dhus.service.UserService;
 
 @Component
@@ -111,23 +109,18 @@ public class DefaultAuthenticationProvider implements AuthenticationProvider
 
       if ( !user.getPassword ().equals (password))
       {
-         LOGGER.warn (
-               new Message (MessageType.USER, "Connection refused for '" +
-                     username
-                     + "' from " + ip +
-                     " : error in login/password combination"));
+         LOGGER.warn("Connection refused for '{}' from {} : error in login/password combination", username, ip);
          throw new BadCredentialsException (errorMessage);
       }
-      
+
       for (AccessRestriction restriction : user.getRestrictions ())
       {
-         LOGGER.warn ("Connection refused for '" + username +
-               "' from " + ip + " : account is locked (" +
-               restriction.getBlockingReason () + ")");
+         LOGGER.warn ("Connection refused for '{}' from {} : account is locked ({})",
+               username, ip, restriction.getBlockingReason());
          throw new LockedException (restriction.getBlockingReason ());
       }
-      
-      LOGGER.info ("Connection success for '" + username + "' from " + ip);
+
+      LOGGER.info ("Connection success for '{}' from {}", username, ip);
       return new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
    }
 

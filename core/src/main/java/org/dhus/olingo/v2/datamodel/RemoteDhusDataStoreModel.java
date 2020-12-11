@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -37,6 +37,7 @@ public class RemoteDhusDataStoreModel extends DataStoreModel
    public static final String PROPERTY_SERVICE_URL = "ServiceUrl";
    public static final String PROPERTY_LOGIN = "Login";
    public static final String PROPERTY_PASSWORD = "Password";
+   public static final String PROPERTY_ALIVE_INTERVAL = "AliveInterval";
 
    @Override
    public CsdlEntityType getEntityType()
@@ -56,10 +57,15 @@ public class RemoteDhusDataStoreModel extends DataStoreModel
             .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
             .setNullable(false);
 
+      CsdlProperty interval = new CsdlProperty()
+            .setName(PROPERTY_ALIVE_INTERVAL)
+            .setType(EdmPrimitiveTypeKind.Int64.getFullQualifiedName())
+            .setNullable(true);
+
       return new CsdlEntityType()
             .setBaseType(DataStoreModel.ABSTRACT_FULL_QUALIFIED_NAME)
             .setName(ENTITY_TYPE_NAME)
-            .setProperties(Arrays.asList(url, login, password));
+            .setProperties(Arrays.asList(url, login, password, interval));
    }
 
    @Override

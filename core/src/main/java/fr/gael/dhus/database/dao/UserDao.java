@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -34,7 +34,6 @@ import fr.gael.dhus.database.object.restriction.TmpUserLockedAccessRestriction;
 import fr.gael.dhus.service.exception.UserAlreadyExistingException;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -48,15 +47,15 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import org.hibernate.HibernateException;
-import org.hibernate.Query;
-import org.hibernate.SQLQuery;
+import org.hibernate.query.Query;
+import org.hibernate.query.NativeQuery;
 import org.hibernate.Session;
 
 import org.hibernate.type.StandardBasicTypes;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.support.DataAccessUtils;
-import org.springframework.orm.hibernate3.HibernateCallback;
-import org.springframework.orm.hibernate3.HibernateTemplate;
+import org.springframework.orm.hibernate5.HibernateCallback;
+import org.springframework.orm.hibernate5.HibernateTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -80,8 +79,8 @@ public class UserDao extends HibernateDao<User, String>
    public User getByName (final String name)
    {
       User user = getHibernateTemplate().execute(session -> {
-         Query query = session.createQuery("From User u where u.username=?");
-         query.setParameter(0, name, StandardBasicTypes.STRING);
+         Query query = session.createQuery("From User u where u.username=?1");
+         query.setParameter(1, name, StandardBasicTypes.STRING);
          return (User) query.uniqueResult();
       });
 
@@ -95,8 +94,8 @@ public class UserDao extends HibernateDao<User, String>
       if (user==null)
       {
          user = getHibernateTemplate().execute(session -> {
-            Query query = session.createQuery("From User u where LOWER(u.username)=?");
-            query.setParameter(0, name.toLowerCase(), StandardBasicTypes.STRING);
+            Query query = session.createQuery("From User u where LOWER(u.username)=?1");
+            query.setParameter(1, name.toLowerCase(), StandardBasicTypes.STRING);
             return (User) query.uniqueResult();
          });
       }
@@ -115,17 +114,16 @@ public class UserDao extends HibernateDao<User, String>
       {
          @Override
          public Void doInHibernate (Session session)
-               throws HibernateException, SQLException
+               throws HibernateException
          {
             String sql = "DELETE FROM NETWORK_USAGE WHERE USER_UUID = :uid";
-            SQLQuery query = session.createSQLQuery (sql);
+            NativeQuery query = session.createNativeQuery (sql);
             query.setParameter("uid", uid, StandardBasicTypes.STRING);
             query.executeUpdate ();
             return null;
          }
       });
 
-      fireDeletedEvent (new DaoEvent<User> (user));
       super.delete (user);
    }
    
@@ -305,7 +303,7 @@ public class UserDao extends HibernateDao<User, String>
 
       long start = System.currentTimeMillis();
       String id = (String) getHibernateTemplate().save(user);
-      user = getHibernateTemplate().get((Class<User>) user.getClass(), id);
+      user = getHibernateTemplate().<User>get(User.class, id);
       long end = System.currentTimeMillis();
       LOGGER.info("Create/save {} ({}) spent {}ms", entityClass.getSimpleName(), id, (end - start));
 
@@ -352,7 +350,7 @@ public class UserDao extends HibernateDao<User, String>
             @Override
             @SuppressWarnings ("unchecked")
             public List<Object[]> doInHibernate (Session session)
-               throws HibernateException, SQLException
+               throws HibernateException
             {
                Query query = session.createQuery (hql).setReadOnly (true);
                query.setFirstResult (start);
@@ -503,28 +501,6 @@ public class UserDao extends HibernateDao<User, String>
          "%'  OR lower(u.firstname) LIKE '%"+filter.toLowerCase()+ "%'  OR lower(u.lastname) LIKE '%"+filter.toLowerCase()+
          "%'  OR lower(u.email) LIKE '%"+filter.toLowerCase()+ "%') and not u.username='" +
             cfgManager.getAdministratorConfiguration ().getName () + "'"));
-   }
-
-   /**
-    * Count the user according to the passed filter.
-    * @param filter filter over users. If null all the users will be returned.
-    * @return number of users.
-    */
-   public int countUsers (String filter)
-   {
-      // TODO Security on filter string
-      StringBuilder qBuilder = new StringBuilder ();
-
-      qBuilder.append ("SELECT count (*) FROM User u ");
-
-      if (filter != null && !filter.isEmpty ())
-      {
-         qBuilder.append ("WHERE ");
-         qBuilder.append (filter);
-      }
-
-      return ((Long) getHibernateTemplate ().find (qBuilder.toString ())
-            .get (0)).intValue ();
    }
 
    public Iterator<User> getAllUsers ()

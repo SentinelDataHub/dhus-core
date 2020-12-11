@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017,2018 GAEL Systems
+ * Copyright (C) 2013-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -25,7 +25,6 @@ import fr.gael.dhus.database.object.config.cron.CleanDatabaseCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.CleanDatabaseDumpCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.CronConfiguration;
 import fr.gael.dhus.database.object.config.cron.DumpDatabaseCronConfiguration;
-import fr.gael.dhus.database.object.config.cron.FileScannersCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.SearchesCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.SendLogsCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.StatisticsConfiguration;
@@ -38,13 +37,11 @@ import fr.gael.dhus.database.object.config.messaging.MailConfiguration;
 import fr.gael.dhus.database.object.config.messaging.MailFromConfiguration;
 import fr.gael.dhus.database.object.config.messaging.MailServerConfiguration;
 import fr.gael.dhus.database.object.config.messaging.MessagingConfiguration;
-import fr.gael.dhus.database.object.config.messaging.jms.JmsConfiguration;
 import fr.gael.dhus.database.object.config.network.NetworkConfiguration;
 import fr.gael.dhus.database.object.config.product.DownloadConfiguration;
 import fr.gael.dhus.database.object.config.product.ProductConfiguration;
 import fr.gael.dhus.database.object.config.product.QuicklookConfiguration;
 import fr.gael.dhus.database.object.config.product.ThumbnailConfiguration;
-import fr.gael.dhus.database.object.config.scanner.ScannerManager;
 import fr.gael.dhus.database.object.config.search.GeocoderConfiguration;
 import fr.gael.dhus.database.object.config.search.GeonameConfiguration;
 import fr.gael.dhus.database.object.config.search.NominatimConfiguration;
@@ -67,8 +64,10 @@ import fr.gael.dhus.database.object.config.system.ProcessingConfiguration;
 import fr.gael.dhus.database.object.config.system.SupportConfiguration;
 import fr.gael.dhus.database.object.config.system.SystemConfiguration;
 import fr.gael.dhus.database.object.config.system.TomcatConfiguration;
+import fr.gael.dhus.database.object.config.system.TransformationConfiguration;
 import fr.gael.dhus.database.object.config.system.TrashPathConfiguration;
 import fr.gael.dhus.search.SolrType;
+import fr.gael.dhus.sync.smart.SourceManager;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -95,12 +94,13 @@ import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 
-import fr.gael.dhus.sync.smart.SourceManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import org.dhus.scanner.config.ScannerConfigurationManager;
 import org.dhus.store.datastore.config.DataStoreConf;
 import org.dhus.store.datastore.config.DataStoreManager;
+
 import org.springframework.stereotype.Service;
 
 import org.xml.sax.SAXException;
@@ -142,7 +142,6 @@ public class ConfigurationManager
       setNewInstanceIfNull("cleanDatabaseConfiguration", crons, CleanDatabaseCronConfiguration.class);
       setNewInstanceIfNull("cleanDatabaseDumpConfiguration", crons, CleanDatabaseDumpCronConfiguration.class);
       setNewInstanceIfNull("dumpDatabaseConfiguration", crons, DumpDatabaseCronConfiguration.class);
-      setNewInstanceIfNull("fileScannersConfiguration", crons, FileScannersCronConfiguration.class);
       setNewInstanceIfNull("searchesConfiguration", crons, SearchesCronConfiguration.class);
       setNewInstanceIfNull("sendLogsConfiguration", crons, SendLogsCronConfiguration.class);
       setNewInstanceIfNull("systemCheckConfiguration", crons, SystemCheckCronConfiguration.class);
@@ -179,12 +178,11 @@ public class ConfigurationManager
       setNewInstanceIfNull("thumbnailConfiguration", prod, ThumbnailConfiguration.class);
 
       // Scanners
-      setNewInstanceIfNull("scanners", conf, ScannerManager.class);
+      setNewInstanceIfNull("scanners", conf, ScannerConfigurationManager.class);
 
       // Search
       setNewInstanceIfNull("searchConfiguration", conf, SearchConfiguration.class);
       SearchConfiguration search = conf.getSearchConfiguration();
-      setNewInstanceIfNull("geocoderConfiguration", search, GeocoderConfiguration.class);
       setNewInstanceIfNull("odataConfiguration", search, OdataConfiguration.class);
 
       // Search->Solr (default conf if none exist)
@@ -194,11 +192,6 @@ public class ConfigurationManager
       {
          search.setSolrConfiguration(new SolrConfiguration());
       }
-
-      // Search->Geocoder
-      GeocoderConfiguration geocoder = search.getGeocoderConfiguration();
-      setNewInstanceIfNull("nominatimConfiguration", geocoder, NominatimConfiguration.class);
-      setNewInstanceIfNull("geonameConfiguration", geocoder, GeonameConfiguration.class);
 
       // Server
       setNewInstanceIfNull("serverConfiguration", conf, ServerConfiguration.class);
@@ -223,6 +216,7 @@ public class ConfigurationManager
       setNewInstanceIfNull("tomcatConfiguration", sys, TomcatConfiguration.class);
       setNewInstanceIfNull("executorConfiguration", sys, ExecutorConfiguration.class);
       setNewInstanceIfNull("trashPathConfiguration", sys, TrashPathConfiguration.class);
+      setNewInstanceIfNull("transformationConfiguration", sys, TransformationConfiguration.class);
 
       /// Sets runtime default values
 
@@ -270,16 +264,12 @@ public class ConfigurationManager
          field.setAccessible(true); // field accessibility was: protected
          if (field.get(toSet) == null)
          {
-            field.set(toSet, toInstanciate.newInstance());
+            field.set(toSet, toInstanciate.getDeclaredConstructor().newInstance());
          }
       }
-      catch (NoSuchFieldException | InstantiationException ex)
+      catch (ReflectiveOperationException | IllegalArgumentException ex)
       {
          throw new RuntimeException(ex); // Programming issue
-      }
-      catch (IllegalArgumentException | IllegalAccessException ex)
-      {
-         // Ignored
       }
    }
 
@@ -337,11 +327,6 @@ public class ConfigurationManager
       return loader.getConf().getCronConfiguration().getCleanDatabaseDumpConfiguration();
    }
 
-   public FileScannersCronConfiguration getFileScannersCronConfiguration()
-   {
-      return loader.getConf().getCronConfiguration().getFileScannersConfiguration();
-   }
-
    public SearchesCronConfiguration getSearchesCronConfiguration()
    {
       return loader.getConf().getCronConfiguration().getSearchesConfiguration();
@@ -355,12 +340,6 @@ public class ConfigurationManager
    public SystemCheckCronConfiguration getSystemCheckCronConfiguration()
    {
       return loader.getConf().getCronConfiguration().getSystemCheckConfiguration();
-   }
-
-   // Messaging configurations
-   public JmsConfiguration getJmsConfiguration()
-   {
-      return loader.getConf().getMessagingConfiguration().getJmsConfiguration();
    }
 
    public MailConfiguration getMailConfiguration()
@@ -476,6 +455,11 @@ public class ConfigurationManager
       return loader.getConf().getSystemConfiguration().getProcessingConfiguration();
    }
 
+   public TransformationConfiguration getTransformationConfiguration()
+   {
+      return loader.getConf().getSystemConfiguration().getTransformationConfiguration();
+   }
+
    public List<DataStoreConf> getDataStoresConf()
    {
       return loader.getConf().getDataStores().getDataStore();
@@ -531,9 +515,9 @@ public class ConfigurationManager
       return (DataStoreManager) loader.getConf().getDataStores();
    }
 
-   public ScannerManager getScannerManager()
+   public ScannerConfigurationManager getScannerManager()
    {
-      return (ScannerManager) loader.getConf().getScanners();
+      return (ScannerConfigurationManager) loader.getConf().getScanners();
    }
 
    public SourceManager getSourceManager()

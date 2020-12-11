@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2016,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -18,8 +18,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package fr.gael.dhus.spring.security.filter;
-
-import java.io.IOException;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -48,7 +46,6 @@ public class BasicAuthFilter extends BasicAuthenticationFilter
    @Override
    protected void onSuccessfulAuthentication (HttpServletRequest request,
       HttpServletResponse response, Authentication auth_result)
-      throws IOException
    {
       try
       {

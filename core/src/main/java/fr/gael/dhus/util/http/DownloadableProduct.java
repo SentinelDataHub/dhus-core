@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017,2018 GAEL Systems
+ * Copyright (C) 2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -102,12 +102,13 @@ public class DownloadableProduct extends AbstractProduct implements Closeable
     * @param to_download A product whose Origin is set (not null)
     * @param md5 hash of data to download, for verification purposes (not null)
     * @param default_name the default name of this product (not null)
-    * @throws IOException if the HTTP client could not HEAD the origin of the product
+    * @throws IOException IO Error (network unavailable)
+    * @throws DownloadableProductException if the HTTP client could not HEAD the origin of the product
     * @throws InterruptedException if current thread is interrupted
     */
    public DownloadableProduct(InterruptibleHttpClient http_client, int download_attempts,
          String to_download, String md5, String default_name)
-         throws IOException, InterruptedException
+         throws IOException, DownloadableProductException, InterruptedException
    {
       Objects.requireNonNull(http_client);
       Objects.requireNonNull(to_download);
@@ -116,6 +117,12 @@ public class DownloadableProduct extends AbstractProduct implements Closeable
       this.httpClient = http_client;
       this.md5 = md5;
       this.downloadAttempts = download_attempts;
+
+      // Sets the MD5 sum property so it is not recomputed by the target datastore
+      if (md5 != null && !md5.isEmpty())
+      {
+         setProperty(ProductConstants.CHECKSUM_MD5, md5);
+      }
 
       // HEADs the target to check availability and get its properties
       HttpResponse headrsp = http_client.interruptibleHead(to_download);
@@ -177,6 +184,7 @@ public class DownloadableProduct extends AbstractProduct implements Closeable
       return InputStream.class.isAssignableFrom(cl);
    }
 
+   @SuppressWarnings("rawtypes")
    @Override
    public <T> T getImpl(Class<? extends T> cl)
    {
@@ -203,6 +211,7 @@ public class DownloadableProduct extends AbstractProduct implements Closeable
    /**
     * Interrupts the downloading thread.
     */
+   @Override
    public void close() throws IOException
    {
       if (downloadThread != null)
@@ -211,23 +220,25 @@ public class DownloadableProduct extends AbstractProduct implements Closeable
       }
    }
 
-   /** raise an IOException with the given StatusLine and cause Header (cause may be null). */
-   private void raiseFailure(StatusLine stl, Header cause) throws IOException
+   /** raise a DownloadableProductException with the given StatusLine and cause Header (cause may be null). */
+   private void raiseFailure(StatusLine stl, Header cause) throws DownloadableProductException
    {
-      Formatter ff = new Formatter();
-      ff.format("Cannot download %s, Reason='%s' (HTTP%d)",
-            this.url,
-            stl.getReasonPhrase(),
-            stl.getStatusCode());
-      if (cause != null)
+      try (Formatter ff = new Formatter())
       {
-         String cause_msg = cause.getValue();
-         if (cause_msg != null && !cause_msg.isEmpty())
+         ff.format("Cannot download %s, Reason='%s' (HTTP%d)",
+               this.url,
+               stl.getReasonPhrase(),
+               stl.getStatusCode());
+         if (cause != null)
          {
-            ff.format(" Cause='%s'", cause_msg);
+            String cause_msg = cause.getValue();
+            if (cause_msg != null && !cause_msg.isEmpty())
+            {
+               ff.format(" Cause='%s'", cause_msg);
+            }
          }
+         throw new DownloadableProductException(ff.out().toString(), stl.getStatusCode());
       }
-      throw new IOException(ff.out().toString());
    }
 
    /** Download this.product, streams the data to the InputStreap implementation using a Pipe. */
@@ -247,6 +258,7 @@ public class DownloadableProduct extends AbstractProduct implements Closeable
        * In-thread code.
        * @return path to the downloaded data.
        */
+      @SuppressWarnings({ "unchecked", "rawtypes" })
       @Override
       public void run()
       {
@@ -339,5 +351,21 @@ public class DownloadableProduct extends AbstractProduct implements Closeable
       }
    }
 
+   public static class DownloadableProductException extends IOException
+   {
+      private static final long serialVersionUID = 1L;
 
+      private final int httpStatusCode;
+
+      public DownloadableProductException(String message, int httpStatusCode)
+      {
+         super(message);
+         this.httpStatusCode = httpStatusCode;
+      }
+
+      public int getHttpStatusCode()
+      {
+         return httpStatusCode;
+      }
+   }
 }

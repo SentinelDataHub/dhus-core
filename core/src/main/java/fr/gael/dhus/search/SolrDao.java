@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2013-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,6 +19,7 @@
  */
 package fr.gael.dhus.search;
 
+import fr.gael.dhus.database.object.config.search.GeocoderConfiguration;
 import fr.gael.dhus.search.geocoder.CachedGeocoder;
 import fr.gael.dhus.search.geocoder.Geocoder;
 import fr.gael.dhus.search.geocoder.impl.NominatimGeocoder;
@@ -121,7 +122,15 @@ public class SolrDao
             throw new RuntimeException("Solr configuration not set in dhus.xml");
          }
       }
-      geocoder = new CachedGeocoder(new NominatimGeocoder(conf.getGeocoderConfiguration()));
+      GeocoderConfiguration geoConf = conf.getGeocoderConfiguration();
+      if (geoConf != null)
+      {
+         geocoder = new CachedGeocoder(new NominatimGeocoder(geoConf));
+      }
+      else
+      {
+         geocoder = null;
+      }
    }
 
    /**
@@ -402,14 +411,16 @@ public class SolrDao
             {
                return query;
             }
-
-            String wtk_boundaries = geocoder.getBoundariesWKT(token);
-
-            if (wtk_boundaries != null)
+            if (geocoder != null)
             {
-               String locate = "(" + token +" OR footprint:\"Intersects(" +
-                  wtk_boundaries + ") distErrPct=0\")";
-               query = query.replace(token, locate).trim();
+               String wtk_boundaries = geocoder.getBoundariesWKT(token);
+
+               if (wtk_boundaries != null)
+               {
+                  String locate = "(" + token +" OR footprint:\"Intersects(" +
+                     wtk_boundaries + ") distErrPct=0\")";
+                  query = query.replace(token, locate).trim();
+               }
             }
          }
       }

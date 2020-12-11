@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017,2018 GAEL Systems
+ * Copyright (C) 2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -46,15 +46,21 @@ public class DataStoreModel implements EntityModel
          new FullQualifiedName(DHuSODataServlet.NAMESPACE, ABSTRACT_ENTITY_TYPE_NAME);
 
    public static final String PROPERTY_NAME = "Name";
-   public static final String PROPERTY_READONLY = "ReadOnly";
+   public static final String PROPERTY_RESTRICTION = "Restriction";
    public static final String PROPERTY_PRIORITY = "Priority";
 
    public static final String PROPERTY_CURRENTSIZE = "CurrentSize";
    public static final String PROPERTY_MAXIMUMSIZE = "MaximumSize";
    public static final String PROPERTY_AUTOEVICTION = "AutoEviction";
+   public static final String PROPERTY_FILTER = "Filter";
 
    public static final String NAVIGATION_PRODUCTS = "Products";
    public static final String NAVIGATION_EVICTION = "Eviction";
+
+   public static boolean isDataStoreSubType(String type)
+   {
+      return type != null && type.endsWith(ABSTRACT_ENTITY_TYPE_NAME);
+   }
 
    @Override
    public CsdlEntityType getEntityType()
@@ -66,9 +72,9 @@ public class DataStoreModel implements EntityModel
             .setNullable(false);
 
       // TODO only for SYSTEM_MANAGER users
-      CsdlProperty readOnly = new CsdlProperty()
-            .setName(PROPERTY_READONLY)
-            .setType(EdmPrimitiveTypeKind.Boolean.getFullQualifiedName())
+      CsdlProperty restriction = new CsdlProperty()
+            .setName(PROPERTY_RESTRICTION)
+            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
             .setNullable(false);
 
       CsdlProperty priority = new CsdlProperty()
@@ -89,6 +95,11 @@ public class DataStoreModel implements EntityModel
             .setType(EdmPrimitiveTypeKind.Boolean.getFullQualifiedName())
             .setNullable(false);
 
+      CsdlProperty filter = new CsdlProperty()
+            .setName(PROPERTY_FILTER)
+            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
+            .setNullable(true);
+
       // define reference property
       CsdlPropertyRef propertyRef = new CsdlPropertyRef().setName(PROPERTY_NAME);
 
@@ -107,11 +118,12 @@ public class DataStoreModel implements EntityModel
             .setName(ABSTRACT_ENTITY_TYPE_NAME)
             .setProperties(Arrays.asList(
                   name,
-                  readOnly,
+                  restriction,
                   priority,
                   maximumSize,
                   currentSize,
-                  autoEviction))
+                  autoEviction,
+                  filter))
             .setKey(Collections.singletonList(propertyRef))
             .setAbstract(true)
             .setNavigationProperties(Arrays.asList(

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2013-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,41 +20,28 @@
 package fr.gael.dhus.service;
 
 import fr.gael.dhus.database.object.Collection;
-import fr.gael.dhus.service.job.JobScheduler;
 
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 import org.dhus.store.ingestion.IngestibleRawProduct;
 import org.dhus.store.ingestion.ProcessingManager;
 
-import org.quartz.SchedulerException;
-
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 @Service
 public class UploadService extends WebService
 {
-   @Autowired
-   private JobScheduler scheduler;
-
    // TODO replace List<Collection> with List<String>
    @PreAuthorize ("hasRole('ROLE_UPLOAD')")
    public boolean addProduct (URL path, final List<Collection> collections)
    {
       List<String> collectionNames = new ArrayList<>(collections.size());
       collections.forEach((collection) -> collectionNames.add(collection.getName()));
-      ProcessingManager.processProduct(new IngestibleRawProduct(path), collectionNames, false);
+      ProcessingManager.processProduct(IngestibleRawProduct.fromURL(path), collectionNames, false);
       return true;
    }
 
-   @PreAuthorize ("hasRole('ROLE_UPLOAD')")
-   public Date getNextScheduleFileScanner() throws SchedulerException
-   {
-      return scheduler.getNextFileScannerJobSchedule ();
-   }
 }

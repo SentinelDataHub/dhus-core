@@ -21,6 +21,7 @@ package fr.gael.dhus.datastore;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 
 import org.apache.commons.io.FileUtils;
 
@@ -36,6 +37,7 @@ public class HierarchicalDirectoryBuilder implements DirectoryBuilder
 
    private static final Logger LOGGER = LogManager.getLogger(HierarchicalDirectoryBuilder.class);
    private static final String COUNTER_FILE_NAME = ".counter";
+   private static final Charset UTF8 = Charset.forName("UTF-8");
 
    private static boolean isHookInstalled = false;
 
@@ -48,8 +50,8 @@ public class HierarchicalDirectoryBuilder implements DirectoryBuilder
    public HierarchicalDirectoryBuilder(File root, int max_occurence, int maxItems)
    {
       this.root = root;
-      this.maxOccurence = new Long(max_occurence);
-      this.maxItems = new Long(maxItems);
+      this.maxOccurence = Long.valueOf(max_occurence);
+      this.maxItems = Long.valueOf(maxItems);
 
       // Try to read counter from local file
       File counter_file = new File(root, COUNTER_FILE_NAME);
@@ -58,7 +60,7 @@ public class HierarchicalDirectoryBuilder implements DirectoryBuilder
       {
          try
          {
-            String counter_string = FileUtils.readFileToString(counter_file);
+            String counter_string = FileUtils.readFileToString(counter_file, UTF8);
             counter_string = counter_string.trim();
             counter = Long.parseLong(counter_string);
          }
@@ -262,7 +264,7 @@ public class HierarchicalDirectoryBuilder implements DirectoryBuilder
          // Recompute the counter path (case of root changed).
          File counter_file = new File(root, COUNTER_FILE_NAME);
          // Save the counter.
-         FileUtils.writeStringToFile(counter_file, counter.toString());
+         FileUtils.writeStringToFile(counter_file, counter.toString(), UTF8);
          lastSaved = counter;
       }
       catch (IOException e)

@@ -21,10 +21,11 @@ package fr.gael.dhus.olingo.v1;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
+import org.apache.olingo.odata2.api.commons.HttpHeaders;
 import org.apache.olingo.odata2.api.commons.HttpStatusCodes;
 import org.apache.olingo.odata2.api.processor.ODataContext;
 import org.apache.olingo.odata2.api.processor.ODataResponse;
+import org.apache.olingo.odata2.core.commons.ContentType;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -145,6 +146,7 @@ public class MediaResponseBuilder
       ODataResponse.ODataResponseBuilder builder = ODataResponse.newBuilder ();
 
       builder.status(HttpStatusCodes.ACCEPTED);
+      builder.header(HttpHeaders.CONTENT_TYPE, ContentType.TEXT_PLAIN.toContentTypeString());
 
       return builder.build();
    }

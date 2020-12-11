@@ -86,7 +86,5 @@ public class LogoutSuccessHandler implements
       }
       LOGGER.info ("Connection closed by '" + name + "' from " + ip);
       securityContextProvider.logout(integriyCookie);
-
-      request.getSession ().invalidate ();
    }
 }

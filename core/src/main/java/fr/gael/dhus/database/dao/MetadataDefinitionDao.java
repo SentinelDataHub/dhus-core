@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -25,7 +25,6 @@ import fr.gael.dhus.database.object.MetadataDefinition;
 import org.hibernate.Criteria;
 import org.hibernate.Session;
 import org.hibernate.criterion.Criterion;
-import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Restrictions;
 
 import org.springframework.stereotype.Repository;
@@ -38,7 +37,7 @@ public class MetadataDefinitionDao extends HibernateDao<MetadataDefinition, Inte
    private static final String TYPE = "type";
    private static final String QUERYABLE = "queryable";
 
-   private synchronized MetadataDefinition find(String name, String category, String type, String queryable)
+   public MetadataDefinition find(String name, String category, String type, String queryable)
    {
       MetadataDefinition result = getHibernateTemplate().execute((Session session) ->
       {
@@ -63,11 +62,5 @@ public class MetadataDefinitionDao extends HibernateDao<MetadataDefinition, Inte
          return (MetadataDefinition) criteria.uniqueResult();
       });
       return result;
-   }
-
-   public synchronized MetadataDefinition findAndCreateIfAbsent(String name, String category, String type, String queryable)
-   {
-      MetadataDefinition metadataDefinition = find(name, category, type, queryable);
-      return (metadataDefinition == null) ? create(new MetadataDefinition(name, type, category, queryable)) : metadataDefinition;
    }
 }

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -21,7 +21,6 @@ package fr.gael.dhus.olingo.v1.operations;
 
 import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.User;
-import fr.gael.dhus.datastore.scanner.ScannerFactory;
 import fr.gael.dhus.olingo.v1.ExpectedException;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 
@@ -38,13 +37,15 @@ import org.apache.olingo.odata2.api.edm.provider.FunctionImportParameter;
 import org.apache.olingo.odata2.api.edm.provider.ReturnType;
 import org.apache.olingo.odata2.api.exception.ODataException;
 
+import org.dhus.scanner.ScannerContainer;
+
 /**
  *
  */
 public class StopScanner extends AbstractOperation
 {
-   private static final ScannerFactory SCANNER_FACTORY =
-         ApplicationContextProvider.getBean(ScannerFactory.class);
+   private static final ScannerContainer SCANNER_CONTAINER =
+         ApplicationContextProvider.getBean(ScannerContainer.class);
 
    // operation name
    public static final String NAME = "StopScanner";
@@ -92,7 +93,7 @@ public class StopScanner extends AbstractOperation
          throw new ExpectedException(e.getMessage(), HttpStatusCodes.BAD_REQUEST);
       }
 
-      if (SCANNER_FACTORY.stopScan(scannerId))
+      if (SCANNER_CONTAINER.stopScan(scannerId))
       {
          return String.format("Scanner #%d stopped.", scannerId);
       }

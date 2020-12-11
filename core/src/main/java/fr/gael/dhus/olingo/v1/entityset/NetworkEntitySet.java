@@ -163,7 +163,7 @@ public class NetworkEntitySet extends AbstractEntitySet<Network>
    }
 
    @Override
-   public Map getEntities()
+   public Map<Integer, Network> getEntities()
    {
       return new NetworkMap();
    }

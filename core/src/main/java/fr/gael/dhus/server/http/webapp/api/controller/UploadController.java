@@ -64,6 +64,7 @@ public class UploadController
    public void upload(Principal principal, HttpServletRequest req,
          HttpServletResponse res) throws IOException
    {
+      LOGGER.warn("This upload utility is deprecated, please use the upload capabilities of the OData APIs (/v2 preferably)");
       // process only multipart requests
       if (ServletFileUpload.isMultipartContent (req))
       {

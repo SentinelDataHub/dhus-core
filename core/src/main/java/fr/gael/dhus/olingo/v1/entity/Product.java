@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2014-2018 GAEL Systems
+ * Copyright (C) 2014-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,6 +20,7 @@
 package fr.gael.dhus.olingo.v1.entity;
 
 import fr.gael.dhus.database.object.MetadataIndex;
+import fr.gael.dhus.database.object.Order;
 import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.datastore.Destination;
@@ -40,11 +41,13 @@ import fr.gael.dhus.olingo.v1.entityset.ItemEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.NodeEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.ProductEntitySet;
 import fr.gael.dhus.service.EvictionService;
+import fr.gael.dhus.service.OrderService;
 import fr.gael.dhus.service.ProductService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.util.DownloadActionRecordListener;
 import fr.gael.dhus.util.DownloadStreamCloserListener;
-import fr.gael.dhus.util.UnZip;
+import fr.gael.dhus.util.DrbChildren;
+import fr.gael.dhus.util.stream.ListenableStream;
 
 import fr.gael.drb.DrbNode;
 import fr.gael.drb.impl.DrbNodeImpl;
@@ -64,8 +67,6 @@ import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import org.apache.commons.io.IOUtils;
-
 import org.apache.commons.net.io.CopyStreamAdapter;
 import org.apache.commons.net.io.CopyStreamListener;
 
@@ -75,10 +76,11 @@ import org.apache.olingo.odata2.api.processor.ODataResponse;
 import org.apache.olingo.odata2.api.processor.ODataSingleProcessor;
 import org.apache.olingo.odata2.api.uri.NavigationSegment;
 
+import org.dhus.store.datastore.async.AsyncDataStoreException;
+import org.dhus.metrics.DownloadMetrics;
 import org.dhus.store.datastore.async.AsyncProduct;
 import org.dhus.store.derived.DerivedProductStore;
 import org.dhus.store.derived.DerivedProductStoreService;
-import org.dhus.store.datastore.remotedhus.RemoteDhusProduct;
 import org.dhus.store.StoreException;
 import org.dhus.store.StoreService;
 import org.dhus.store.datastore.DataStoreException;
@@ -91,16 +93,19 @@ import org.dhus.store.quota.QuotaException;
 public class Product extends Node implements Closeable
 {
    private static final EvictionService EVICTION_SERVICE =
-      ApplicationContextProvider.getBean (EvictionService.class);
+         ApplicationContextProvider.getBean(EvictionService.class);
 
    private static final ProductService PRODUCT_SERVICE =
-      ApplicationContextProvider.getBean (ProductService.class);
+         ApplicationContextProvider.getBean(ProductService.class);
 
    private static final StoreService STORE_SERVICE =
          ApplicationContextProvider.getBean(StoreService.class);
 
    private static final DerivedProductStoreService DERIVED_PRODUCT =
          ApplicationContextProvider.getBean(DerivedProductStoreService.class);
+
+   private static final OrderService ORDER_SERVICE =
+         ApplicationContextProvider.getBean(OrderService.class);
 
    private static final Logger LOGGER = LogManager.getLogger();
 
@@ -171,7 +176,7 @@ public class Product extends Node implements Closeable
 
    protected Product(fr.gael.dhus.database.object.Product product)
    {
-      super(product.getIdentifier () + ".zip");
+      super(product.getIdentifier() + ".zip");
       this.product = product;
    }
 
@@ -187,40 +192,40 @@ public class Product extends Node implements Closeable
     *
     * @return the DrbCortex class name.
     * @throws UnsupportedOperationException if the model cannot be computed.
-    * @throws NullPointerException if this product does not related any class.
+    * @throws NullPointerException          if this product does not related any class.
     */
    @Override
-   public fr.gael.dhus.olingo.v1.entity.Class getItemClass ()
+   public fr.gael.dhus.olingo.v1.entity.Class getItemClass()
    {
-      return new fr.gael.dhus.olingo.v1.entity.Class (product.getItemClass ());
+      return new fr.gael.dhus.olingo.v1.entity.Class(product.getItemClass());
    }
 
    @Override
-   public String getId ()
+   public String getId()
    {
-      return product.getUuid ();
+      return product.getUuid();
    }
 
    @Override
-   public String getName ()
+   public String getName()
    {
-      return product.getIdentifier ();
+      return product.getIdentifier();
    }
 
    @Override
-   public String getContentType ()
+   public String getContentType()
    {
       return fr.gael.dhus.database.object.Product.DEFAULT_CONTENT_TYPE;
    }
 
    @Override
-   public Long getContentLength ()
+   public Long getContentLength()
    {
       return product.getSize();
    }
 
    @Override
-   public Integer getChildrenNumber ()
+   public Integer getChildrenNumber()
    {
       int number = 0;
       if (this.product != null)
@@ -239,45 +244,50 @@ public class Product extends Node implements Closeable
    }
 
    @Override
-   public Object getValue ()
+   public Object getValue()
    {
       return null;
    }
 
-   public Date getIngestionDate ()
+   public Date getCreationDate()
    {
-      return product.getIngestionDate ();
+      return product.getCreated();
    }
 
-   public Date getEvictionDate ()
+   public Date getIngestionDate()
+   {
+      return product.getIngestionDate();
+   }
+
+   public Date getModificationDate()
+   {
+      return product.getUpdated();
+   }
+
+   public Date getEvictionDate()
    {
       // dynamic date
       return EVICTION_SERVICE.getEvictionDate(product);
    }
 
-   public Date getCreationDate ()
+   public String getGeometry()
    {
-      return product.getCreated ();
+      return product.getFootPrint();
    }
 
-   public String getGeometry ()
+   public Date getContentStart()
    {
-      return product.getFootPrint ();
+      return product.getContentStart();
    }
 
-   public Date getContentStart ()
+   public Date getContentEnd()
    {
-      return product.getContentStart ();
+      return product.getContentEnd();
    }
 
-   public Date getContentEnd ()
+   public boolean hasChecksum()
    {
-      return product.getContentEnd ();
-   }
-
-   public boolean hasChecksum ()
-   {
-      return ! (product.getDownload ().getChecksums ().isEmpty ());
+      return !(product.getDownload().getChecksums().isEmpty());
    }
 
    public boolean isOnline()
@@ -285,21 +295,35 @@ public class Product extends Node implements Closeable
       return product.isOnline();
    }
 
-   public String getChecksumAlgorithm ()
+   public boolean isOnDemand()
    {
-      if ( ! (hasChecksum ())) return null;
-
-      Map<String, String> checksum = product.getDownload ().getChecksums ();
-      String algorithm = "MD5";
-      if (checksum.get (algorithm) != null) return algorithm;
-      return checksum.keySet ().iterator ().next ();
+      return product.isOnDemand();
    }
 
-   public String getChecksumValue ()
+   public String getChecksumAlgorithm()
    {
-      if ( ! (hasChecksum ())) return null;
-      return product.getDownload ().getChecksums ()
-         .get (getChecksumAlgorithm ());
+      if (!(hasChecksum()))
+      {
+         return null;
+      }
+
+      Map<String, String> checksum = product.getDownload().getChecksums();
+      String algorithm = "MD5";
+      if (checksum.get(algorithm) != null)
+      {
+         return algorithm;
+      }
+      return checksum.keySet().iterator().next();
+   }
+
+   public String getChecksumValue()
+   {
+      if (!(hasChecksum()))
+      {
+         return null;
+      }
+      return product.getDownload().getChecksums()
+            .get(getChecksumAlgorithm());
    }
 
    /**
@@ -307,7 +331,7 @@ public class Product extends Node implements Closeable
     *
     * @return true is control is required, false otherwise.
     */
-   public boolean requiresControl ()
+   public boolean requiresControl()
    {
       // TODO This method shall be replaced by RABAC mechanism
       return true;
@@ -336,7 +360,7 @@ public class Product extends Node implements Closeable
    }
 
    @Override
-   public Map<String, Node> getNodes ()
+   public Map<String, Node> getNodes()
    {
       if (this.nodes == null)
       {
@@ -349,7 +373,7 @@ public class Product extends Node implements Closeable
             }
 
             DrbNode node = this.drbNode;
-            if (UnZip.hasArchiveExtension(data.getName()) || data instanceof RemoteDhusProduct)
+            if (DrbChildren.shouldODataUseFirstChild(data.getName(), node))
             {
                // skip product zip node or remote odata container
                node = this.drbNode.getFirstChild();
@@ -366,22 +390,21 @@ public class Product extends Node implements Closeable
    }
 
    @Override
-   public Map<String, Attribute> getAttributes ()
+   public Map<String, Attribute> getAttributes()
    {
       if (this.attributes == null)
       {
-         this.attributes = new LinkedHashMap<String, Attribute> ();
-         for (MetadataIndex index :
-              PRODUCT_SERVICE.getIndexes (this.product.getId ()))
+         this.attributes = new LinkedHashMap<>();
+         for (MetadataIndex index: PRODUCT_SERVICE.getIndexes(this.product.getUuid()))
          {
-            Attribute attr= new Attribute(index.getName(), index.getValue(), index.getCategory());
+            Attribute attr = new Attribute(index.getName(), index.getValue(), index.getCategory());
             this.attributes.put(attr.getName(), attr);
          }
       }
       return this.attributes;
    }
 
-   public InputStream getInputStream () throws IOException
+   public InputStream getInputStream() throws IOException
    {
       try
       {
@@ -399,29 +422,31 @@ public class Product extends Node implements Closeable
    }
 
    @Override
-   public Map<String, Object> toEntityResponse (String root_url)
+   public Map<String, Object> toEntityResponse(String root_url)
    {
       // superclass node response is not required. Only Item response is
       // necessary.
-      Map<String, Object> res = super.itemToEntityResponse (root_url);
+      Map<String, Object> res = super.itemToEntityResponse(root_url);
 
-      res.put (NodeEntitySet.CHILDREN_NUMBER, getChildrenNumber ());
+      res.put(NodeEntitySet.CHILDREN_NUMBER, getChildrenNumber());
 
-      LinkedHashMap<String, Date> dates = new LinkedHashMap<String, Date> ();
+      LinkedHashMap<String, Date> dates = new LinkedHashMap<String, Date>();
       dates.put(Model.TIME_RANGE_START, getContentStart());
       dates.put(Model.TIME_RANGE_END, getContentEnd());
-      res.put (ProductEntitySet.CONTENT_DATE, dates);
+      res.put(ProductEntitySet.CONTENT_DATE, dates);
 
-      HashMap<String, String> checksum = new LinkedHashMap<String, String> ();
+      HashMap<String, String> checksum = new LinkedHashMap<String, String>();
       checksum.put(Model.ALGORITHM, getChecksumAlgorithm());
       checksum.put(Model.VALUE, getChecksumValue());
-      res.put (ProductEntitySet.CHECKSUM, checksum);
+      res.put(ProductEntitySet.CHECKSUM, checksum);
 
-      res.put (ProductEntitySet.INGESTION_DATE, getIngestionDate ());
-      res.put (ProductEntitySet.CREATION_DATE, getCreationDate ());
-      res.put (ProductEntitySet.EVICTION_DATE, getEvictionDate ());
-      res.put (ProductEntitySet.CONTENT_GEOMETRY, getGeometry ());
+      res.put(ProductEntitySet.CREATION_DATE, getCreationDate());
+      res.put(ProductEntitySet.INGESTION_DATE, getIngestionDate());
+      res.put(ProductEntitySet.MODIFICATION_DATE, getModificationDate());
+      res.put(ProductEntitySet.EVICTION_DATE, getEvictionDate());
+      res.put(ProductEntitySet.CONTENT_GEOMETRY, getGeometry());
       res.put(ProductEntitySet.ONLINE, isOnline());
+      res.put(ProductEntitySet.ON_DEMAND, isOnDemand());
 
       try
       {
@@ -436,11 +461,11 @@ public class Product extends Node implements Closeable
    }
 
    @Override
-   public Object getProperty (String prop_name) throws ODataException
+   public Object getProperty(String prop_name) throws ODataException
    {
       // item and node properties are fetched directly from Product
       // to avoid initializing a DrbNode
-      switch(prop_name)
+      switch (prop_name)
       {
          // item properties
          case ItemEntitySet.ID: return getId();
@@ -455,69 +480,73 @@ public class Product extends Node implements Closeable
          // product properties
          case ProductEntitySet.CREATION_DATE: return getCreationDate();
          case ProductEntitySet.INGESTION_DATE: return getIngestionDate();
+         case ProductEntitySet.MODIFICATION_DATE: return getModificationDate();
          case ProductEntitySet.EVICTION_DATE: return getEvictionDate();
          case ProductEntitySet.CONTENT_GEOMETRY: return getGeometry();
          case ProductEntitySet.ONLINE: return isOnline();
+         case ProductEntitySet.ON_DEMAND: return isOnDemand();
          case ProductEntitySet.LOCAL_PATH:
-         try
-         {
-            return getPhysicalProduct().getResourceLocation();
-         }
-         catch (DataStoreException ex)
-         {
-            return null;
-         }
+            try
+            {
+               return getPhysicalProduct().getResourceLocation();
+            }
+            catch (DataStoreException ex)
+            {
+               return null;
+            }
 
          // will throw "Property X not found" ODataException
-         default: return super.getProperty (prop_name);
+         default: return super.getProperty(prop_name);
       }
    }
 
    @Override
-   public Map<String, Object> getComplexProperty (String prop_name)
-      throws ODataException
+   public Map<String, Object> getComplexProperty(String prop_name)
+         throws ODataException
    {
-      if (prop_name.equals (ProductEntitySet.CONTENT_DATE))
+      if (prop_name.equals(ProductEntitySet.CONTENT_DATE))
       {
-         Map<String, Object> values = new HashMap<String, Object> ();
+         Map<String, Object> values = new HashMap<>();
          values.put(Model.TIME_RANGE_START, getContentStart());
          values.put(Model.TIME_RANGE_END, getContentEnd());
          return values;
       }
-      if (prop_name.equals (ProductEntitySet.CHECKSUM))
+      if (prop_name.equals(ProductEntitySet.CHECKSUM))
       {
-         Map<String, Object> values = new HashMap<String, Object> ();
+         Map<String, Object> values = new HashMap<>();
          values.put(Model.ALGORITHM, getChecksumAlgorithm());
          values.put(Model.VALUE, getChecksumValue());
          return values;
       }
-      throw new ODataException ("Complex property '" + prop_name +
-         "' not found.");
+      throw new ODataException("Complex property '" + prop_name
+            + "' not found.");
    }
 
    @Override
    public ODataResponse getEntityMedia(ODataSingleProcessor processor, boolean attach_stream)
          throws ODataException
    {
-      User u = Security.getCurrentUser();
-      String user_name = (u == null ? null : u.getUsername());
-
       try
       {
          if (getPhysicalProduct() instanceof AsyncProduct)
          {
             if (attach_stream)
             {
-               AsyncProduct.class.cast(getPhysicalProduct()).asyncFetchData();
+               Order order = AsyncProduct.class.cast(getPhysicalProduct()).asyncFetchData();
+               ORDER_SERVICE.addOwner(order, Security.getCurrentUser());
             }
             return MediaResponseBuilder.prepareAsyncMediaResponse();
          }
+      }
+      catch (AsyncDataStoreException e)
+      {
+         throw new ExpectedException(e.getUserMessage(), HttpStatusCodes.fromStatusCode(e.getHttpStatusCode()));
       }
       catch (DataStoreException ex)
       {
          Throwable th = ex.getCause();
          if (th != null
-             && QuotaException.ParallelFetchResquestQuotaException.class.isAssignableFrom(th.getClass()))
+               && QuotaException.ParallelFetchResquestQuotaException.class.isAssignableFrom(th.getClass()))
          {
             throw new ExpectedException(th.getMessage(), HttpStatusCodes.FORBIDDEN);
          }
@@ -525,17 +554,24 @@ public class Product extends Node implements Closeable
       }
 
       ODataResponse rsp;
-      InputStream is = null;
+      InputStream input = null;
       try
       {
+         input = attach_stream? getInputStream(): null;
+         User u = Security.getCurrentUser();
+         String user_name = (u == null ? null : u.getUsername());
+         DownloadMetrics.DownloadActionListener metrics = null;
+
+         InputStream is = null;
          if (attach_stream)
          {
-            is = new BufferedInputStream(getInputStream());
+            is = new BufferedInputStream(input);
             if (requiresControl())
             {
                CopyStreamAdapter adapter = new CopyStreamAdapter();
                CopyStreamListener recorder =
                      new DownloadActionRecordListener(product.getUuid(), product.getIdentifier(), u);
+
                CopyStreamListener closer = new DownloadStreamCloserListener(is);
                adapter.addCopyStreamListener(recorder);
                adapter.addCopyStreamListener(closer);
@@ -548,11 +584,19 @@ public class Product extends Node implements Closeable
 
                is = builder.build();
             }
+            if (DL_METRICS.isPresent())
+            {
+               metrics = new DownloadMetrics.DownloadActionListener(DL_METRICS.get(), getItemClass().getUri(), user_name);
+               is = new ListenableStream(is, metrics);
+            }
          }
 
          // Computes ETag
-         String etag = getChecksumValue ();
-         if (etag == null) etag = getId ();
+         String etag = getChecksumValue();
+         if (etag == null)
+         {
+            etag = getId();
+         }
 
          // Prepare the HTTP header for stream transfer.
          rsp = MediaResponseBuilder.prepareMediaResponse(
@@ -562,17 +606,23 @@ public class Product extends Node implements Closeable
                getContentLength(),
                processor.getContext(),
                is);
+         if (metrics != null)
+         {
+            DL_METRICS.get().recordDownloadStart(getItemClass().getUri(), user_name);
+            String contentLength = rsp.getHeader("Content-Length");
+            metrics.setRequestedBytes(contentLength != null ? Long.decode(contentLength) : getContentLength());
+         }
       }
       // RegulationException must be handled separately as they are
       // user generated errors and not internal problems
       catch (RegulationException e)
       {
-         IOUtils.closeQuietly(is);
+         forceClose(input);
          throw new MediaRegulationException(e.getMessage());
       }
       catch (IOException | DataStoreException e)
       {
-         IOUtils.closeQuietly(is);
+         forceClose(input);
          throw new InvalidMediaException(e.getMessage());
       }
       return rsp;
@@ -607,17 +657,19 @@ public class Product extends Node implements Closeable
       if (!ns.getKeyPredicates().isEmpty())
       {
          res = Map.class.cast(res).get(
-            ns.getKeyPredicates().get(0).getLiteral());
+               ns.getKeyPredicates().get(0).getLiteral());
       }
 
       return res;
    }
 
    @Override
-   public void close () throws IOException
+   public void close() throws IOException
    {
       if (this.drbNode == null)
+      {
          return;
+      }
 
       if (this.drbNode instanceof DrbNodeImpl)
       {
@@ -638,9 +690,9 @@ public class Product extends Node implements Closeable
    }
 
    @Override
-   public List<Map<String, Object>> expand(String navlink_name, String self_url)
+   public List<Map<String, Object>> expand(String navlink_name, String self_url) throws ODataException
    {
-      switch(navlink_name)
+      switch (navlink_name)
       {
          case "Products":
             return Expander.mapToData(getProducts(), self_url);

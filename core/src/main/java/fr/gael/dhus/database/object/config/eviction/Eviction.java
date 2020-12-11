@@ -65,6 +65,7 @@ public class Eviction extends EvictionConfiguration
     * @param value filter
     * @throws ODataException could not generate executable filter
     */
+   @SuppressWarnings("unchecked")
    public void checkAndSetFilter(String value) throws ODataException
    {
       if (value == null)
@@ -127,9 +128,9 @@ public class Eviction extends EvictionConfiguration
     * Sets the OrderBy and tries to parse it.
     *
     * @param value OrderBy OData formatted {@code $orderby} expression
-    * @throws ODataException could not generate executable OrderBy
+    * @throws IllegalArgumentException could not generate executable OrderBy
     */
-   public void checkAndSetOrderBy(String value) throws ODataException
+   public void checkAndSetOrderBy(String value) throws IllegalArgumentException
    {
       if (value == null)
       {
@@ -137,29 +138,15 @@ public class Eviction extends EvictionConfiguration
       }
       else
       {
-         ODataExpressionParser.getProductExpressionParser().parseOrderByString(value);
+         try
+         {
+            ODataExpressionParser.getProductExpressionParser().parseOrderByString(value);
+         }
+         catch (ODataException ex)
+         {
+            throw new IllegalArgumentException(ex);
+         }
          super.setOrderBy(value);
-      }
-   }
-
-   /**
-    * This method calls {@link #checkAndSetOrderBy(String)} but suppresses the exception thrown if
-    * the OrderBy cannot be parsed/transformed, a warning is printed in the logs.
-    *
-    * @deprecated use {@link #checkAndSetOrderBy(String)} instead.
-    * @see EvictionConfiguration#setOrderBy(String)
-    */
-   @Override
-   @Deprecated
-   public void setOrderBy(String value)
-   {
-      try
-      {
-         checkAndSetOrderBy(value);
-      }
-      catch (ODataException ex)
-      {
-         LOGGER.warn("Could not parse orderby parameter for eviction '{}' from expression '{}'", name, value, ex);
       }
    }
 

@@ -40,6 +40,7 @@ public class CollectionModel implements EntityModel
    public static final FullQualifiedName FULL_QUALIFIED_NAME =
          new FullQualifiedName(DHuSODataServlet.NAMESPACE, ENTITY_TYPE_NAME);
 
+   public static final String PROPERTY_UUID = "UUID";
    public static final String PROPERTY_NAME = "Name";
    public static final String PROPERTY_DESCRIPTION = "Description";
 
@@ -55,13 +56,18 @@ public class CollectionModel implements EntityModel
             .setName(PROPERTY_DESCRIPTION)
             .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
             .setNullable(true);
+      
+      CsdlProperty uuid = new CsdlProperty()
+            .setName(PROPERTY_UUID)
+            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
+            .setNullable(true);
 
       CsdlPropertyRef keyRef = new CsdlPropertyRef().setName(PROPERTY_NAME);
 
       return new CsdlEntityType()
             .setName(ENTITY_TYPE_NAME)
             .setKey(Collections.singletonList(keyRef))
-            .setProperties(Arrays.asList(name, description))
+            .setProperties(Arrays.asList(name, description, uuid))
             .setAbstract(false);
    }
 

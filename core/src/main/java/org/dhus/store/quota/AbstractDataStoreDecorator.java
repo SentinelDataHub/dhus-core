@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,12 +19,15 @@
  */
 package org.dhus.store.quota;
 
+import java.util.List;
 import java.util.Objects;
 
 import org.dhus.Product;
 import org.dhus.store.StoreException;
 import org.dhus.store.datastore.DataStore;
 import org.dhus.store.datastore.DataStoreException;
+import org.dhus.store.datastore.DataStoreProduct;
+import org.dhus.store.derived.DerivedProductStore;
 import org.dhus.store.ingestion.IngestibleProduct;
 
 /**
@@ -36,6 +39,12 @@ public abstract class AbstractDataStoreDecorator<DST extends DataStore> implemen
 {
    protected final DST decorated;
 
+   /**
+    * Creates a new decorator.
+    *
+    * @param decorated a non null DataStore instance
+    * @throws NullPointerException if the `decorated` parameter is null
+    */
    public AbstractDataStoreDecorator(DST decorated)
    {
       Objects.requireNonNull(decorated);
@@ -55,9 +64,9 @@ public abstract class AbstractDataStoreDecorator<DST extends DataStore> implemen
    }
 
    @Override
-   public boolean isReadOnly()
+   public boolean canModifyReferences()
    {
-      return this.decorated.isReadOnly();
+      return this.decorated.canModifyReferences();
    }
 
    @Override
@@ -101,4 +110,107 @@ public abstract class AbstractDataStoreDecorator<DST extends DataStore> implemen
    {
       return this.decorated.addProductReference(uuid, product);
    }
+
+   @Override
+   public List<String> getProductList()
+   {
+      return this.decorated.getProductList();
+   }
+
+   @Override
+   public void close() throws Exception
+   {
+      this.decorated.close();
+   }
+
+   @Override
+   public boolean canHandleDerivedProducts()
+   {
+      return this.decorated.canHandleDerivedProducts();
+   }
+
+   @Override
+   public boolean hasKeyStore()
+   {
+      return this.decorated.hasKeyStore();
+   }
+
+   /**
+    * Add the `DerivedProductStore` trait to your DataStore decorator using the 'mixins' paradigm.
+    * See a usage in class {@link AbstractDataStoreDecorator.DerivedDataStore } below.
+    */
+   public static interface DataStoreDecoratorHelper extends DerivedProductStore
+   {
+      /**
+       * The only method to implement per the 'mixins' pattern is this getter.
+       *
+       * @return the decorated object
+       */
+      DerivedProductStore getDecorated();
+
+      @Override
+      default void addDerivedProduct(String uuid, String tag, Product product) throws StoreException
+      {
+         getDecorated().addDerivedProduct(uuid, tag, product);
+      }
+
+      @Override
+      default void deleteDerivedProduct(String uuid, String tag) throws StoreException
+      {
+         getDecorated().deleteDerivedProduct(uuid, tag);
+      }
+
+      @Override
+      default void deleteDerivedProducts(String uuid) throws StoreException
+      {
+         getDecorated().deleteDerivedProducts(uuid);
+      }
+
+      @Override
+      default DataStoreProduct getDerivedProduct(String uuid, String tag) throws StoreException
+      {
+         return getDecorated().getDerivedProduct(uuid, tag);
+      }
+
+      @Override
+      default boolean hasDerivedProduct(String uuid, String tag)
+      {
+         return getDecorated().hasDerivedProduct(uuid, tag);
+      }
+
+      @Override
+      default boolean addDerivedProductReference(String uuid, String tag, Product product) throws StoreException
+      {
+         return getDecorated().addDerivedProductReference(uuid, tag, product);
+      }
+
+      @Override
+      default void deleteDerivedProductReference(String uuid, String tag) throws StoreException
+      {
+         getDecorated().deleteDerivedProductReference(uuid, tag);
+      }
+   }
+
+   /**
+    * Subclass to add the DerivedProductStore interface and decorate Stores supporting Derived Product.
+    *
+    * @param <DPDST> implements both then DataStore and DerivedProductStore interfaces
+    */
+   public static abstract class DerivedDataStore<DPDST extends DataStore & DerivedProductStore>
+         extends AbstractDataStoreDecorator<DPDST>
+         implements DataStoreDecoratorHelper
+   {
+      public DerivedDataStore(DPDST decorated)
+      {
+         super(decorated);
+      }
+
+      @Override
+      public DerivedProductStore getDecorated()
+      {
+         return decorated;
+      }
+
+   }
+
 }

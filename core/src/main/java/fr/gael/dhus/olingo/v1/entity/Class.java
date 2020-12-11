@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -26,7 +26,6 @@ import fr.gael.dhus.olingo.v1.entityset.ClassEntitySet;
 import fr.gael.dhus.olingo.v1.map.impl.ClassMap;
 
 import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -131,7 +130,7 @@ public class Class extends AbstractEntity
    }
 
    @Override
-   public List<Map<String, Object>> expand(String navlink_name, String self_url)
+   public List<Map<String, Object>> expand(String navlink_name, String self_url) throws ODataException
    {
       if (navlink_name.equals("Classes"))
       {

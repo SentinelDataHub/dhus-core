@@ -600,7 +600,7 @@ public class User extends AbstractEntity
    }
 
    @Override
-   public List<Map<String, Object>> expand(String navlink_name, String root_url)
+   public List<Map<String, Object>> expand(String navlink_name, String root_url) throws ODataException
    {
       switch(navlink_name)
       {

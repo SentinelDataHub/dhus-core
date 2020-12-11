@@ -1,17 +1,21 @@
-/**
- * Copyright 2015, GAEL Consultant
- * 25 rue Alfred Nobel,
- * Parc Descartes Nobel, F-77420 Champs-sur-Marne, France
- * (tel) +33 1 64 73 99 55, (fax) +33 1 64 73 51 60
- * Contact: info@gael.fr
- * 
- * Gael Consultant Proprietary - Delivered under License Agreement.
- * Copying and Disclosure Prohibited Without Express Written 
- * Permission From Gael Consultant.
- * 
- * Author        : Frédéric PIDANCIER (frederic.pidancier@gael.fr)
- * Creation date : 29 oct. 2015 - 17:43:42 
- * 
+/*
+ * Data Hub Service (DHuS) - For Space data distribution.
+ * Copyright (C) 2015,2019 GAEL Systems
+ *
+ * This file is part of DHuS software sources.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package fr.gael.dhus.service;
 
@@ -24,14 +28,16 @@ public class SandBoxUser extends User
 {
    private static final long serialVersionUID = 4203811510444372440L;
    private Integer sandBox;
-   public SandBoxUser (String username, String password, boolean enabled, 
-      Integer sandBox, Collection<? extends GrantedAuthority> authorities)
-   { 
-      super(username, password, enabled, true, true, true, authorities); 
-      this.sandBox = sandBox; 
+
+   public SandBoxUser(String username, String password, boolean enabled,
+         Integer sandBox, Collection<? extends GrantedAuthority> authorities)
+   {
+      super(username, password, enabled, true, true, true, authorities);
+      this.sandBox = sandBox;
    }
+
    public Integer getSandBox()
-   { 
+   {
       return sandBox;
    }
 }

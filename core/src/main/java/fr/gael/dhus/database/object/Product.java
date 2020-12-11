@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -82,6 +82,9 @@ public class Product implements Serializable
    @Column(name = "ONLINE",columnDefinition = "boolean", nullable = false)
    private Boolean online;
 
+   @Column(name = "ON_DEMAND", columnDefinition = "boolean default false", nullable = false)
+   private Boolean onDemand = false;
+
    @ElementCollection (targetClass = MetadataIndex.class,
                        fetch = FetchType.LAZY)
    @Cascade(value={CascadeType.ALL})
@@ -158,7 +161,7 @@ public class Product implements Serializable
    {
       this.created = created;
    }
-   
+
    /**
     * @return the created
     */
@@ -369,6 +372,16 @@ public class Product implements Serializable
       this.online = online;
    }
 
+   public Boolean isOnDemand()
+   {
+      return onDemand;
+   }
+
+   public void setOnDemand(Boolean onDemand)
+   {
+      this.onDemand = onDemand;
+   }
+
    @Override
    public boolean equals (Object o)
    {
@@ -388,6 +401,13 @@ public class Product implements Serializable
       hash = 67 * hash + (this.uuid != null ? this.uuid.hashCode () : 0);
       return hash;
    }
+
+   @Override
+   public String toString()
+   {
+      return uuid + " (" + identifier + ")";
+   }
+
 
    @Embeddable
    public static class Download implements Serializable

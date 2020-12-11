@@ -124,6 +124,7 @@ public class ScannersCRUDScenario implements TestScenario
       ignored.add (STATUS);
       ignored.add (STATUSMESSAGE);
       ignored.add (PASSWORD);
+      ignored.add (USERNAME);
       return ignored;
    }
    

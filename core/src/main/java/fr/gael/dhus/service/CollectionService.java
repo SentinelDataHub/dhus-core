@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -221,8 +221,7 @@ public class CollectionService extends WebService
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public List<Long> getProductIds(String uuid)
    {
-      User user = securityService.getCurrentUser();
-      return collectionDao.getProductIds (uuid, user);
+      return collectionDao.getProductIds(uuid);
    }
 
    @PreAuthorize ("hasAnyRole('ROLE_DATA_MANAGER','ROLE_SEARCH')")

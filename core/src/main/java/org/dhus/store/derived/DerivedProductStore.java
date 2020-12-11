@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,6 +22,7 @@ package org.dhus.store.derived;
 import org.dhus.Product;
 import org.dhus.store.Store;
 import org.dhus.store.StoreException;
+import org.dhus.store.datastore.DataStoreProduct;
 
 /**
  * A DerivedProductStore is a means to store, access, and manage the physical data of derived products
@@ -66,8 +67,9 @@ public interface DerivedProductStore extends Store
     * @param uuid the UUID of the Product from which the returned product was derived
     * @param tag  the tag under which the derived product is referenced
     * @return a derived Product
+    * @throws StoreException on error
     */
-   public Product getDerivedProduct(String uuid, String tag) throws StoreException;
+   public DataStoreProduct getDerivedProduct(String uuid, String tag) throws StoreException;
 
    /**
     * Returns true if this DerivedProductStore has a derived product referenced under the tag,
@@ -76,7 +78,6 @@ public interface DerivedProductStore extends Store
     * @param uuid the UUID of the original product
     * @param tag  the tag under which the derived product is referenced
     * @return true if the derived product is found, false otherwise
-    * @throws StoreException
     */
    public boolean hasDerivedProduct(String uuid, String tag);
 
@@ -91,4 +92,12 @@ public interface DerivedProductStore extends Store
     */
    public boolean addDerivedProductReference(String uuid, String tag, Product product) throws StoreException;
 
+   /**
+    * Deletes a reference to a derived product to this DerivedProductStore, the data is not deleted from the storage.
+    *
+    * @param uuid the UUID of the original product
+    * @param tag  the tag under which the derived product is referenced
+    * @throws StoreException on error
+    */
+   public default void deleteDerivedProductReference(String uuid, String tag) throws StoreException {} // Default No-Op implementation
 }

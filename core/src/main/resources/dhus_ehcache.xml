@@ -107,7 +107,6 @@
    <cache name="security_context"
           eternal="false"
           maxEntriesLocalHeap="30000"
-          maxEntriesLocalDisk="3000"
           timeToIdleSeconds="0"
           timeToLiveSeconds="3600"
           memoryStoreEvictionPolicy="LFU">

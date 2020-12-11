@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ * Copyright (C) 2013-2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -25,7 +25,6 @@ import fr.gael.dhus.database.object.ProductCart;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -33,10 +32,11 @@ import java.util.List;
 import java.util.Set;
 
 import org.hibernate.HibernateException;
+import org.hibernate.query.Query;
 import org.hibernate.Session;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.orm.hibernate3.HibernateCallback;
+import org.springframework.orm.hibernate5.HibernateCallback;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -54,9 +54,13 @@ public class ProductCartDao extends HibernateDao<ProductCart, String>
    @SuppressWarnings("unchecked")
    public ProductCart getCartOfUser(final User user)
    {
-      List<ProductCart> result =
-            (List<ProductCart>) getHibernateTemplate().find("from ProductCart where user=?", user);
-      return (result.isEmpty()) ? null : result.get(0);
+      return getHibernateTemplate().execute(session ->
+      {
+         Query<ProductCart> query = session.createQuery("from ProductCart where user=?1");
+         query.setParameter(1, user);
+         List<ProductCart> result = query.list();
+         return (result.isEmpty()) ? null : result.get(0);
+      });
    }
 
    /**
@@ -83,9 +87,9 @@ public class ProductCartDao extends HibernateDao<ProductCart, String>
       getHibernateTemplate().execute(new HibernateCallback<Void>()
       {
          @Override
-         public Void doInHibernate(Session session) throws HibernateException, SQLException
+         public Void doInHibernate(Session session) throws HibernateException
          {
-            session.createSQLQuery("DELETE FROM CART_PRODUCTS p WHERE p.PRODUCT_ID = :pid")
+            session.createNativeQuery("DELETE FROM CART_PRODUCTS p WHERE p.PRODUCT_ID = :pid")
                   .setParameter("pid", product.getId()).executeUpdate();
             return null;
          }

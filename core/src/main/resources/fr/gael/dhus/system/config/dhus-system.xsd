@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2013-2018 GAEL Systems
+   Copyright (C) 2013-2019 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -98,6 +98,13 @@
                </xs:appinfo>
             </xs:annotation>
          </xs:element>
+         <xs:element minOccurs="0" name="transformation" type="dhusSystem:transformationConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="transformationConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
       </xs:all>
    </xs:complexType>
 
@@ -151,7 +158,7 @@
       <xs:all />
       <xs:attribute name="path" type="xs:string" default="./tomcat" />
    </xs:complexType>
-	
+
    <xs:complexType name="trashPathConfiguration">
       <xs:all />
       <xs:attribute name="path" type="xs:string" />
@@ -166,5 +173,35 @@
       <xs:attribute name="enabled" type="xs:boolean" default="true" />
       <xs:attribute name="batchModeEnabled" type="xs:boolean" default="false" />
    </xs:complexType>
+
+   <xs:complexType name="transformationConfiguration">
+      <xs:sequence>
+         <xs:element name="transformerQuotas" type="dhusSystem:transformerQuota" minOccurs="0" maxOccurs="unbounded">
+         </xs:element>
+         <xs:element name="userQuotas" minOccurs="0" maxOccurs="1">
+            <xs:complexType>
+              <xs:all />
+              <xs:attribute name="maxParallelTransformationsPerUser" type="dhusSystem:positiveInt" use="required" />
+            </xs:complexType>
+         </xs:element>
+      </xs:sequence>
+      <xs:attribute name="isMaster" type="xs:boolean" default="false" />
+      <xs:attribute name="interval" type="dhusSystem:positiveInt" default="60000" />
+      <xs:attribute name="targetDataStore" type="xs:string" />
+      <xs:attribute name="ingestCorePoolSize" type="dhusSystem:positiveInt" default="4" />
+   </xs:complexType>
+
+   <xs:complexType name="transformerQuota">
+      <xs:all />
+      <xs:attribute name="transformerName" type="xs:string" use="required" />
+      <xs:attribute name="maxPendingRequests" type="dhusSystem:positiveInt" default="4" />
+      <xs:attribute name="maxRunningRequests" type="dhusSystem:positiveInt" default="4" />
+   </xs:complexType>
+
+   <xs:simpleType name="positiveInt">
+      <xs:restriction base="xs:int">
+         <xs:minExclusive value="0" />
+      </xs:restriction>
+   </xs:simpleType>
 
 </xs:schema>

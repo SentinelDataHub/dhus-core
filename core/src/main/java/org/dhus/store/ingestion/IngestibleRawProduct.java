@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017,2018 GAEL Systems
+ * Copyright (C) 2017-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -27,7 +27,9 @@ import fr.gael.dhus.factory.MetadataFactory;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.system.config.ConfigurationManager;
 import fr.gael.dhus.system.init.WorkingDirectory;
+import fr.gael.dhus.util.DrbChildren;
 import fr.gael.dhus.util.WKTFootprintParser;
+
 import fr.gael.drb.DrbAttribute;
 import fr.gael.drb.DrbNode;
 import fr.gael.drb.DrbSequence;
@@ -45,9 +47,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -79,6 +81,7 @@ import org.apache.logging.log4j.Logger;
 
 import org.dhus.Product;
 import org.dhus.ProductFactory;
+import org.dhus.store.datastore.DataStoreProduct;
 import org.dhus.store.datastore.hfs.HfsProduct;
 
 import org.geotools.gml2.GMLConfiguration;
@@ -109,7 +112,10 @@ public class IngestibleRawProduct implements IngestibleProduct
 
    // base fields
    private final String uuid;
-   private final URL productUrl;
+   private final String productUrl; // FIXME should be URL
+   private final DrbNode productNode;
+   private final Product physicalProduct;
+   private Boolean onDemand;
 
    // set when called
    private Date ingestionDate = null;
@@ -123,11 +129,9 @@ public class IngestibleRawProduct implements IngestibleProduct
    private List<MetadataIndex> metadataIndexes = null;
 
    // private extracted data
-   private DrbNode productNode = null;
    private DrbCortexItemClass drbCortexItemClass = null;
 
    // physical data
-   private Product physicalProduct = null;
    private File quicklook = null;
    private File thumbnail = null;
    private HfsProduct quicklookProduct = null;
@@ -136,15 +140,67 @@ public class IngestibleRawProduct implements IngestibleProduct
    // public externally added properties (mutable)
    private final Map<String, Object> publicProperties;
 
-   public IngestibleRawProduct(URL productUrl)
+   // used to avoid removing DataStore products
+   private final boolean readOnlySource;
+
+   // timer
+   private long timerStartMillis;
+   private long timerStopMillis;
+
+   public static IngestibleRawProduct fromURL(URL productUrl)
    {
-      this(UUID.randomUUID().toString(), productUrl);
+      return fromURL(productUrl, false);
    }
 
-   public IngestibleRawProduct(String uuid, URL productUrl)
+   public static IngestibleRawProduct fromURL(URL productUrl, boolean onDemand)
+   {
+      DrbNode nodeFromPath = ProcessingUtils.getNodeFromPath(productUrl.getPath());
+      Product physicalProduct = ProductFactory.generateProduct(productUrl);
+
+      return new IngestibleRawProduct(
+            UUID.randomUUID().toString(),
+            productUrl.toString(),
+            nodeFromPath,
+            physicalProduct,
+            false,
+            onDemand);
+   }
+
+   public static IngestibleRawProduct fromDataStoreProduct(String uuid, DataStoreProduct dataStoreProduct,
+      fr.gael.dhus.database.object.Product databaseProduct)
+   {
+      DrbNode node = dataStoreProduct.getImpl(DrbNode.class);
+      String resourceLocation = dataStoreProduct.getResourceLocation();
+
+      // getFirstChild required for zips, but crashes extraction for TGZ
+      // something is wrong with DRB's Tar implementation (or Zip)
+      // similar issue with DhusODataV1Node and SMOS
+      // TODO fix DRB implementations and remove this
+      if (DrbChildren.shouldIngestionUseFirstChild(resourceLocation, node))
+      {
+         LOGGER.debug("Skipping first child of DrbNode from product at {}", resourceLocation);
+         node = node.getFirstChild();
+      }
+
+      return new IngestibleRawProduct(uuid, resourceLocation, node, dataStoreProduct, true, databaseProduct.getIngestionDate(), false);
+   }
+
+   private IngestibleRawProduct(String uuid, String productUrl, DrbNode productNode, Product physicalProduct, boolean readOnlySource, Date ingestionDate, boolean onDemand)
+   {
+      this(uuid,productUrl,productNode,physicalProduct,readOnlySource, onDemand);
+      this.ingestionDate = ingestionDate;
+   }
+
+   private IngestibleRawProduct(String uuid, String productUrl, DrbNode productNode, Product physicalProduct, boolean readOnlySource, boolean onDemand)
    {
       this.uuid = uuid;
       this.productUrl = productUrl;
+      this.productNode = productNode;
+      this.physicalProduct = physicalProduct;
+      this.onDemand = onDemand;
+
+      this.readOnlySource = readOnlySource;
+
       this.publicProperties = new HashMap<>();
    }
 
@@ -189,8 +245,8 @@ public class IngestibleRawProduct implements IngestibleProduct
          }
          else
          {
-            LOGGER.warn("No defined identifier - using filename");
-            identifier = productUrl.getFile();
+            LOGGER.warn("No defined identifier - using default name");
+            identifier = getName();
          }
       }
       return identifier;
@@ -368,7 +424,6 @@ public class IngestibleRawProduct implements IngestibleProduct
       if (productNode != null)
       {
          closeNode(productNode);
-         productNode = null;
       }
 
       if (quicklook != null && quicklook.exists())
@@ -402,10 +457,6 @@ public class IngestibleRawProduct implements IngestibleProduct
 
    private DrbNode getProductNode()
    {
-      if (productNode == null)
-      {
-         productNode = ProcessingUtils.getNodeFromPath(productUrl.getPath());
-      }
       return productNode;
    }
 
@@ -851,11 +902,6 @@ public class IngestibleRawProduct implements IngestibleProduct
 
    private Product toPhysicalProduct()
    {
-      if (physicalProduct == null)
-      {
-         physicalProduct = ProductFactory.generateProduct(productUrl);
-      }
-
       return physicalProduct;
    }
 
@@ -876,16 +922,49 @@ public class IngestibleRawProduct implements IngestibleProduct
    @Override
    public boolean removeSource()
    {
-      LOGGER.info("Deleting source of product {} at: {}", uuid, productUrl);
-      try
+      if (!readOnlySource)
       {
-         Files.deleteIfExists(Paths.get(productUrl.toURI()));
-         return true;
+         LOGGER.info("Deleting source of product {} at: {}", uuid, productUrl);
+         try
+         {
+            Path productPath = Paths.get(new URL(productUrl).getPath());
+            return Files.deleteIfExists(productPath);
+         }
+         catch (IOException | RuntimeException e)
+         {
+            LOGGER.warn("Cannot delete source of product {} at: {} ({})", uuid, productUrl, e.getMessage());
+            return false;
+         }
       }
-      catch (IOException | URISyntaxException | RuntimeException e)
-      {
-         LOGGER.warn("Cannot delete source of product {} at: {} ({})", uuid, productUrl, e.getMessage());
-         return false;
-      }
+      return false;
+   }
+
+   @Override
+   public Boolean isOnDemand()
+   {
+      return onDemand;
+   }
+
+   public void setOnDemand(Boolean onDemand)
+   {
+      this.onDemand = onDemand;
+   }
+
+   @Override
+   public void startTimer()
+   {
+      timerStartMillis = System.currentTimeMillis();
+   }
+
+   @Override
+   public void stopTimer()
+   {
+      timerStopMillis = System.currentTimeMillis();
+   }
+
+   @Override
+   public long getIngestionTimeMillis()
+   {
+      return timerStopMillis - timerStartMillis;
    }
 }

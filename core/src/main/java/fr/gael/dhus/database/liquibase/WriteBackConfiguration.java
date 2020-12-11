@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -39,20 +39,21 @@ public class WriteBackConfiguration implements CustomTaskChange
       try
       {
          // Avoid direct dependency to the Spring context
-         Class cls = Class.forName("fr.gael.dhus.database.liquibase.WriteBackConfigurationEmbed");
-         Class<CustomTaskChange> contextAwareTaskClass = cls.asSubclass(CustomTaskChange.class);
-         CustomTaskChange contextAwareTask = contextAwareTaskClass.newInstance();
+         Class<?> cls = Class.forName("fr.gael.dhus.database.liquibase.WriteBackConfigurationEmbed");
+         Class<? extends CustomTaskChange> contextAwareTaskClass = cls.asSubclass(CustomTaskChange.class);
+         CustomTaskChange contextAwareTask = contextAwareTaskClass.getDeclaredConstructor().newInstance();
          contextAwareTask.execute(database);
       }
-      catch (ClassNotFoundException ex)
+      catch (ReflectiveOperationException ex)
       {
+         Throwable cause = ex.getCause();
+         if (cause == null || !(cause instanceof ReflectiveOperationException))
+         {
+            throw new CustomChangeException(cause);
+         }
          // Spring context not in classpath
          // This change task should be considered successful in that case,
          // because there is no config file to write to
-      }
-      catch (InstantiationException | IllegalAccessException ex)
-      {
-         throw new CustomChangeException(ex);
       }
    }
 

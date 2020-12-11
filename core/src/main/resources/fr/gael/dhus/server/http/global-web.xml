@@ -31,7 +31,7 @@
    </listener>
 
    <session-config>
-      <!-- 24h timeout -->
-      <session-timeout>1440</session-timeout>
+      <!-- 5 minutes timeout (HTTP sessions not used by DHuS) -->
+      <session-timeout>5</session-timeout>
    </session-config>
 </web-app>

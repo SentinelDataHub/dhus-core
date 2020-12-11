@@ -80,11 +80,6 @@ public class JobScheduler extends SchedulerFactoryBean implements
       return triggers.get (SystemCheckJob.class).getFireTimeAfter (new Date ());
    }
 
-   public Date getNextFileScannerJobSchedule () throws SchedulerException
-   {
-      return triggers.get(ScannersJob.class).getFireTimeAfter(new Date());
-   }
-
    public Date getNextSearchesJobSchedule () throws SchedulerException
    {
       return triggers.get (SearchesJob.class).getFireTimeAfter (new Date ());

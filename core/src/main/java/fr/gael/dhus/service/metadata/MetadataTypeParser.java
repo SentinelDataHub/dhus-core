@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2015,2016 GAEL Systems
+ * Copyright (C) 2015,2016,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,8 +19,6 @@
  */
 package fr.gael.dhus.service.metadata;
 
-import fr.gael.dhus.messaging.jms.Message;
-import fr.gael.dhus.messaging.jms.Message.MessageType;
 import fr.gael.dhus.service.metadata.xml.MetadataTypes;
 
 import java.io.StringReader;
@@ -61,11 +59,8 @@ public class MetadataTypeParser
                case ValidationEvent.WARNING:
                case ValidationEvent.ERROR:
                case ValidationEvent.FATAL_ERROR:
-                  LOGGER.error(new Message(MessageType.SYSTEM,
-                        "XML Matadata Type parsing failure at line "
-                              + event.getLocator().getLineNumber() + ", column "
-                              + event.getLocator().getColumnNumber() + ": "
-                              + event.getMessage()));
+                  LOGGER.error("XML Matadata Type parsing failure at line {}, column {}: {}",
+                        event.getLocator().getLineNumber(), event.getLocator().getColumnNumber(), event.getMessage());
                   break;
                default:
                   LOGGER.warn("Invalid configuration validation event!");
@@ -128,8 +123,7 @@ public class MetadataTypeParser
 
          if (LOGGER.isDebugEnabled())
          {
-            LOGGER.debug("Parsed \"" + metadata_type.getName() + "\" ("
-                  + metadata_type.getId() + ") metadata type.");
+            LOGGER.debug("Parsed \"{}\" ({}) metadata type", metadata_type.getName(), metadata_type.getId());
          }
       }
 

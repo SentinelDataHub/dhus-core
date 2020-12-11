@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016-2019 GAEL Systems
+ * Copyright (C) 2016-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,7 +19,9 @@
  */
 package org.dhus.store.datastore;
 
+import fr.gael.dhus.database.object.KeyStoreEntry;
 import fr.gael.dhus.datastore.Destination;
+import fr.gael.dhus.service.KeyStoreService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
@@ -31,10 +33,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
@@ -47,58 +50,30 @@ import org.apache.logging.log4j.Logger;
 import org.dhus.Product;
 import org.dhus.ProductConstants;
 import org.dhus.store.StoreException;
-import org.dhus.store.datastore.DataStoreFactory.InvalidConfigurationException;
-import org.dhus.store.datastore.async.AsyncDataSource;
-import org.dhus.store.datastore.config.DataStoreConf;
+import org.dhus.store.datastore.async.AsyncDataStore;
+import org.dhus.store.datastore.config.DataStoreRestriction;
 import org.dhus.store.datastore.hfs.HfsDataStore;
 import org.dhus.store.derived.DerivedProductStore;
 import org.dhus.store.derived.DerivedProductStoreService;
 import org.dhus.store.ingestion.IngestibleProduct;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * This class implements the default DataStore container that is constructed according to aggregated DataStores.
  * The execution of this DataStore commands will automatically be propagated to the handled DataStores.
  */
+// TODO reorganize methods for better readability
 public class DefaultDataStoreManager implements DataStoreManager, DerivedProductStoreService
 {
    private static final Logger LOGGER = LogManager.getLogger();
 
    private static final String DATA_STORE_NAME = "DefaultDataStoreService";
 
-   /** Default constructor needed for Spring to construct this bean. */
-   @SuppressWarnings("unused")
-   private DefaultDataStoreManager() {}
-
    private final SortedSet<DataStore> datastores = new ConcurrentSkipListSet<>(
-      new Comparator<DataStore>()
-      {
-         @Override
-         public int compare(DataStore ds1, DataStore ds2)
-         {
-            return DataStores.compare(ds1, ds2);
-         }
-      }
-   );
+         (DataStore ds1, DataStore ds2) -> DataStores.compare(ds1, ds2));
 
-   /**
-    * Construct a DataStore from a list of DataStoreConf.
-    *
-    * @param confs
-    */
-   public DefaultDataStoreManager(List<DataStoreConf> confs)
-   {
-      for (DataStoreConf conf : confs)
-      {
-         try
-         {
-            this.datastores.add(DataStoreFactory.createDataStore(conf));
-         }
-         catch (InvalidConfigurationException e)
-         {
-            LOGGER.warn("Invalid configuration for DataStore '{}'", conf);
-         }
-      }
-   }
+   @Autowired
+   private KeyStoreService keyStoreService;
 
    @Override
    public String getName()
@@ -107,39 +82,33 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
    }
 
    @Override
-   public Product get(String id) throws DataStoreException
+   public Product get(String uuid) throws DataStoreException
    {
-      Iterator<DataStore> iterator = datastores.iterator();
-      while (iterator.hasNext())
+      LOGGER.debug("Finding product {} in data stores...", uuid);
+      List<DataStore> datastoreList = listForUuid(uuid, true);
+      for (DataStore datastore : datastoreList)
       {
-         DataStore datastore = iterator.next();
          try
          {
-            if (datastore.hasProduct(id))
-            {
-               return datastore.get(id);
-            }
-            if (AsyncDataSource.class.isAssignableFrom(datastore.getClass()) // Async Data Store
-             && AsyncDataSource.class.cast(datastore).hasAsyncProduct(id))
-            {
-               return datastore.get(id);
-            }
+            return datastore.get(uuid);
          }
          catch (DataStoreException e)
          {
             continue;
          }
       }
-      throw new ProductNotFoundException("Cannot retrieve product for id " + id);
+      LOGGER.debug("Product {} not found in any data store", uuid);
+
+      throw new ProductNotFoundException("Cannot retrieve product for id " + uuid);
    }
 
-   // TODO removed this method?
+   // TODO remove this method?
    // This method MUST be transactional: in case of failure all the DataStores that have been set
    // in this context must be rolled back.
    @Override
    public void set(String uuid, Product product) throws DataStoreException
    {
-      for (DataStore datastore:datastores)
+      for (DataStore datastore : datastores)
       {
          try
          {
@@ -161,14 +130,29 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
       }
    }
 
-   // TODO merge addProduct() and set()
    @Override
-   public void addProduct(IngestibleProduct inProduct) throws StoreException
+   public void addProduct(IngestibleProduct inProduct, String targetDataStore) throws StoreException
    {
-      LOGGER.info("Inserting product {} in DataStores", inProduct.getUuid());
+      if (targetDataStore == null)
+      {
+         LOGGER.info("No target data store, inserting product {} in all data stores", inProduct.getUuid());
+      }
+      else
+      {
+         LOGGER.info("Inserting product {} in target data store {}", inProduct.getUuid(), targetDataStore);
+      }
+
       List<Throwable> throwables = new ArrayList<>();
+      int count = 0;
       for (DataStore datastore: datastores)
       {
+         // only insert product in target data store
+         // except when targetDataStore is null, in which case insert everywhere
+         if (targetDataStore != null && !datastore.getName().equals(targetDataStore))
+         {
+            continue;
+         }
+
          if (Thread.interrupted())
          {
             Thread.currentThread().interrupt();
@@ -179,6 +163,10 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
          {
             long duration = System.currentTimeMillis();
             datastore.addProduct(inProduct);
+            LOGGER.debug("Added product {} to data store '{}'", inProduct.getUuid(), datastore.getName());
+
+            count++;
+
             duration = System.currentTimeMillis() - duration;
             LOGGER.info("Product {} of UUID {} and size {} stored in {} datastore in {}ms",
                   inProduct.getName(), inProduct.getUuid(),
@@ -193,8 +181,14 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
             throwables.add(e);
          }
       }
+      LOGGER.info("Product {} inserted in {} data stores", inProduct.getUuid(), count);
       DataStores.throwErrors(throwables, "addProduct", inProduct.getUuid());
-      LOGGER.info("Product {} inserted", inProduct.getUuid());
+   }
+
+   @Override
+   public void deleteProduct(String uuid) throws DataStoreException
+   {
+      deleteProduct(uuid, Destination.NONE);
    }
 
    @Override
@@ -204,17 +198,26 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
       makeBackupProduct(uuid, destination);
 
       LOGGER.info("Deleting product {} from all DataStores", uuid);
+
+      // get list of products
+      List<DataStore> datastoreList = listForUuid(uuid, false);
+
       List<Throwable> throwables = new ArrayList<>();
       boolean deleted = false;
-      for (DataStore datastore: datastores)
+      int count = 0;
+      for (DataStore datastore: datastoreList)
       {
          try
          {
             datastore.deleteProduct(uuid);
+            LOGGER.debug("Deleted product {} from data store '{}'", uuid, datastore.getName());
+
             deleted = true;
+            count++;
          }
          catch (ReadOnlyDataStoreException | ProductNotFoundException e)
          {
+            LOGGER.debug("Cannot remove product {} from data store '{}': {}", uuid, datastore.getName(), e.getMessage());
             continue;
          }
          catch (DataStoreException | RuntimeException e)
@@ -227,13 +230,8 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
          throw new ProductNotFoundException();
       }
 
+      LOGGER.debug("Removed product {} from {} data stores", uuid, count);
       DataStores.throwErrors(throwables, "deleteProduct", uuid);
-   }
-
-   @Override
-   public void deleteProduct(String uuid) throws DataStoreException
-   {
-      deleteProduct(uuid, Destination.NONE);
    }
 
    private void makeBackupProduct(String uuid, Destination destination)
@@ -255,17 +253,20 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
       // is to use an HFSDataStore that isn't read-only
       for (DataStore dataStore: datastores)
       {
-         if (!dataStore.isReadOnly() && dataStore instanceof HfsDataStore
-               && dataStore.hasProduct(uuid))
+         if (dataStore instanceof HfsDataStore && dataStore.hasProduct(uuid))
          {
-            try
+            HfsDataStore hfsStore = (HfsDataStore) dataStore;
+            if (hfsStore.getRestriction() == DataStoreRestriction.NONE)
             {
-               moveProduct((HfsDataStore) dataStore, uuid, destination);
-               return;
-            }
-            catch (DataStoreException | IOException e)
-            {
-               exception = e;
+               try
+               {
+                  moveProduct((HfsDataStore) dataStore, uuid, destination);
+                  return;
+               }
+               catch (DataStoreException | IOException e)
+               {
+                  exception = e;
+               }
             }
          }
       }
@@ -369,16 +370,10 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
    @Override
    public boolean hasProduct(String uuid)
    {
-      Iterator<DataStore> iterator = datastores.iterator();
-      while (iterator.hasNext())
-      {
-         DataStore datastore = iterator.next();
-         if (datastore.hasProduct(uuid))
-         {
-            return true;
-         }
-      }
-      return false;
+      // get list of products
+      List<DataStore> datastoreList = listForUuid(uuid, false);
+      // at least one datastore has the product if not empty
+      return !datastoreList.isEmpty();
    }
 
    @Override
@@ -424,15 +419,20 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
    @Override
    public boolean addProductReference(String uuid, Product product) throws DataStoreException
    {
+      LOGGER.debug("Adding product {} reference in all suitable data stores...", uuid);
       List<Throwable> throwables = new ArrayList<>();
       boolean added = false;
-      for (DataStore dataStore: datastores)
+      int count = 0;
+      for (DataStore datastore: datastores)
       {
          try
          {
-            if (dataStore.addProductReference(uuid, product))
+            if (datastore.addProductReference(uuid, product))
             {
                added = true;
+               LOGGER.debug("Added product {} reference to data store '{}'", uuid, datastore.getName());
+
+               count++;
             }
          }
          catch (ReadOnlyDataStoreException e)
@@ -444,6 +444,8 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
             throwables.add(e);
          }
       }
+
+      LOGGER.debug("Added product {} reference in {} data stores", uuid, count);
       DataStores.throwErrors(throwables, "addProductReference", uuid);
       return added;
    }
@@ -468,22 +470,39 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
    }
 
    @Override
-   public boolean isReadOnly()
+   public boolean canModifyReferences()
    {
-      return false;
+      return true;
    }
 
    @Override
    public void addDerivedProduct(String uuid, String tag, Product product) throws StoreException
    {
+      addDerivedProduct(uuid, tag, product, null);
+   }
+
+   @Override
+   public void addDerivedProduct(String uuid, String tag, Product product, String targetDataStore) throws StoreException
+   {
       List<Throwable> throwables = new ArrayList<>();
       for (DataStore datastore: datastores)
       {
-         if (!datastore.isReadOnly() && datastore instanceof DerivedProductStore)
+         // only insert product in target data store
+         // except when targetDataStore is null, in which case insert everywhere
+         if (targetDataStore != null && !datastore.getName().equals(targetDataStore))
+         {
+            continue;
+         }
+
+         if (datastore.canHandleDerivedProducts ())
          {
             try
             {
                ((DerivedProductStore) datastore).addDerivedProduct(uuid, tag, product);
+            }
+            catch (ReadOnlyDataStoreException suppressed)
+            {
+               continue;
             }
             catch (StoreException | RuntimeException e)
             {
@@ -495,17 +514,17 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
    }
 
    @Override
-   public void addDefaultDerivedProducts(IngestibleProduct inProduct) throws StoreException
+   public void addDefaultDerivedProducts(IngestibleProduct inProduct, String targetDataStore) throws StoreException
    {
       LOGGER.info("Retrieving derived products from product {}", inProduct.getUuid());
 
       if (inProduct.getQuicklook() != null)
       {
-         addDerivedProduct(inProduct.getUuid(), DerivedProductStore.QUICKLOOK_TAG, inProduct.getQuicklook());
+         addDerivedProduct(inProduct.getUuid(), DerivedProductStore.QUICKLOOK_TAG, inProduct.getQuicklook(), targetDataStore);
       }
       if (inProduct.getThumbnail() != null)
       {
-         addDerivedProduct(inProduct.getUuid(), DerivedProductStore.THUMBNAIL_TAG, inProduct.getThumbnail());
+         addDerivedProduct(inProduct.getUuid(), DerivedProductStore.THUMBNAIL_TAG, inProduct.getThumbnail(), targetDataStore);
       }
 
       LOGGER.info("Derived products retrieved from product {}", inProduct.getUuid());
@@ -533,7 +552,7 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
       boolean added = false;
       for (DataStore datastore: datastores)
       {
-         if(datastore instanceof DerivedProductStore)
+         if (datastore.canHandleDerivedProducts())
          {
             try
             {
@@ -541,6 +560,10 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
                {
                   added = true;
                }
+            }
+            catch (ReadOnlyDataStoreException suppressed)
+            {
+               continue;
             }
             catch (StoreException | RuntimeException e)
             {
@@ -556,18 +579,23 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
    public void deleteDerivedProduct(String uuid, String tag) throws StoreException
    {
       List<Throwable> throwables = new ArrayList<>();
-      for (DataStore datastore: datastores)
+
+      // get list from keystores
+      List<DataStore> datastoreList = listForUuidDerived(uuid, tag);
+
+      for (DataStore datastore: datastoreList)
       {
-         if (!datastore.isReadOnly() && datastore instanceof DerivedProductStore)
+         try
          {
-            try
-            {
-               ((DerivedProductStore) datastore).deleteDerivedProduct(uuid, tag);
-            }
-            catch (StoreException | RuntimeException e)
-            {
-               throwables.add(e);
-            }
+            ((DerivedProductStore) datastore).deleteDerivedProduct(uuid, tag);
+         }
+         catch (ReadOnlyDataStoreException | ProductNotFoundException e)
+         {
+            continue;
+         }
+         catch (StoreException | RuntimeException e)
+         {
+            throwables.add(e);
          }
       }
       DataStores.throwErrors(throwables, "deleteDerivedProduct", uuid);
@@ -578,36 +606,38 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
    {
       LOGGER.info("Deleting derived products of {}", uuid);
       List<Throwable> throwables = new ArrayList<>();
-      for (DataStore datastore: datastores)
+
+      try
       {
-         if (!datastore.isReadOnly() && datastore instanceof DerivedProductStore)
-         {
-            try
-            {
-               ((DerivedProductStore) datastore).deleteDerivedProducts(uuid);
-            }
-            catch (StoreException | RuntimeException e)
-            {
-               throwables.add(e);
-            }
-         }
+         deleteDerivedProduct(uuid, DerivedProductStore.QUICKLOOK_TAG);
       }
+      catch (Exception e)
+      {
+         throwables.add(e);
+      }
+
+      try
+      {
+         deleteDerivedProduct(uuid, DerivedProductStore.THUMBNAIL_TAG);
+      }
+      catch (Exception e)
+      {
+         throwables.add(e);
+      }
+
       DataStores.throwErrors(throwables, "deleteDerivedProducts", uuid);
    }
 
    @Override
-   public Product getDerivedProduct(String uuid, String tag) throws StoreException
+   public DataStoreProduct getDerivedProduct(String uuid, String tag) throws StoreException
    {
-      for (DataStore datastore: datastores)
+      // get list from keystores
+      List<DataStore> datastoreList = listForUuidDerived(uuid, tag);
+
+      for (DataStore datastore: datastoreList)
       {
-         if (datastore instanceof DerivedProductStore)
-         {
-            DerivedProductStore derivedProductStore = (DerivedProductStore) datastore;
-            if (derivedProductStore.hasDerivedProduct(uuid, tag))
-            {
-               return derivedProductStore.getDerivedProduct(uuid, tag);
-            }
-         }
+         DerivedProductStore derivedProductStore = (DerivedProductStore) datastore;
+         return derivedProductStore.getDerivedProduct(uuid, tag);
       }
       throw new ProductNotFoundException();
    }
@@ -615,10 +645,12 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
    @Override
    public boolean hasDerivedProduct(String uuid, String tag)
    {
-      for (DataStore datastore: datastores)
+      // get list from keystores
+      List<DataStore> datastoreList = listForUuidDerived(uuid, tag);
+
+      for (DataStore datastore: datastoreList)
       {
-         if (datastore instanceof DerivedProductStore
-               && ((DerivedProductStore) datastore).hasDerivedProduct(uuid, tag))
+         if (((DerivedProductStore) datastore).hasDerivedProduct(uuid, tag))
          {
             return true;
          }
@@ -677,5 +709,115 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
          }
       }
       return false;
+   }
+
+   @Override
+   public Map<String, String> getResourceLocations(String uuid) throws DataStoreException
+   {
+      // get list
+      List<DataStore> datastoreList = listForUuid(uuid, false);
+
+      Map<String, String> locations = new HashMap<>();
+      for (DataStore datastore: datastoreList)
+      {
+         locations.put(datastore.getName(), ((DataStoreProduct) datastore.get(uuid)).getResourceLocation());
+      }
+      return locations;
+   }
+
+   @Override
+   public int getDefaultDerivedProdutCount(String uuid)
+   {
+      int count = 0;
+      if (hasDerivedProduct(uuid, DerivedProductStore.QUICKLOOK_TAG))
+      {
+         count++;
+      }
+      if (hasDerivedProduct(uuid, DerivedProductStore.THUMBNAIL_TAG))
+      {
+         count++;
+      }
+      return count;
+   }
+
+   @Override
+   public boolean canHandleDerivedProducts()
+   {
+      return true;
+   }
+
+   @Override
+   public boolean hasKeyStore()
+   {
+      return false;
+   }
+
+   private List<DataStore> listForUuid(String uuid, boolean includeAsync)
+   {
+      Set<String> datastoreNames = keyStoreService.listUnalteredForUuid(uuid).stream()
+            .map(KeyStoreEntry::getKeyStore)
+            .collect(Collectors.toSet());
+
+      // return data stores found in keystores
+      // and data stores that do no have a keystore
+      // and async data stores
+      return datastores.stream()
+            .filter(datastore -> {
+               // standard case, data store with keystore
+               if (datastoreNames.contains(datastore.getName()))
+               {
+                  return true;
+               }
+               // case of data store without keystore, usually a remote data store
+               if (!datastore.hasKeyStore() && datastore.hasProduct(uuid))
+               {
+                  return true;
+               }
+               // case of async data stores if included
+               if (includeAsync
+                     && AsyncDataStore.class.isAssignableFrom(datastore.getClass())
+                     && AsyncDataStore.class.cast(datastore).hasAsyncProduct(uuid))
+               {
+                  LOGGER.debug("Found async product in {}", datastore.getName());
+                  // do NOT put async products in registry
+                  return true;
+               }
+               return false;
+            })
+            .collect(Collectors.toList());
+   }
+
+   private List<DataStore> listForUuidDerived(String uuid, String tag)
+   {
+      Set<String> datastoreNames = keyStoreService.listDerivedForUuid(uuid, tag).stream()
+            .map(KeyStoreEntry::getKeyStore)
+            .collect(Collectors.toSet());
+
+      // return data stores found in keystores
+      // and data stores that do no have a keystore
+      // do not use registry
+      return datastores.stream()
+            .filter(datastore -> {
+               // only check derived product stores
+               if (!datastore.canHandleDerivedProducts())
+               {
+                  return false;
+               }
+
+               // standard case, data store with keystore
+               if (datastoreNames.contains(datastore.getName()))
+               {
+                  LOGGER.debug("Found local derived product in {}", datastore.getName());
+                  return true;
+               }
+               // case of data store without keystore, usually a remote data store
+               if (!datastore.hasKeyStore() && ((DerivedProductStore) datastore).hasDerivedProduct(uuid, tag))
+               {
+                  LOGGER.debug("Found remote derived product in {}", datastore.getName());
+                  return true;
+               }
+               return false;
+            })
+            .collect(Collectors.toList());
    }
 }

@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2017 GAEL Systems
+   Copyright (C) 2017-2019 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -28,10 +28,6 @@
 
    <jxb:bindings schemaLocation="dhus-configuration.xsd">
       <namespace:prefix name="conf" />
-   </jxb:bindings>
-
-   <jxb:bindings schemaLocation="dhus-jms.xsd">
-      <namespace:prefix name="jms" />
    </jxb:bindings>
 
    <jxb:bindings schemaLocation="dhus-messaging.xsd">

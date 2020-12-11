@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2014-2018 GAEL Systems
+ * Copyright (C) 2014-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -35,31 +35,31 @@ import org.apache.olingo.odata2.api.uri.expression.PropertyExpression;
 
 public class ProductSQLVisitor extends SQLVisitor
 {
-   public ProductSQLVisitor (FilterExpression filter, OrderByExpression order)
+   public ProductSQLVisitor(FilterExpression filter, OrderByExpression order)
          throws ExceptionVisitExpression, ODataApplicationException
    {
       super(Product.class, filter, order);
    }
 
    @Override
-   public Object visitProperty (PropertyExpression property_expression,
-      String uri_literal, EdmTyped edm_property)
+   public Object visitProperty(PropertyExpression property_expression, String uri_literal, EdmTyped edm_property)
    {
       if (edm_property == null)
-         throw new IllegalArgumentException ("Property not found: " +
-               uri_literal);
+      {
+         throw new IllegalArgumentException("Property not found: " + uri_literal);
+      }
 
       Member member = null;
       switch (uri_literal)
       {
          case ItemEntitySet.ID:
          {
-            member = new Member ("uuid");
+            member = new Member("uuid");
             break;
          }
          case ItemEntitySet.NAME:
          {
-            member = new Member ("identifier");
+            member = new Member("identifier");
             break;
          }
          case ItemEntitySet.CONTENT_LENGTH:
@@ -69,17 +69,22 @@ public class ProductSQLVisitor extends SQLVisitor
          }
          case ProductEntitySet.CREATION_DATE:
          {
-            member = new Member ("created");
+            member = new Member("created");
             break;
          }
          case ProductEntitySet.INGESTION_DATE:
          {
-            member = new Member ("ingestionDate");
+            member = new Member("ingestionDate");
+            break;
+         }
+         case ProductEntitySet.MODIFICATION_DATE:
+         {
+            member = new Member("updated");
             break;
          }
          case ProductEntitySet.CONTENT_GEOMETRY:
          {
-            member = new Member ("footPrint");
+            member = new Member("footPrint");
             break;
          }
          // Not used really, but needed to be here.
@@ -89,17 +94,22 @@ public class ProductSQLVisitor extends SQLVisitor
          }
          case Model.TIME_RANGE_START:
          {
-            member = new Member ("contentStart");
+            member = new Member("contentStart");
             break;
          }
          case Model.TIME_RANGE_END:
          {
-            member = new Member ("contentEnd");
+            member = new Member("contentEnd");
             break;
          }
          case ProductEntitySet.ONLINE:
          {
             member = new Member("online");
+            break;
+         }
+         case ProductEntitySet.ON_DEMAND:
+         {
+            member = new Member("onDemand");
             break;
          }
 
@@ -109,15 +119,13 @@ public class ProductSQLVisitor extends SQLVisitor
          case NodeEntitySet.VALUE:
          case NodeEntitySet.CHILDREN_NUMBER:
          {
-            throw new IllegalArgumentException ("Property \"" + uri_literal +
-                  "\" is not filterable.");
+            throw new IllegalArgumentException("Property \"" + uri_literal + "\" is not filterable.");
          }
 
          // Unsupported or invalid properties
          default:
          {
-            throw new IllegalArgumentException ("Property not supported: " +
-                  uri_literal);
+            throw new IllegalArgumentException("Property not supported: " + uri_literal);
          }
       }
       return member;

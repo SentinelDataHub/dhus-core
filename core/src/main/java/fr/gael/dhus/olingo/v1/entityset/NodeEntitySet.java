@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2014-2016,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -38,6 +38,7 @@ import org.apache.olingo.odata2.api.edm.provider.AssociationSetEnd;
 import org.apache.olingo.odata2.api.edm.provider.EntityType;
 import org.apache.olingo.odata2.api.edm.provider.NavigationProperty;
 import org.apache.olingo.odata2.api.edm.provider.SimpleProperty;
+import org.apache.olingo.odata2.api.exception.ODataException;
 
 public class NodeEntitySet extends AbstractEntitySet<Node>
 {
@@ -195,7 +196,8 @@ public class NodeEntitySet extends AbstractEntitySet<Node>
 
    @Override
    public List<Map<String, Object>> expand(String navlink_name, String self_url,
-         Map<?, AbstractEntity> entities, Map<String, Object> key)
+         Map<? extends Object, ? extends AbstractEntity> entities, Map<String, Object> key)
+         throws ODataException
    {
       return Expander.expandFeedSingletonKey(navlink_name, self_url, entities, key, ItemEntitySet.ID);
    }

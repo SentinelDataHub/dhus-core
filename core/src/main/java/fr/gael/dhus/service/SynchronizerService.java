@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2015-2018 GAEL Systems
+ * Copyright (C) 2015-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -169,7 +169,7 @@ public class SynchronizerService implements ISynchronizerService
        T createSynchronizer(String label, String cronExpression, Class<T> type)
          throws ParseException, ReflectiveOperationException
    {
-      T sc = type.newInstance();
+      T sc = type.getDeclaredConstructor().newInstance();
       sc.setLabel(label);
       CronExpression.validateExpression(cronExpression);
       sc.setSchedule(cronExpression);
@@ -217,8 +217,20 @@ public class SynchronizerService implements ISynchronizerService
             sc.setActive(true);
             wasActive = false;
          }
-         Synchronizer s = instanciate(sc);
-         executor.addSynchronizer(s);
+         try
+         {
+            Synchronizer s = instanciate(sc);
+            executor.addSynchronizer(s);
+         }
+         catch (InvokeSynchronizerException ex)
+         {
+            sc.setActive(false);
+            if (wasActive)
+            {
+               manager.update(sc);
+            }
+            throw ex;
+         }
          if (!wasActive)
          {
             manager.update(sc);
@@ -340,8 +352,7 @@ public class SynchronizerService implements ISynchronizerService
       }
       catch (com.vividsolutions.jts.io.ParseException | IOException | ODataException | RuntimeException e)
       {
-         throw new InvokeSynchronizerException(
-               "There was an error while instanciating Synchronizer.", e);
+         throw new InvokeSynchronizerException("Cannot invoke Synchronizer: " + e.getMessage(), e);
       }
    }
 

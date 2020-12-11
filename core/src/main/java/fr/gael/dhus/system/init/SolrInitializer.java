@@ -88,7 +88,7 @@ public class SolrInitializer
    {
       SolrConfig sc = new SolrConfig(path_to_coredir, SOLR_CONFIG_NAME, null);
       ManagedIndexSchemaFactory misf = new ManagedIndexSchemaFactory();
-      NamedList named_list = new NamedList();
+      NamedList<Boolean> named_list = new NamedList<>();
       named_list.add("mutable", Boolean.TRUE);
       misf.init(named_list);
       ManagedIndexSchema schema = misf.create(path_to_schema, sc);

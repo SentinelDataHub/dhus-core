@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,14 +19,14 @@
  */
 package fr.gael.dhus.olingo.v1.entity;
 
+import fr.gael.dhus.database.object.config.scanner.FileScannerConf;
 import fr.gael.dhus.database.object.config.scanner.ScannerConfiguration.Collections;
-import fr.gael.dhus.database.object.config.scanner.ScannerInfo;
-import fr.gael.dhus.database.object.config.scanner.ScannerManager;
-import fr.gael.dhus.datastore.scanner.ScannerFactory;
+import fr.gael.dhus.datastore.scanner.ScannerException;
+import fr.gael.dhus.datastore.scanner.ScannerStatus;
 import fr.gael.dhus.olingo.v1.Expander;
 import fr.gael.dhus.olingo.v1.ExpectedException;
-import fr.gael.dhus.olingo.v1.ExpectedException.IncompleteDocException;
 import fr.gael.dhus.olingo.v1.ExpectedException.ConflictException;
+import fr.gael.dhus.olingo.v1.ExpectedException.IncompleteDocException;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidKeyException;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidTargetException;
 import fr.gael.dhus.olingo.v1.Model;
@@ -35,7 +35,6 @@ import fr.gael.dhus.olingo.v1.map.FunctionalMap;
 import fr.gael.dhus.olingo.v1.visitor.CollectionFunctionalVisitor;
 import fr.gael.dhus.service.CollectionService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
-import fr.gael.dhus.system.config.ConfigurationManager;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,29 +50,33 @@ import org.apache.olingo.odata2.api.uri.NavigationSegment;
 import org.apache.olingo.odata2.api.uri.UriInfo;
 import org.apache.olingo.odata2.api.uri.info.DeleteUriInfo;
 
+import org.dhus.scanner.ScannerContainer;
+import org.dhus.scanner.config.ScannerInfo;
+import org.dhus.scanner.service.ScannerService;
+
 public class Scanner extends AbstractEntity
 {
-   private static final ConfigurationManager CONFIGURATION_MANAGER =
-         ApplicationContextProvider.getBean(ConfigurationManager.class);
+   private static final ScannerService SCANNER_SERVICE =
+         ApplicationContextProvider.getBean(ScannerService.class);
 
    private static final CollectionService COLLECTION_SERVICE =
          ApplicationContextProvider.getBean(CollectionService.class);
 
-   private final ScannerInfo scanner;
+   private final fr.gael.dhus.datastore.scanner.Scanner scanner;
 
-   public Scanner(ScannerInfo scanner)
+   public Scanner(fr.gael.dhus.datastore.scanner.Scanner scanner)
    {
       this.scanner = scanner;
    }
 
    public static Scanner get(Long id) throws InvalidKeyException
    {
-      ScannerInfo scannerInfo = CONFIGURATION_MANAGER.getScannerManager().get(id);
-      if(scannerInfo == null)
+      fr.gael.dhus.datastore.scanner.Scanner scanner = SCANNER_SERVICE.getScanner(id);
+      if (scanner == null)
       {
          throw new ExpectedException.InvalidKeyException(id.toString(), ScannerEntitySet.ENTITY_NAME);
       }
-      return new Scanner(scannerInfo);
+      return new Scanner(scanner);
    }
 
    /**
@@ -88,8 +91,6 @@ public class Scanner extends AbstractEntity
       Map<String, Object> properties = odataEntry.getProperties();
       String url = (String) properties.get(ScannerEntitySet.URL);
       Boolean active = (Boolean) properties.get(ScannerEntitySet.ACTIVE);
-      String username = (String) properties.get(ScannerEntitySet.USERNAME);
-      String password = (String) properties.get(ScannerEntitySet.PASSWORD);
       String pattern = (String) properties.get(ScannerEntitySet.PATTERN);
 
       if (url == null || url.isEmpty())
@@ -101,17 +102,39 @@ public class Scanner extends AbstractEntity
          active = Boolean.FALSE;
       }
 
-      String statusMessage = "Added on " + ScannerFactory.SDF.format(new Date());
-      String status = ScannerManager.STATUS_ADDED;
+      String statusMessage = "Added on " + ScannerContainer.SDF.format(new Date());
+      String status = ScannerStatus.STATUS_ADDED;
 
-      ScannerInfo scanner = CONFIGURATION_MANAGER.getScannerManager().
-            create(url, status, statusMessage, active, username, password, pattern, true);
-      return new Scanner(scanner);
+      ScannerInfo config = new FileScannerConf();
+      config.setId(-1);
+      config.setUrl(url);
+      config.setPattern(pattern);
+      config.setActive(active);
+
+      try
+      {
+         fr.gael.dhus.datastore.scanner.Scanner scanner = SCANNER_SERVICE.createScanner(config);
+         scanner.getStatus().addStatusMessage(statusMessage);
+         scanner.getStatus().setStatus(status);
+
+         return new Scanner(scanner);
+      }
+      catch (ScannerException e)
+      {
+         throw new ODataException("Cannot create scanner: " + e.getMessage());
+      }
    }
 
-   public static void delete(long id)
+   public static void delete(long id) throws ODataException
    {
-      CONFIGURATION_MANAGER.getScannerManager().delete(id);
+      try
+      {
+         SCANNER_SERVICE.deleteScanner(id);
+      }
+      catch (ScannerException e)
+      {
+         throw new ODataException("Cannot delete scanner: " + e.getMessage());
+      }
    }
 
    @Override
@@ -119,14 +142,14 @@ public class Scanner extends AbstractEntity
    {
       Map<String, Object> entityResponse = new HashMap<>();
 
-      entityResponse.put(ScannerEntitySet.ID, scanner.getId());
-      entityResponse.put(ScannerEntitySet.URL, scanner.getUrl());
-      entityResponse.put(ScannerEntitySet.STATUS, scanner.getStatus());
-      entityResponse.put(ScannerEntitySet.STATUS_MESSAGE, scanner.getStatusMessage());
-      entityResponse.put(ScannerEntitySet.ACTIVE, scanner.isActive());
-      entityResponse.put(ScannerEntitySet.USERNAME, scanner.getUsername());
+      entityResponse.put(ScannerEntitySet.ID, scanner.getConfig().getId());
+      entityResponse.put(ScannerEntitySet.URL, scanner.getConfig().getUrl());
+      entityResponse.put(ScannerEntitySet.STATUS, scanner.getStatus().getStatus());
+      entityResponse.put(ScannerEntitySet.STATUS_MESSAGE, scanner.getStatus().getStatusMessage());
+      entityResponse.put(ScannerEntitySet.ACTIVE, scanner.getConfig().isActive());
+      entityResponse.put(ScannerEntitySet.USERNAME, scanner.getConfig().getUsername());
       entityResponse.put(ScannerEntitySet.PASSWORD, "******"); // hidden password
-      entityResponse.put(ScannerEntitySet.PATTERN, scanner.getPattern());
+      entityResponse.put(ScannerEntitySet.PATTERN, scanner.getConfig().getPattern());
 
       return entityResponse;
    }
@@ -137,30 +160,30 @@ public class Scanner extends AbstractEntity
       switch (propName)
       {
          case ScannerEntitySet.ID:
-            return scanner.getId();
+            return scanner.getConfig().getId();
          case ScannerEntitySet.URL:
-            return scanner.getUrl();
+            return scanner.getConfig().getUrl();
          case ScannerEntitySet.STATUS:
-            return scanner.getStatus();
+            return scanner.getStatus().getStatus();
          case ScannerEntitySet.STATUS_MESSAGE:
-            return scanner.getStatusMessage();
+            return scanner.getStatus().getStatusMessage();
          case ScannerEntitySet.ACTIVE:
-            return scanner.isActive();
+            return scanner.getConfig().isActive();
          case ScannerEntitySet.USERNAME:
-            return scanner.getUsername();
+            return scanner.getConfig().getUsername();
          case ScannerEntitySet.PASSWORD:
             return "******"; // hidden password
          case ScannerEntitySet.PATTERN:
-            return scanner.getPattern();
+            return scanner.getConfig().getPattern();
          default:
-            throw new ODataException("Property '" + propName + "' not found.");
+            throw new ODataException("Property '" + propName + "' not found");
       }
    }
 
    @Override
    public void updateFromEntry(ODataEntry entry) throws ODataException
    {
-      if (scanner.getStatus().equals(ScannerManager.STATUS_RUNNING))
+      if (scanner.getStatus().getStatus().equalsIgnoreCase(ScannerStatus.STATUS_RUNNING))
       {
          throw new ConflictException("Scanner is currently running, please stop it before doing any update");
       }
@@ -168,33 +191,42 @@ public class Scanner extends AbstractEntity
       // olingo handles illegal null values for us
       Map<String, Object> properties = entry.getProperties();
 
+      ScannerInfo config = scanner.getConfig();
+
       if (properties.containsKey(ScannerEntitySet.ID))
       {
-         scanner.setId((Long) properties.get(ScannerEntitySet.ID));
+         config.setId((Long) properties.get(ScannerEntitySet.ID));
       }
       if (properties.containsKey(ScannerEntitySet.URL))
       {
-         scanner.setUrl((String) properties.get(ScannerEntitySet.URL));
+         config.setUrl((String) properties.get(ScannerEntitySet.URL));
       }
       if (properties.containsKey(ScannerEntitySet.ACTIVE))
       {
-         scanner.setActive((Boolean) properties.get(ScannerEntitySet.ACTIVE));
+         config.setActive((Boolean) properties.get(ScannerEntitySet.ACTIVE));
       }
       if (properties.containsKey(ScannerEntitySet.USERNAME))
       {
-         scanner.setUsername((String) properties.get(ScannerEntitySet.USERNAME));
+         config.setUsername((String) properties.get(ScannerEntitySet.USERNAME));
       }
       if (properties.containsKey(ScannerEntitySet.PASSWORD))
       {
-         scanner.setPassword((String) properties.get(ScannerEntitySet.PASSWORD));
+         config.setPassword((String) properties.get(ScannerEntitySet.PASSWORD));
       }
       if (properties.containsKey(ScannerEntitySet.PATTERN))
       {
-         scanner.setPattern((String) properties.get(ScannerEntitySet.PATTERN));
+         config.setPattern((String) properties.get(ScannerEntitySet.PATTERN));
       }
-      scanner.setStatusMessage(scanner.getStatusMessage() + " Updated on " + ScannerFactory.SDF.format(new Date()));
 
-      CONFIGURATION_MANAGER.getScannerManager().update(scanner, true);
+      try
+      {
+         SCANNER_SERVICE.updateScanner(config);
+         scanner.getStatus().addStatusMessage("Updated on " + ScannerContainer.SDF.format(new Date()));
+      }
+      catch (ScannerException e)
+      {
+         throw new ODataException("Cannot create update scanner: " + e.getMessage());
+      }
    }
 
    @Override
@@ -218,8 +250,7 @@ public class Scanner extends AbstractEntity
       }
       else
       {
-         throw new InvalidTargetException(Model.SCANNER.getName(),
-               navigationSegment.getEntitySet().getName());
+         throw new InvalidTargetException(Model.SCANNER.getName(), navigationSegment.getEntitySet().getName());
       }
    }
 
@@ -236,7 +267,8 @@ public class Scanner extends AbstractEntity
                COLLECTION_SERVICE.getCollection(collectionUuid);
 
          // retrieve existing list of collections for this scanner
-         List<String> existingCollections = scanner.getCollectionList();
+         ScannerInfo config = scanner.getConfig();
+         List<String> existingCollections = config.getCollectionList();
 
          // create list of existing + new collection
          List<String> collectionList = new ArrayList<>();
@@ -246,8 +278,15 @@ public class Scanner extends AbstractEntity
          // set the new collection set to the scanner an update it
          Collections collections = new Collections();
          collections.setCollection(collectionList);
-         scanner.setCollections(collections);
-         CONFIGURATION_MANAGER.getScannerManager().update(scanner, true);
+         config.setCollections(collections);
+         try
+         {
+            SCANNER_SERVICE.updateScanner(config);
+         }
+         catch (ScannerException e)
+         {
+            throw new ODataException("Cannot create link from scanner " + e.getMessage());
+         }
       }
       else
       {
@@ -266,7 +305,8 @@ public class Scanner extends AbstractEntity
          String collectionToDelete = link.getTargetKeyPredicates().get(0).getLiteral();
 
          // retrieve existing list of collections for this scanner
-         List<String> existingCollections = scanner.getCollectionList();
+         ScannerInfo config = scanner.getConfig();
+         List<String> existingCollections = config.getCollectionList();
 
          List<String> collectionList = new ArrayList<>();
          for (String collectionName: existingCollections)
@@ -280,8 +320,15 @@ public class Scanner extends AbstractEntity
          // set the new collection set to the scanner an update it
          Collections collections = new Collections();
          collections.setCollection(collectionList);
-         scanner.setCollections(collections);
-         CONFIGURATION_MANAGER.getScannerManager().update(scanner, true);
+         config.setCollections(collections);
+         try
+         {
+            SCANNER_SERVICE.updateScanner(config);
+         }
+         catch (ScannerException e)
+         {
+            throw new ODataException("Cannot delete link for scanner " + e.getMessage());
+         }
       }
       else
       {
@@ -297,7 +344,7 @@ public class Scanner extends AbstractEntity
    }
 
    @Override
-   public List<Map<String, Object>> expand(String navlinkName, String selfUrl)
+   public List<Map<String, Object>> expand(String navlinkName, String selfUrl) throws ODataException
    {
       switch (navlinkName)
       {
@@ -312,7 +359,7 @@ public class Scanner extends AbstractEntity
    {
       // TODO is creating this map Scanner's role?
       Map<String, Collection> collectionMap = new HashMap<>();
-      for (String collectionName : scanner.getCollectionList())
+      for (String collectionName: scanner.getConfig().getCollectionList())
       {
          collectionMap.put(collectionName, new Collection(COLLECTION_SERVICE.getCollectionByName(collectionName)));
       }

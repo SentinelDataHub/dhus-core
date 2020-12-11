@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017 GAEL Systems
+ * Copyright (C) 2016-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -43,7 +43,6 @@ import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.DigestOutputStream;
@@ -240,7 +239,7 @@ public class Ingest extends AbstractEntity
       {
          Files.move(temp_file, pname);
          temp_file = pname;
-         IngestibleRawProduct productToProcess = new IngestibleRawProduct(pname.toUri().toURL());
+         IngestibleRawProduct productToProcess = IngestibleRawProduct.fromURL(pname.toUri().toURL());
          ProcessingManager.processProduct(productToProcess, new ArrayList<>(targetCollections.keySet()), true);
       }
       catch (IOException ex)

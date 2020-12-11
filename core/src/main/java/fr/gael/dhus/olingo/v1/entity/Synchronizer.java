@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2015-2018 GAEL Systems
+ * Copyright (C) 2015-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -23,6 +23,7 @@ import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.io.WKTReader;
 
 import fr.gael.dhus.database.object.config.synchronizer.ProductSynchronizer;
+import fr.gael.dhus.olingo.v1.Expander;
 import fr.gael.dhus.olingo.v1.ExpectedException;
 import fr.gael.dhus.olingo.v1.ExpectedException.IncompleteDocException;
 import fr.gael.dhus.olingo.v1.ExpectedException.InvalidTargetException;
@@ -64,6 +65,7 @@ import org.apache.olingo.odata2.api.uri.NavigationSegment;
 import org.apache.olingo.odata2.api.uri.PathSegment;
 import org.apache.olingo.odata2.api.uri.UriInfo;
 import org.apache.olingo.odata2.api.uri.UriParser;
+import org.apache.olingo.odata2.api.uri.info.DeleteUriInfo;
 
 import org.quartz.CronExpression;
 
@@ -253,7 +255,9 @@ public final class Synchronizer extends AbstractEntity
       }
 
       // To avoid any side effects
+      boolean currentState = this.syncConf.isActive();
       SYNCHRONIZER_SERVICE.deactivateSynchronizer(this.syncConf.getId());
+      this.syncConf.setActive(currentState);
 
       if (request != null)
       {
@@ -316,7 +320,14 @@ public final class Synchronizer extends AbstractEntity
 
       if (has_last_date)
       {
-         this.syncConf.setLastCreated(XmlProvider.getCalendar(last_ingestion_date));
+         if (last_ingestion_date == null)
+         {
+            this.syncConf.setLastCreated(null);
+         }
+         else
+         {
+            this.syncConf.setLastCreated(XmlProvider.getCalendar(last_ingestion_date));
+         }
       }
 
       if (copy_product != null)
@@ -503,6 +514,71 @@ public final class Synchronizer extends AbstractEntity
       }
 
       return res;
+   }
+
+   @Override
+   public List<String> getExpandableNavLinkNames()
+   {
+      return Collections.<String>singletonList(SynchronizerEntitySet.TARGET_COLLECTION);
+   }
+
+   @Override
+   public List<Map<String, Object>> expand(String navlinkName, String selfUrl) throws ODataException
+   {
+      switch (navlinkName)
+      {
+         case SynchronizerEntitySet.TARGET_COLLECTION:
+            return Expander.entityToData(getTargetCollection(), selfUrl);
+         default:
+            return super.expand(navlinkName, selfUrl);
+      }
+   }
+
+   @Override
+   public void createLink(UriInfo link) throws ODataException
+   {
+      EdmEntitySet targetEntitySet = link.getTargetEntitySet();
+      if (targetEntitySet.getName().equals(Model.COLLECTION.getName()))
+      {
+         String collectionName = link.getTargetKeyPredicates().get(0).getLiteral();
+         this.syncConf.setTargetCollection(collectionName);
+         try
+         {
+            SYNCHRONIZER_SERVICE.saveSynchronizerConf(this.syncConf);
+         }
+         catch (InvokeSynchronizerException ex)
+         {
+            throw new ODataException("Cannot create link to TargetCollection: " + ex.getMessage());
+         }
+      }
+      else
+      {
+         throw new ODataException(String.format("Cannot create link from %s to %s",
+               Model.SYNCHRONIZER.getName(), targetEntitySet.getName()));
+      }
+   }
+
+   @Override
+   public void deleteLink(DeleteUriInfo link) throws ODataException
+   {
+      EdmEntitySet targetEntitySet = link.getTargetEntitySet();
+      if (targetEntitySet.getName().equals(Model.COLLECTION.getName()))
+      {
+         this.syncConf.setTargetCollection(null);
+         try
+         {
+            SYNCHRONIZER_SERVICE.saveSynchronizerConf(this.syncConf);
+         }
+         catch (InvokeSynchronizerException ex)
+         {
+            throw new ODataException("Cannot delete link to TargetCollection: " + ex.getMessage());
+         }
+      }
+      else
+      {
+         throw new ODataException(String.format("Cannot delete link from %s to %s",
+               Model.SYNCHRONIZER.getName(), targetEntitySet.getName()));
+      }
    }
 
    private static boolean editsTargetCollection(ODataEntry entry) throws ODataException

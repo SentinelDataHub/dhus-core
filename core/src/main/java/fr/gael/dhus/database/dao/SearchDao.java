@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2016,2018 GAEL Systems
+ * Copyright (C) 2013-2016,2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,14 +19,13 @@
  */
 package fr.gael.dhus.database.dao;
 
-import java.sql.SQLException;
 import java.util.List;
 
 import org.hibernate.HibernateException;
-import org.hibernate.Query;
+import org.hibernate.query.Query;
 import org.hibernate.Session;
 import org.hibernate.type.StandardBasicTypes;
-import org.springframework.orm.hibernate3.HibernateCallback;
+import org.springframework.orm.hibernate5.HibernateCallback;
 import org.springframework.stereotype.Repository;
 
 import fr.gael.dhus.database.dao.interfaces.HibernateDao;
@@ -45,14 +44,14 @@ public class SearchDao extends HibernateDao<Search, String>
             @Override
             @SuppressWarnings ("unchecked")
             public List<Search> doInHibernate (Session session)
-               throws HibernateException, SQLException
+               throws HibernateException
             {
                String hql =
                   "SELECT s FROM User u LEFT OUTER JOIN u.preferences p "
                      + "LEFT OUTER JOIN p.searches s "
-                     + "WHERE u.uuid like ? ORDER BY s.value";
+                     + "WHERE u.uuid like ?1 ORDER BY s.value";
                Query query = session.createQuery (hql).setReadOnly (true);
-               query.setParameter(0, user.getUUID(), StandardBasicTypes.STRING);
+               query.setParameter(1, user.getUUID(), StandardBasicTypes.STRING);
                query.setFirstResult (skip);
                query.setMaxResults (top);
                return (List<Search>) query.list ();
@@ -66,12 +65,11 @@ public class SearchDao extends HibernateDao<Search, String>
       getHibernateTemplate ().execute (new HibernateCallback<Void>()
       {
          @Override
-         public Void doInHibernate (Session session) throws HibernateException,
-            SQLException
+         public Void doInHibernate (Session session) throws HibernateException
          {
-            String sql = "DELETE FROM SEARCH_PREFERENCES WHERE SEARCHES_UUID = ?";
-            Query query = session.createSQLQuery (sql);
-            query.setParameter(0, search.getUUID(), StandardBasicTypes.STRING);
+            String sql = "DELETE FROM SEARCH_PREFERENCES WHERE SEARCHES_UUID = ?1";
+            Query query = session.createNativeQuery (sql);
+            query.setParameter(1, search.getUUID(), StandardBasicTypes.STRING);
             query.executeUpdate ();
             return null;
          }
@@ -87,11 +85,10 @@ public class SearchDao extends HibernateDao<Search, String>
       getHibernateTemplate ().execute (new HibernateCallback<Void> ()
       {
          @Override
-         public Void doInHibernate (Session session) throws HibernateException,
-               SQLException
+         public Void doInHibernate (Session session) throws HibernateException
          {
             String query = "UPDATE SEARCHES SET NOTIFY = false";
-            session.createSQLQuery (query).executeUpdate ();
+            session.createNativeQuery (query).executeUpdate ();
             return null;
          }
       });

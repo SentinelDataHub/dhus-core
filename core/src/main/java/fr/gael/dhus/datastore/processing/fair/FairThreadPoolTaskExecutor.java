@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2015,2017,2018 GAEL Systems
+ * Copyright (C) 2015,2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,6 +20,8 @@
 package fr.gael.dhus.datastore.processing.fair;
 
 import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -136,6 +138,41 @@ public class FairThreadPoolTaskExecutor extends ExecutorConfigurationSupport
             }
             return super.newTaskFor(runnable, value);
          }
+
+         /* Handles uncaught exceptions. */
+         @Override
+         protected void afterExecute(Runnable r, Throwable t)
+         {
+            super.afterExecute(r, t);
+            if (t == null && r instanceof Future<?>) // Tasks encapsulate uncaught errors/exceptions
+            {
+               try
+               {
+                  Future<?> future = (Future<?>) r;
+                  if (future.isDone()) // Should always be true...
+                  {
+                     future.get();
+                  }
+               }
+               catch (CancellationException ce)
+               {
+                  t = ce;
+               }
+               catch (ExecutionException ee)
+               {
+                  t = ee.getCause();
+               }
+               catch (InterruptedException suppressed)
+               {
+                  Thread.currentThread().interrupt();
+               }
+            }
+            if (t != null)
+            {
+               LOGGER.error("Uncaught exception in Runnable {}", r.getClass().getName(), t);
+            }
+         }
+
       };
 
       this.threadPoolExecutor = executor;

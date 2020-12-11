@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+   Copyright (C) 2014-2019 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -22,8 +22,8 @@
    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
    xmlns:context="http://www.springframework.org/schema/context"
    xsi:schemaLocation="
-      http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.1.xsd
-      http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.1.xsd">
+      http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+      http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
 
    <!-- Load core context -->
    <import resource="dhus-core-database.xml" />
@@ -33,8 +33,13 @@
    <import resource="dhus-core-security.xml" />
    <import resource="dhus-core-cache.xml" />
    <import resource="dhus-core-datastore.xml" />
+   <import resource="dhus-core-transformation.xml" />
 
    <!-- Load GUIs contexts -->
    <import resource="classpath*:spring/dhus-gui-*-context.xml" />
+
+   <!-- Load monitoring context -->
+   <import resource="dhus-core-monitoring.xml" />
+   <import resource="classpath*:monitoring.xml" />
 
 </beans>

@@ -43,6 +43,9 @@ public class CollectionFunctionalVisitor extends FunctionalVisitor
          case CollectionEntitySet.DESCRIPTION:
             result = new DescriptionProvider();
             break;
+         case CollectionEntitySet.UUID:
+            result = new UUIDProvider();
+            break;
             
          default:
             throw new UnsupportedOperationException("Unknown property: " + 
@@ -68,5 +71,14 @@ public class CollectionFunctionalVisitor extends FunctionalVisitor
       {
          return collection.getDescription();
       }  
+   }
+   
+   private static class UUIDProvider implements Transformer<Collection, String>
+   {
+      @Override
+      public String transform(Collection collection)
+      {
+         return collection.getUUID();
+      }
    }
 }

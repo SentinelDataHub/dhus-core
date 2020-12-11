@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,6 +19,8 @@
  */
 package fr.gael.dhus.database;
 
+import com.codahale.metrics.annotation.Gauge;
+
 import fr.gael.dhus.database.dao.CollectionDao;
 import fr.gael.dhus.database.dao.CountryDao;
 import fr.gael.dhus.database.dao.NetworkUsageDao;
@@ -32,6 +34,8 @@ import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.database.object.config.system.AdministratorConfiguration;
 import fr.gael.dhus.service.ProductService;
 import fr.gael.dhus.service.SearchService;
+import fr.gael.dhus.service.SystemService;
+import fr.gael.dhus.service.UserService;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
 import java.io.BufferedReader;
@@ -79,7 +83,12 @@ public class DatabasePostInit implements InitializingBean
    private SearchService searchService;
 
    @Autowired
+   private SystemService systemService;
+
+   @Autowired
    private UserDao userDao;
+
+   @Autowired UserService userService;
 
    @Autowired
    private NetworkUsageDao networkUsageDao;
@@ -107,32 +116,7 @@ public class DatabasePostInit implements InitializingBean
       // These accounts have to be created during context initialization.
 
       // Root account
-      AdministratorConfiguration cfg = cfgManager.getAdministratorConfiguration();
-      User rootUser = userDao.getByName(cfg.getName());
-      if (rootUser != null)
-      {
-         // If root User exists, update his roles by security
-         ArrayList<Role> roles = new ArrayList<>();
-         roles.addAll(Arrays.asList(Role.values()));
-         rootUser.setRoles(roles);
-         userDao.update(rootUser);
-      }
-      else
-      {
-         // Create it
-         rootUser = new User();
-         rootUser.setUsername(cfg.getName());
-         rootUser.setPassword(cfg.getPassword());
-         rootUser.setCreated(new Date());
-         ArrayList<Role> roles = new ArrayList<>();
-         roles.addAll(Arrays.asList(Role.values()));
-         rootUser.setRoles(roles);
-         rootUser.setDomain("Other");
-         rootUser.setSubDomain("System");
-         rootUser.setUsage("Other");
-         rootUser.setSubUsage("System");
-         userDao.create(rootUser);
-      }
+      userService.systemCreateOrUpdateRootAccount();
    }
 
    /**
@@ -196,7 +180,7 @@ public class DatabasePostInit implements InitializingBean
                + (new Date().getTime() - start) + " ms");
 
          LOGGER.info("Optimizing database...");
-         DaoUtils.optimize();
+         systemService.optimize();
 
          LOGGER.info("SCHEDULER : Check system consistency done - " +
                   (System.currentTimeMillis ()-time_start) + "ms");
@@ -320,5 +304,19 @@ public class DatabasePostInit implements InitializingBean
             searchService.partialReindex(query, false);
          }
       }
+   }
+
+   /**
+    * Gauge used by the monitoring module.
+    * <p>
+    * Do not move to ProductService, this gauge needs to be in another bean to use the proxy
+    * (to use the cache and the transaction) to work.
+    *
+    * @return total product count
+    */
+   @Gauge(absolute = true, name = "products.count")
+   public int gaugeProductCount()
+   {
+      return productService.unprotectedCount();
    }
 }

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017,2018 GAEL Systems
+ * Copyright (C) 2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -27,7 +27,6 @@ import org.apache.olingo.commons.api.edm.provider.CsdlEntityType;
 import org.apache.olingo.commons.api.edm.provider.CsdlProperty;
 
 import org.dhus.olingo.v2.datamodel.complex.GMPConfigurationComplexType;
-import org.dhus.olingo.v2.datamodel.complex.GMPQuotasComplexType;
 import org.dhus.olingo.v2.datamodel.complex.MySQLConnectionInfoComplexType;
 import org.dhus.olingo.v2.web.DHuSODataServlet;
 
@@ -40,12 +39,8 @@ public class GmpDataStoreModel extends DataStoreModel
    public static final FullQualifiedName FULL_QUALIFIED_NAME =
          new FullQualifiedName(DHuSODataServlet.NAMESPACE, ENTITY_TYPE_NAME);
 
-   public static final String PROPERTY_REPO_LOCATION = "GMPRepoLocation";
-   public static final String PROPERTY_HFS_LOCATION = "HFSLocation";
-   public static final String PROPERTY_MAX_QUEUED_REQUESTS = "MaxQueuedRequest";
-   public static final String PROPERTY_IS_MASTER = "IsMaster";
+   public static final String PROPERTY_REPO_LOCATION = "RepoLocation";
    public static final String PROPERTY_MYSQLCONNECTIONINFO = "MySQLConnectionInfo";
-   public static final String PROPERTY_QUOTAS = "Quotas";
    public static final String PROPERTY_CONFIGURATION = "Configuration";
 
    @Override
@@ -56,28 +51,10 @@ public class GmpDataStoreModel extends DataStoreModel
             .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
             .setNullable(false);
 
-      CsdlProperty hfsLocation = new CsdlProperty()
-            .setName(PROPERTY_HFS_LOCATION)
-            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
-            .setNullable(false);
-
-      CsdlProperty maxQueuedRequests = new CsdlProperty()
-            .setName(PROPERTY_MAX_QUEUED_REQUESTS)
-            .setType(EdmPrimitiveTypeKind.Int32.getFullQualifiedName());
-
-      CsdlProperty isMaster = new CsdlProperty()
-            .setName(PROPERTY_IS_MASTER)
-            .setType(EdmPrimitiveTypeKind.Boolean.getFullQualifiedName());
-
       CsdlProperty mysqlConnectionInfo = new CsdlProperty()
             .setName(PROPERTY_MYSQLCONNECTIONINFO)
             .setType(MySQLConnectionInfoComplexType.FULL_QUALIFIED_NAME)
             .setNullable(false);
-
-      CsdlProperty quotas = new CsdlProperty()
-            .setName(PROPERTY_QUOTAS)
-            .setType(GMPQuotasComplexType.FULL_QUALIFIED_NAME)
-            .setNullable(true);
 
       CsdlProperty configuration = new CsdlProperty()
             .setName(PROPERTY_CONFIGURATION)
@@ -85,15 +62,11 @@ public class GmpDataStoreModel extends DataStoreModel
             .setNullable(false);
 
       return new CsdlEntityType()
-            .setBaseType(DataStoreModel.ABSTRACT_FULL_QUALIFIED_NAME)
+            .setBaseType(AsyncDataStoreModel.FULL_QUALIFIED_NAME)
             .setName(ENTITY_TYPE_NAME)
             .setProperties(Arrays.asList(
                   repoLocation,
-                  hfsLocation,
-                  maxQueuedRequests,
-                  isMaster,
                   mysqlConnectionInfo,
-                  quotas,
                   configuration));
    }
 

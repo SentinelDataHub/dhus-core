@@ -240,7 +240,7 @@ public class SynchronizerEntitySet extends AbstractEntitySet<Synchronizer>
    }
 
    @Override
-   public Map getEntities()
+   public Map<Long, Synchronizer> getEntities()
    {
       return new SynchronizerMap();
    }

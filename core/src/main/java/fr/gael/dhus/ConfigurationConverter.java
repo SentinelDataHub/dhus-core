@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017-2018 GAEL Systems
+ * Copyright (C) 2017-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,6 +20,10 @@
 package fr.gael.dhus;
 
 import fr.gael.dhus.database.object.config.Configuration;
+import fr.gael.dhus.database.object.config.cron.Cron;
+import fr.gael.dhus.database.object.config.scanner.FileScannerConf;
+import fr.gael.dhus.database.object.config.scanner.FtpScannerConf;
+import fr.gael.dhus.database.object.config.scanner.ScannerConfiguration;
 import fr.gael.dhus.database.object.config.system.DatabaseConfiguration;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
@@ -29,7 +33,12 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.AbstractList;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -39,11 +48,18 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
+import org.dhus.scanner.config.ScannerInfo;
+import org.dhus.store.datastore.config.AsyncDataStoreConf;
+import org.dhus.store.datastore.config.DataStoreConf;
+import org.dhus.store.datastore.config.DataStoreRestriction;
+import org.dhus.store.datastore.config.GmpDataStoreConf;
 import org.dhus.store.datastore.config.HfsDataStoreConf;
+import org.dhus.store.datastore.config.NamedDataStoreConf;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 import org.xml.sax.ErrorHandler;
 import org.xml.sax.SAXException;
@@ -86,6 +102,11 @@ public class ConfigurationConverter
       ConfigurationManager.postLoad(loadedConfig);
       convertDatabaseConfiguration(loadedConfig.getSystemConfiguration().getDatabaseConfiguration(), doc);
       convertOldIncomingToHFS(loadedConfig, doc);
+      convertOldScannerConf(loadedConfig, doc);
+      convertOldGmpDataStoresConf(loadedConfig, doc);
+      convertOldAsyncDataStoreMaxQueuedRequest(loadedConfig, doc);
+      convertAsyncQuotas(loadedConfig, doc);
+      convertDataStoreReadOnly(loadedConfig, doc);
 
       if (backup != null)
       {
@@ -106,6 +127,140 @@ public class ConfigurationConverter
          stream.close();
       }
       System.out.println("Configuration converted in " + input);
+   }
+
+   private static void convertOldScannerConf(Configuration loadedConfig, Document doc)
+   {
+      Objects.requireNonNull(loadedConfig);
+      Objects.requireNonNull(doc);
+      boolean sourceRemove = false;
+      boolean active = false;
+      String schedule = "0 0 22 ? * *";
+
+      // Move sourceRemove to archive conf
+      Node node = doc.getElementsByTagNameNS("*", "fileScanners").item(0);
+      if (node != null && Element.class.isAssignableFrom(node.getClass()))
+      {
+         Element element = Element.class.cast(node);
+         sourceRemove = Boolean.parseBoolean(element.getAttribute("sourceRemove"));
+         active = Boolean.valueOf(element.getAttribute("active"));
+         schedule = element.getAttribute("schedule");
+      }
+
+      // Is there old-style scanner conf to convert?
+      NodeList scannerNodes = doc.getElementsByTagNameNS("fr.gael.dhus.database.object.config.scanner", "scanner");
+      if (scannerNodes.getLength() <= 0)
+      {
+         return;
+      }
+      if (scannerNodes.item(0).getAttributes().getNamedItemNS("http://www.w3.org/2001/XMLSchema-instance", "type") != null)
+      {
+         return;
+      }
+
+      // Convert old scanner conf
+      List<ScannerConfiguration> newScanners = new ArrayList<>();
+      for (int scannersIter = 0; scannersIter < scannerNodes.getLength(); scannersIter++)
+      {
+         Node scannerNode = scannerNodes.item(scannersIter);
+
+         NodeList nl = scannerNode.getChildNodes();
+         ScannerInfo si = null;
+         // Initialize correct type based on URL
+         for (int elemIter = 0; elemIter < nl.getLength(); elemIter++)
+         {
+            Node child = nl.item(elemIter);
+            if ("url".equalsIgnoreCase(child.getLocalName()))
+            {
+               String url = child.getTextContent();
+               if (url.startsWith("ftp") || url.startsWith("sftp:"))
+               {
+                  si = new FtpScannerConf();
+               }
+               else
+               {
+                  si = new FileScannerConf();
+               }
+
+               break;
+            }
+         }
+
+         // Copy old value
+         if (si == null)
+         {
+            si = new FileScannerConf();
+         }
+         for (int elemIter = 0; elemIter < nl.getLength(); elemIter++)
+         {
+            Node child = nl.item(elemIter);
+            if (child.getNodeType() != Node.ELEMENT_NODE)
+            {
+               continue;
+            }
+
+            String nodeName = child.getLocalName();
+            switch (nodeName.toLowerCase())
+            {
+               case "id":
+                  si.setId(Long.parseLong(child.getTextContent()));
+                  break;
+               case "url":
+                  si.setUrl(child.getTextContent());
+                  break;
+               case "pattern":
+                  si.setPattern(child.getTextContent());
+                  break;
+               case "collections":
+               {
+                  NodeList collectionNL = child.getChildNodes();
+                  ScannerConfiguration.Collections collections = new ScannerConfiguration.Collections();
+                  if (collectionNL.getLength() > 0)
+                  {
+                     for (int collecIter = 0; collecIter < collectionNL.getLength(); collecIter++)
+                     {
+                        Node collection = collectionNL.item(collecIter);
+                        if ("collection".equalsIgnoreCase(collection.getLocalName()))
+                        {
+                           String collectionName = collection.getTextContent();
+                           collections.getCollection().add(collectionName);
+                        }
+                     }
+                     si.setCollections(collections);
+                  }
+                  break;
+               }
+               case "username":
+               {
+                  if (si instanceof FtpScannerConf)
+                  {
+                     si.setUsername(child.getTextContent());
+                  }
+                  break;
+               }
+               case "password":
+               {
+                  if (si instanceof FtpScannerConf)
+                  {
+                     si.setPassword(child.getTextContent());
+                  }
+                  break;
+               }
+               default:
+                  break;
+            }
+         }
+
+         Cron cron = new Cron();
+         cron.setActive(active);
+         cron.setSchedule(schedule);
+         si.setCron(cron);
+
+         si.setSourceRemove(sourceRemove);
+         newScanners.add(si);
+      }
+
+      loadedConfig.getScanners().setScanner(newScanners);
    }
 
    /**
@@ -195,7 +350,7 @@ public class ConfigurationConverter
             }
             hfsDsc.setPath(path);
             hfsDsc.setPriority(-1);
-            hfsDsc.setReadOnly(false);
+            hfsDsc.setRestriction(DataStoreRestriction.NONE);
 
             conf.getDataStores().getDataStore().add(hfsDsc);
          }
@@ -203,6 +358,221 @@ public class ConfigurationConverter
          String errorPath = element.getAttribute("errorPath");
          conf.getSystemConfiguration().getArchiveConfiguration().setErrorPath(errorPath);
       }
+   }
+
+   /**
+    * Handles the renaming of some attributes related to async DataStores:
+    * - gmpRepoLocation attribute renamed to repoLocation.
+    * - isMaster attribute to become a child element.
+    *
+    * Also handles the renaming new optional configuration options that need to be present
+    * in GMPDataStore in order to not break previous behaviors:
+    * - PatternReplaceIn
+    * - PatternReplaceOut
+    *
+    * @param conf configuration to update
+    * @param doc  source document containing the deprecated configuration
+    */
+   public static void convertOldGmpDataStoresConf(Configuration conf, Document doc)
+   {
+      Objects.requireNonNull(conf);
+      Objects.requireNonNull(doc);
+
+      NodeList nodes = doc.getElementsByTagNameNS("*", "dataStore");
+      List<DataStoreConf> dataStoreConfList = conf.getDataStores().getDataStore();
+
+      for (int i = 0; i < nodes.getLength(); i++)
+      {
+         Node node = nodes.item(i);
+         if (node != null && Element.class.isAssignableFrom(node.getClass()))
+         {
+            Element element = Element.class.cast(node);
+            String name = element.getAttribute("name");
+
+            for (DataStoreConf dataStoreConf: dataStoreConfList)
+            {
+               if (dataStoreConf instanceof GmpDataStoreConf)
+               {
+                  GmpDataStoreConf gmpDataStoreConf = (GmpDataStoreConf) dataStoreConf;
+
+                  if (name.equals(gmpDataStoreConf.getName()))
+                  {
+                     NodeList children = element.getChildNodes();
+                     boolean hasIsMaster = false;
+                     for (int it=0; it < children.getLength(); it++)
+                     {
+                        Node child = children.item(it);
+                        if ("gmpRepoLocation".equals(child.getLocalName()))
+                        {
+                           String gmpRepoLocation = child.getTextContent();
+                           gmpDataStoreConf.setRepoLocation(gmpRepoLocation);
+                           continue;
+                        }
+
+                        if ("isMaster".equals(child.getLocalName()))
+                        {
+                           hasIsMaster = true;
+                           continue;
+                        }
+                     }
+
+                     if (!hasIsMaster)
+                     {
+                        gmpDataStoreConf.setIsMaster(Boolean.valueOf(element.getAttribute("isMaster")));
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+
+   public static void convertAsyncQuotas(Configuration conf, Document doc)
+   {
+      Objects.requireNonNull(conf);
+      Objects.requireNonNull(doc);
+
+      NodeList nodes = doc.getElementsByTagNameNS("*", "dataStore");
+      List<DataStoreConf> dataStoreConfList = conf.getDataStores().getDataStore();
+
+      for (DataStoreConf dataStoreConf: dataStoreConfList)
+      {
+         if (dataStoreConf instanceof AsyncDataStoreConf)
+         {
+            AsyncDataStoreConf asyncDSconf = (AsyncDataStoreConf) dataStoreConf;
+            Optional<Element> element = streamableElementList(nodes)
+                  .filter((e) -> e.getAttribute("name").equals(asyncDSconf.getName()))
+                  .findFirst();
+
+            if (element.isPresent())
+            {
+               Element child = firstElementByName(element.get().getChildNodes(), "quotas");
+               if (child != null)
+               {
+                  String maxQPU = child.getAttribute("maxQueryPerUser");
+                  if (maxQPU != null && !maxQPU.isEmpty())
+                  {
+                     try
+                     {
+                        int maxQueryInParallel = Integer.parseInt(maxQPU);
+                        asyncDSconf.setMaxParallelFetchRequestsPerUser(maxQueryInParallel);
+                     }
+                     catch (NumberFormatException suppressed) {}
+                  }
+               }
+            }
+         }
+      }
+   }
+
+   /**
+    * Converts old property of AsyncDataStores "maxQueuedRequest" into new properties
+    * "maxPendingRequests" and "maxRunningRequests", using the old value for both.
+    *
+    * @param conf configuration to update
+    * @param doc  source document containing the deprecated configuration
+    */
+   public static void convertOldAsyncDataStoreMaxQueuedRequest(Configuration conf, Document doc)
+   {
+      Objects.requireNonNull(conf);
+      Objects.requireNonNull(doc);
+
+      NodeList nodes = doc.getElementsByTagNameNS("*", "dataStore");
+      List<DataStoreConf> dataStoreConfList = conf.getDataStores().getDataStore();
+
+      streamableElementList(nodes).forEach((Element element) ->
+      {
+         String name = element.getAttribute("name");
+
+         AsyncDataStoreConf asyncDSConf = dataStoreConfList.stream()
+               .filter((dsc) -> AsyncDataStoreConf.class.isAssignableFrom(dsc.getClass()))
+               .<AsyncDataStoreConf>map(AsyncDataStoreConf.class::cast)
+               .filter((dsc) -> dsc.getName().equals(name))
+               .findFirst().orElse(null);
+
+         if (asyncDSConf != null)
+         {
+            Element child = firstElementByName(element.getChildNodes(), "maxQueuedRequest");
+            if (child != null)
+            {
+               String maxQueuedRequest = child.getTextContent();
+               try
+               {
+                  asyncDSConf.setMaxPendingRequests(Integer.decode(maxQueuedRequest));
+                  asyncDSConf.setMaxRunningRequests(Integer.decode(maxQueuedRequest));
+               }
+               catch (NumberFormatException suppressed) {}
+            }
+         }
+      });
+   }
+
+   /**
+    * Handles the renaming of restriction parameter related to DataStores:
+    *
+    * @param conf configuration to update
+    * @param doc  source document containing the deprecated configuration
+    */
+   public static void convertDataStoreReadOnly(Configuration conf, Document doc)
+   {
+      Objects.requireNonNull(conf);
+      Objects.requireNonNull(doc);
+
+      NodeList nodes = doc.getElementsByTagNameNS("*", "dataStore");
+      List<DataStoreConf> dataStoreConfList = conf.getDataStores().getDataStore();
+
+      streamableElementList(nodes).forEach((Element element) ->
+      {
+         // do not override existing restriction
+         if (element.getAttribute("restriction").isEmpty())
+         {
+            String name = element.getAttribute("name");
+            String readOnly = element.getAttribute("readOnly");
+
+            dataStoreConfList.stream()
+               .filter((dsc) -> NamedDataStoreConf.class.isAssignableFrom(dsc.getClass()))
+               .<NamedDataStoreConf>map(NamedDataStoreConf.class::cast)
+               .filter((dsc) -> dsc.getName().equals(name))
+               .findFirst()
+               .ifPresent(dsc -> dsc.setRestriction(Boolean.valueOf(readOnly) ? DataStoreRestriction.REFERENCES_ONLY : DataStoreRestriction.NONE));
+
+         }
+      });
+   }
+
+   /* Returns a stream of Elements from the given NodeList. */
+   private static Stream<Element> streamableElementList(final NodeList nodes)
+   {
+      if (nodes == null)
+      {
+         return Stream.empty();
+      }
+      List<Node> nodeList = new AbstractList<Node>()
+      {
+         @Override
+         public Node get(int index)
+         {
+            return nodes.item(index);
+         }
+
+         @Override
+         public int size()
+         {
+            return nodes.getLength();
+         }
+      };
+      return nodeList.stream()
+            .filter((e) -> Element.class.isAssignableFrom(e.getClass()))
+            .<Element>map(Element.class::cast);
+   }
+
+   /* Returns the first element whose name equals `name`. */
+   private static Element firstElementByName(NodeList nodes, String name)
+   {
+      return streamableElementList(nodes)
+            .filter((e) -> e.getLocalName().equals(name))
+            .findFirst()
+            .orElse(null);
    }
 
    public static void main(String[] args)

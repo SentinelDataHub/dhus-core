@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017,2018 GAEL Systems
+ * Copyright (C) 2016-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -35,11 +35,13 @@ import org.apache.logging.log4j.Logger;
 import org.dhus.Product;
 import org.dhus.ProductConstants;
 import org.dhus.store.datastore.AbstractDataStore;
-import org.dhus.store.datastore.DataStoreConstants;
 import org.dhus.store.datastore.DataStoreException;
+import org.dhus.store.datastore.DataStoreProduct;
+import org.dhus.store.datastore.DataStores;
 import org.dhus.store.datastore.ProductAlreadyExist;
 import org.dhus.store.datastore.ProductNotFoundException;
 import org.dhus.store.datastore.ReadOnlyDataStoreException;
+import org.dhus.store.datastore.config.DataStoreRestriction;
 
 import org.jclouds.blobstore.domain.BlobMetadata;
 
@@ -51,7 +53,9 @@ import org.jclouds.blobstore.domain.BlobMetadata;
 public class OpenStackDataStore extends AbstractDataStore
 {
    private static final Logger LOGGER = LogManager.getLogger();
-   private static final String SUPPORTED_DIGEST_ALGORITHMS = "MD5,SHA-1,SHA-256,SHA-512";
+
+   /** Array of hash sum algorithms to compute on product move (may be empty/null) */
+   private final String[] hashAlgorithms;
 
    /**
     * Occurrence MetaData, allows to manage multiple references of the same object in a
@@ -70,31 +74,32 @@ public class OpenStackDataStore extends AbstractDataStore
    /**
     * Build an open-stack storage API for DHuS data store. Currently only swift is supported.
     *
-    * @param name
-    * @param provider
-    * @param identity
-    * @param credential
-    * @param url
-    * @param container
-    * @param region
-    * @param readOnly
-    * @param priority
-    * @param maximumSize
-    * @param currentSize
-    * @param autoEviction
+    * @param name           of this DataStore
+    * @param provider       OpenStack provider
+    * @param identity       OpenStack identity
+    * @param credential     OpenStack credentials
+    * @param url            OpenStack URL
+    * @param container      OpenStack container
+    * @param region         OpenStack region
+    * @param restriction    access restrictions of this DataStore
+    * @param priority       position of this DataStore
+    * @param maximumSize    maximum size in bytes of this DataStore
+    * @param currentSize    overall size of this DataStore (disk usage)
+    * @param autoEviction   true to activate auto-eviction based on disk usage
+    * @param hashAlgorithms array of hash sum algorithms to compute on product move (may be empty/null)
     */
    public OpenStackDataStore(String name, String provider, String identity, String credential,
-         String url, String container, String region, boolean readOnly, int priority,
-         long maximumSize, long currentSize, boolean autoEviction)
+         String url, String container, String region, DataStoreRestriction restriction, int priority,
+         long maximumSize, long currentSize, boolean autoEviction, String[] hashAlgorithms)
    {
-      super(name, readOnly, priority, maximumSize, currentSize, autoEviction);
+      super(name, restriction, priority, maximumSize, currentSize, autoEviction);
       this.provider = provider;
       this.identity = identity;
       this.credential = credential;
       this.url = url;
       this.container = container;
       this.region = region;
-      super.setProperty(DataStoreConstants.PROP_KEY_TRANSFER_DIGEST, SUPPORTED_DIGEST_ALGORITHMS);
+      this.hashAlgorithms = hashAlgorithms;
    }
 
    /**
@@ -194,22 +199,30 @@ public class OpenStackDataStore extends AbstractDataStore
       // Case of source file not supported
       if (product.hasImpl(InputStream.class))
       {
-         String[] algorithms = SUPPORTED_DIGEST_ALGORITHMS.split(",");
+         InputStream src = product.getImpl(InputStream.class);
 
-         try (MultipleDigestInputStream source =
-               new MultipleDigestInputStream(product.getImpl(InputStream.class), algorithms))
+         String[] algorithmToPerform = DataStores.checkHashAlgorithms(product, hashAlgorithms);
+         if (algorithmToPerform.length != 0)
          {
-            getOpenStackObject()
-                  .putObject(source, product.getName(), container, region, product_size, user_data);
-            for (String algorithm: algorithms)
+            try
             {
-               String key = ProductConstants.CHECKSUM_PREFIX + "." + algorithm;
-               product.setProperty(key, source.getMessageDigestAsHexadecimalString(algorithm));
+               src = new MultipleDigestInputStream(src, algorithmToPerform);
+            }
+            catch (NoSuchAlgorithmException e)
+            {
+               throw new IOException("Checksum computation error", e);
             }
          }
-         catch (NoSuchAlgorithmException e)
+
+         try (InputStream source = src)
          {
-            throw new IOException("Checksum computation error.", e);
+            getOpenStackObject().putObject(source, product.getName(), container, region, product_size, user_data);
+         }
+
+         if (MultipleDigestInputStream.class.isAssignableFrom(src.getClass()))
+         {
+            MultipleDigestInputStream source = MultipleDigestInputStream.class.cast(src);
+            DataStores.extractAndSetChecksum(source, product);
          }
 
          OpenStackLocation location = new OpenStackLocation(region, container, product.getName());
@@ -222,7 +235,7 @@ public class OpenStackDataStore extends AbstractDataStore
    }
 
    @Override
-   protected final Product internalGetProduct(String uuid, String tag) throws DataStoreException
+   protected final DataStoreProduct internalGetProduct(String uuid, String tag) throws DataStoreException
    {
       if (!internalHasProduct(uuid, tag))
       {
@@ -246,11 +259,6 @@ public class OpenStackDataStore extends AbstractDataStore
    @Override
    protected final void internalAddProduct(String id, String tag, Product product) throws DataStoreException
    {
-      if (isReadOnly())
-      {
-         throw new ReadOnlyDataStoreException("DataStore " + getName() + " is read only");
-      }
-
       if (internalHasProduct(id, tag))
       {
          throw new ProductAlreadyExist();
@@ -323,7 +331,12 @@ public class OpenStackDataStore extends AbstractDataStore
       try
       {
          OpenStackLocation location = new OpenStackLocation(resource_location);
-         return getOpenStackObject().exists(location.getObjectName(), container, region);
+         if (location.getRegion ().equals (this.getRegion ()) && 
+                  location.getContainer ().equals (this.getContainer ()))
+         {
+            return getOpenStackObject().exists(location.getObjectName(), container, region);
+         }
+         return false;
       }
       catch (IllegalArgumentException ex)
       {

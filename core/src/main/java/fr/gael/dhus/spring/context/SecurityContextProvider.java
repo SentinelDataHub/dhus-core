@@ -95,7 +95,7 @@ public class SecurityContextProvider
          return;
       }
 
-      List<Object> keys = getCache().getKeysWithExpiryCheck();
+      List keys = getCache().getKeysWithExpiryCheck();
 
       for (Object key: keys)
       {

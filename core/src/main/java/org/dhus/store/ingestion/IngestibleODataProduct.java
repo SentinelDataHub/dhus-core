@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017,2018 GAEL Systems
+ * Copyright (C) 2017-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -48,6 +48,7 @@ public class IngestibleODataProduct implements IngestibleProduct
    private final String origin;
    private final Date ingestionDate;
    private final Date creationDate;
+   private final Boolean onDemand;
 
    // public metadata
    private final String itemClass;
@@ -65,14 +66,19 @@ public class IngestibleODataProduct implements IngestibleProduct
    // mutable properties
    private final Map<String, Object> properties;
 
+   // timer
+   private long timerStartMillis;
+   private long timerStopMillis;
+
    private IngestibleODataProduct(String uuid, String origin, Date ingestionDate, Date creationDate,
          String itemClass, String identifier, Date contentStart, Date contentEnd, String footprint,
-         List<MetadataIndex> metadataIndexes, Product physicalProduct, Product quicklook, Product thumbnail)
+         List<MetadataIndex> metadataIndexes, Product physicalProduct, Product quicklook, Product thumbnail, Boolean onDemand)
    {
       this.uuid = uuid;
       this.origin = origin;
       this.ingestionDate = ingestionDate;
       this.creationDate = creationDate;
+      this.onDemand = onDemand;
 
       this.itemClass = itemClass;
       this.identifier = identifier;
@@ -107,6 +113,13 @@ public class IngestibleODataProduct implements IngestibleProduct
       String identifier = (String) odataProductProperties.get("Name");
       String footprint = (String) odataProductProperties.get("ContentGeometry");
 
+      Boolean onDemand = (Boolean)odataProductProperties.get("OnDemand");
+      // force onDemand default value (false) if field not found.
+      if (onDemand == null)
+      {
+         onDemand = false;
+      }
+
       // extract ContentDate complex property
       @SuppressWarnings("unchecked")
       Map<String, GregorianCalendar> contentDate = (Map<String, GregorianCalendar>) odataProductProperties.get("ContentDate");
@@ -120,7 +133,7 @@ public class IngestibleODataProduct implements IngestibleProduct
       if (physicalProduct != null)
       {
          return new IngestibleODataProduct(uuid, origin, ingestionDate, creationDate, itemClass, identifier,
-               contentStart, contentEnd, footprint, metadataIndexList, physicalProduct, quicklook, thumbnail);
+               contentStart, contentEnd, footprint, metadataIndexList, physicalProduct, quicklook, thumbnail, onDemand);
       }
       throw new MissingProductsException("Cannot instantiate without product, quicklook and thumbnail reference or downloadable");
    }
@@ -274,5 +287,29 @@ public class IngestibleODataProduct implements IngestibleProduct
    public boolean removeSource()
    {
       return false;
+   }
+
+   @Override
+   public Boolean isOnDemand()
+   {
+      return onDemand;
+   }
+
+   @Override
+   public void startTimer()
+   {
+      timerStartMillis = System.currentTimeMillis();
+   }
+
+   @Override
+   public void stopTimer()
+   {
+      timerStopMillis = System.currentTimeMillis();
+   }
+
+   @Override
+   public long getIngestionTimeMillis()
+   {
+      return timerStopMillis - timerStartMillis;
    }
 }

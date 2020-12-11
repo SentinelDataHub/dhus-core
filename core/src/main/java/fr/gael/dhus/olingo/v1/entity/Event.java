@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -251,13 +251,13 @@ public class Event extends AbstractEntity
       Map<String, Object> properties = entry.getProperties();
       if (properties.containsKey(EventEntitySet.CATEGORY))
       {
-         event.setCategory(EventCategory.fromString((String) properties.get(EventEntitySet.CATEGORY)));
+         event.setCategory(EventCategory.valueOf((String) properties.get(EventEntitySet.CATEGORY)));
       }
 
       if (properties.containsKey(EventEntitySet.SUBCATEGORY))
       {
          String subcategory = (String) properties.get(EventEntitySet.SUBCATEGORY);
-         if (event.getCategory().equals(EventCategory.OTHER) && subcategory.isEmpty())
+         if (event.getCategory().equals(EventCategory.Other) && subcategory.isEmpty())
          {
             throw new ODataException("Subcategory must be specified if the Category is 'Other'");
          }

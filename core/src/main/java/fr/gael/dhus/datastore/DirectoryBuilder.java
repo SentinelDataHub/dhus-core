@@ -33,17 +33,4 @@ public interface DirectoryBuilder
     * @return path as File object
     */
    public File getDirectory(String filename);
-
-   /**
-    * Returns the next available folder.
-    * <p>
-    * Defaults to {@code getDirectory(null);}.
-    *
-    * @return path as File object
-    * @deprecated use {@link #getDirectory(String)} instead
-    */
-   default public File getDirectory()
-   {
-      return getDirectory(null);
-   }
 }

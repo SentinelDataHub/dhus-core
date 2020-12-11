@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -49,6 +49,7 @@ import fr.gael.dhus.olingo.v1.entity.Collection;
 import fr.gael.dhus.olingo.v1.map.impl.CollectionMap;
 import fr.gael.dhus.service.CollectionService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import org.apache.olingo.odata2.api.exception.ODataException;
 
 public class CollectionEntitySet extends AbstractEntitySet<Collection>
 {
@@ -88,6 +89,8 @@ public class CollectionEntitySet extends AbstractEntitySet<Collection>
                .setFcTargetPath (EdmTargetPath.SYNDICATION_TITLE)));
       properties.add (new SimpleProperty ().setName (DESCRIPTION).setType (
          EdmSimpleTypeKind.String));
+      properties.add (new SimpleProperty ().setName (UUID).setType (
+            EdmSimpleTypeKind.String));
 
       // Navigation Properties
       List<NavigationProperty> navigationProperties =
@@ -143,7 +146,7 @@ public class CollectionEntitySet extends AbstractEntitySet<Collection>
    }
 
    @Override
-   public Map getEntities()
+   public Map<String, Collection> getEntities()
    {
       return new CollectionMap();
    }
@@ -162,7 +165,8 @@ public class CollectionEntitySet extends AbstractEntitySet<Collection>
 
    @Override
    public List<Map<String, Object>> expand(String navlink_name, String self_url,
-         Map<?, AbstractEntity> entities, Map<String, Object> key)
+         Map<? extends Object, ? extends AbstractEntity> entities, Map<String, Object> key)
+         throws ODataException
    {
       return Expander.expandFeedSingletonKey(navlink_name, self_url, entities, key, CollectionEntitySet.NAME);
    }

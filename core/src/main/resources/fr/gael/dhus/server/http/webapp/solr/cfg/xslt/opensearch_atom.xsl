@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+   Copyright (C) 2013-2019 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -155,14 +155,34 @@
                         <xsl:variable name="mode"  select="str[@name='polarisationmode']" />
                         <xsl:variable name="satellite"  select="str[@name='platformname']" />
                         <xsl:variable name="size"  select="str[@name='size']" />
-                        <xsl:value-of
-                           select="concat('Date: ', $contentDate,
-                              ', Instrument: ', $instrument,
-                              ', Mode: ', $mode,
-                              ', Satellite: ', $satellite,
-                              ', Size: ', $size)"/>
+                        <xsl:choose>
+                            <xsl:when test="str[@name='polarisationmode']">
+                                <xsl:value-of
+                                   select="concat('Date: ', $contentDate,
+                                      ', Instrument: ', $instrument,
+                                      ', Mode: ', $mode,
+                                      ', Satellite: ', $satellite,
+                                      ', Size: ', $size)"/>
+                            </xsl:when>
+                            <xsl:otherwise>
+                                <xsl:value-of
+                                   select="concat('Date: ', $contentDate,
+                                      ', Instrument: ', $instrument,
+                                      ', Satellite: ', $satellite,
+                                      ', Size: ', $size)"/>
+                            </xsl:otherwise>
+                        </xsl:choose>
                     </summary>
+                    <xsl:choose>
+                        <xsl:when test="bool[@name='ondemand']">
+                             <ondemand><xsl:value-of select="bool[@name='ondemand']"/></ondemand>
+                        </xsl:when>
+                        <xsl:otherwise>
+                             <ondemand><xsl:value-of select="false()"/></ondemand>
+                        </xsl:otherwise>
+                    </xsl:choose>
                     <xsl:copy-of select="date" />
+                    <xsl:copy-of select="boolean" />
                     <xsl:copy-of select="int[@name != 'id' and @name != '_version_']" />
                     <xsl:copy-of select="double" />
                     <xsl:copy-of select="str[@name != 'contents' and @name != 'path' and @name != 'user']" />

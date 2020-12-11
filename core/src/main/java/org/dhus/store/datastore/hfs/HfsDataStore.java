@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017,2018 GAEL Systems
+ * Copyright (C) 2016-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,6 +19,8 @@
  */
 package org.dhus.store.datastore.hfs;
 
+import fr.gael.dhus.util.MultipleDigestInputStream;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -34,28 +36,40 @@ import org.apache.logging.log4j.Logger;
 import org.dhus.Product;
 import org.dhus.ProductConstants;
 import org.dhus.store.datastore.AbstractDataStore;
-import org.dhus.store.datastore.DataStoreConstants;
 import org.dhus.store.datastore.DataStoreException;
+import org.dhus.store.datastore.DataStoreProduct;
+import org.dhus.store.datastore.DataStores;
 import org.dhus.store.datastore.ProductNotFoundException;
-import org.dhus.store.datastore.ReadOnlyDataStoreException;
-
-import fr.gael.dhus.util.MultipleDigestInputStream;
+import org.dhus.store.datastore.config.DataStoreRestriction;
 
 public class HfsDataStore extends AbstractDataStore
 {
    private static final Logger LOGGER = LogManager.getLogger();
-   private static final String SUPPORTED_ALGORITHMS = "MD5,SHA-1,SHA-256,SHA-512";
 
    /** The inner implementation of the hierarchical file system. */
    private HfsManager hfs;
 
-   public HfsDataStore(String name, HfsManager hfs, boolean readOnly,
-         int priority, long maximumSize, long currentSize, boolean autoEviction)
-   {
-      super(name, readOnly, priority, maximumSize, currentSize, autoEviction);
-      this.hfs = hfs;
+   /** Array of hash sum algorithms to compute on product move (may be empty/null) */
+   private final String[] hashAlgorithms;
 
-      super.setProperty(DataStoreConstants.PROP_KEY_TRANSFER_DIGEST, SUPPORTED_ALGORITHMS);
+   /**
+    * Creates a new instance of the HFS DataStore.
+    *
+    * @param name           non null name of the DataStore (should be unique)
+    * @param hfs            a non null HFS manager instance
+    * @param restriction    access restrictions of this DataStore
+    * @param priority       position of this DataStore
+    * @param maximumSize    in bytes, used by the on-insert automatic eviction
+    * @param currentSize    in bytes used by this DataStore on disk
+    * @param autoEviction   true to enable the on-insert automatic eviction
+    * @param hashAlgorithms array of hash sum algorithms to compute on product move (may be empty/null)
+    */
+   public HfsDataStore(String name, HfsManager hfs, DataStoreRestriction restriction, int priority, long maximumSize,
+         long currentSize, boolean autoEviction, String[] hashAlgorithms)
+   {
+      super(name, restriction, priority, maximumSize, currentSize, autoEviction);
+      this.hfs = hfs;
+      this.hashAlgorithms = hashAlgorithms;
    }
 
    private void put(Product product, Path destination) throws IOException, DataStoreException
@@ -98,7 +112,7 @@ public class HfsDataStore extends AbstractDataStore
    }
 
    @Override
-   protected Product internalGetProduct(String uuid, String tag) throws DataStoreException
+   protected DataStoreProduct internalGetProduct(String uuid, String tag) throws DataStoreException
    {
       if (internalHasProduct(uuid, tag))
       {
@@ -117,11 +131,6 @@ public class HfsDataStore extends AbstractDataStore
    @Override
    protected void internalAddProduct(String uuid, String tag, Product product) throws DataStoreException
    {
-      if (isReadOnly())
-      {
-         throw new ReadOnlyDataStoreException(getName() + " datastore is read only");
-      }
-
       try
       {
          Path path = getNextLocation(product);
@@ -177,16 +186,20 @@ public class HfsDataStore extends AbstractDataStore
       HfsManager hfs = getHfs();
       return hfs.isContaining(new File(hfs.getPath(), resourceLocation));
    }
-   
+
    private void computeAndSetChecksum(File file, Product product)
          throws IOException
    {
+      String[] algorithmToPerform = DataStores.checkHashAlgorithms(product, hashAlgorithms);
+      if (algorithmToPerform.length == 0)
+      {
+         return;
+      }
       byte[] buffer = new byte[1024 * 4];
-      String[] algorithms = SUPPORTED_ALGORITHMS.split(",");
       MultipleDigestInputStream inputStream = null;
       try
       {
-         inputStream = new MultipleDigestInputStream(new FileInputStream(file), algorithms);
+         inputStream = new MultipleDigestInputStream(new FileInputStream(file), algorithmToPerform);
          while (inputStream.read(buffer) != -1); // read file completely
 
       }
@@ -202,18 +215,7 @@ public class HfsDataStore extends AbstractDataStore
             inputStream.close();
          }
       }
-      extractAndSetChecksum(inputStream, algorithms, product);
-   }
-
-   private void extractAndSetChecksum(MultipleDigestInputStream stream,
-         String[] algorithms, Product product)
-   {
-      for (String algorithm: algorithms)
-      {
-         String k = ProductConstants.CHECKSUM_PREFIX + "." + algorithm;
-         String v = stream.getMessageDigestAsHexadecimalString(algorithm);
-         product.setProperty(k, v);
-      }
+      DataStores.extractAndSetChecksum(inputStream, product);
    }
 
    /**
@@ -229,12 +231,17 @@ public class HfsDataStore extends AbstractDataStore
    private void copyProduct(Product product, Path destination) throws IOException,
          DataStoreException
    {
-      String[] algorithms = SUPPORTED_ALGORITHMS.split(",");
+      String[] algorithmToPerform = DataStores.checkHashAlgorithms(product, hashAlgorithms);
+      if (algorithmToPerform.length == 0)
+      {
+         Files.copy(product.getImpl(InputStream.class), destination);
+         return;
+      }
       if (product.hasImpl(InputStream.class))
       {
          InputStream input = product.getImpl(InputStream.class);
          OutputStream output = Files.newOutputStream(destination);
-         try (MultipleDigestInputStream stream = new MultipleDigestInputStream(input, algorithms))
+         try (MultipleDigestInputStream stream = new MultipleDigestInputStream(input, algorithmToPerform))
          {
             int count;
             byte[] buffer = new byte[4096];
@@ -246,7 +253,7 @@ public class HfsDataStore extends AbstractDataStore
                }
                output.write(buffer, 0, count);
             }
-            extractAndSetChecksum(stream, algorithms, product);
+            DataStores.extractAndSetChecksum(stream, product);
          }
          catch (NoSuchAlgorithmException e)
          {

@@ -162,7 +162,7 @@ public class EventEntitySet extends AbstractEntitySet<Event>
    }
 
    @Override
-   public Map getEntities()
+   public Map<String, Event> getEntities()
    {
       return new EventMap();
    }
@@ -170,7 +170,7 @@ public class EventEntitySet extends AbstractEntitySet<Event>
    @Override
    public AbstractEntity getEntity(KeyPredicate kp)
    {
-      return (Event) getEntities().get(kp.getLiteral());
+      return getEntities().get(kp.getLiteral());
    }
 
    public boolean hasWritePermission(User user)

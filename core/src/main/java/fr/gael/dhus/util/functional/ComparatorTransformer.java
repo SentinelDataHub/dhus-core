@@ -28,7 +28,7 @@ import org.apache.commons.collections4.Transformer;
  * as input.
  */
 public class ComparatorTransformer
-      implements Transformer<Duo<? extends Comparable, ? extends Comparable>, Integer>
+      implements Transformer<Duo<? extends Comparable<Object>, ? extends Comparable<Object>>, Integer>
 {
    private final boolean reverse;
 
@@ -50,7 +50,7 @@ public class ComparatorTransformer
    }
 
    @Override
-   public Integer transform(Duo<? extends Comparable, ? extends Comparable> params)
+   public Integer transform(Duo<? extends Comparable<Object>, ? extends Comparable<Object>> params)
    {
       if (params.getA() == null && params.getB() == null)
       {

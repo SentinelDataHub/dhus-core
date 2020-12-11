@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -40,7 +40,7 @@ public class MetadataFactory
 
    private MetadataFactory() {}
 
-   public static MetadataIndex createMetadataIndex(String name, String type, String category, String queryable, String value)
+   public static synchronized MetadataIndex createMetadataIndex(String name, String type, String category, String queryable, String value)
    {
       MetadataDefinition metadataDefinition = METADATA_SERVICE.getMetadataDefinition(name, type, category, queryable);
       if (metadataDefinition == null)

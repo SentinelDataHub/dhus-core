@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -21,6 +21,7 @@ package org.dhus.store.datastore.remotedhus;
 
 import fr.gael.dhus.olingo.ODataClient;
 import fr.gael.dhus.util.http.Timeouts;
+import fr.gael.dhus.olingo.ODataClient.HttpException;
 import fr.gael.drb.DrbAttribute;
 import fr.gael.drb.DrbAttributeList;
 import fr.gael.drb.DrbDefaultAttribute;
@@ -130,7 +131,7 @@ public class DhusODataV1Node extends DrbNodeImpl
    {
       if ("size".equals(name))
       {
-         Long size = (Long) getODataEntry().getProperties().get(PROPERTY_CONTENT_LENGTH);
+         Long size = (Long) getODataEntryProperty(PROPERTY_CONTENT_LENGTH);
          return new DrbDefaultAttribute(name, new fr.gael.drb.value.String(size.toString()));
       }
 
@@ -140,6 +141,18 @@ public class DhusODataV1Node extends DrbNodeImpl
          ODataEntry entry = client.readEntry(path, Collections.emptyMap());
          return new DrbDefaultAttribute(name,
                new fr.gael.drb.value.String((String) entry.getProperties().get(PROPERTY_VALUE)));
+      }
+      catch (HttpException httpException)
+      {
+         // FIXME should always be http 404, fix Node v1 entity
+         if(httpException.getStatusCode() == 500 || httpException.getStatusCode() == 404)
+         {
+            return null;
+         }
+         else
+         {
+            throw new IllegalStateException("Cannot generate remote attribute from: " + serviceUrl + path, httpException);
+         }
       }
       catch (IOException | ODataException | InterruptedException e)
       {
@@ -160,7 +173,7 @@ public class DhusODataV1Node extends DrbNodeImpl
    @Override
    public int getChildrenCount()
    {
-      return ((Long) getODataEntry().getProperties().get(PROPERTY_CHILDREN_NUM)).intValue();
+      return ((Long) getODataEntryProperty(PROPERTY_CHILDREN_NUM)).intValue();
    }
 
    @Override
@@ -252,7 +265,7 @@ public class DhusODataV1Node extends DrbNodeImpl
    @Override
    public String getName()
    {
-      return (String) getODataEntry().getProperties().get(PROPERTY_NAME);
+      return (String) getODataEntryProperty(PROPERTY_NAME);
    }
 
    @Override
@@ -270,13 +283,13 @@ public class DhusODataV1Node extends DrbNodeImpl
    @Override
    public Value getValue()
    {
-      String value = (String) getODataEntry().getProperties().get(PROPERTY_VALUE);
+      String value = (String) getODataEntryProperty(PROPERTY_VALUE);
       return value == null ? null : new fr.gael.drb.value.String(value);
    }
 
    public String getContentType()
    {
-      return (String) getODataEntry().getProperties().get(PROPERTY_CONTENT_TYPE);
+      return (String) getODataEntryProperty(PROPERTY_CONTENT_TYPE);
    }
 
    @Override
@@ -317,6 +330,17 @@ public class DhusODataV1Node extends DrbNodeImpl
       );
    }
 
+   /**
+    * Used to avoid potential NPEs.
+    *
+    * @param propertyName
+    * @return
+    */
+   private Object getODataEntryProperty(String propertyName)
+   {
+      return getODataEntry() == null ? null : getODataEntry().getProperties().get(propertyName);
+   }
+
    private ODataEntry getODataEntry()
    {
       if (odataEntry == null)
@@ -335,4 +359,5 @@ public class DhusODataV1Node extends DrbNodeImpl
       }
       return odataEntry;
    }
+
 }

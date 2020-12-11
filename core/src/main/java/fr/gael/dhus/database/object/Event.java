@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,7 +20,6 @@
 package fr.gael.dhus.database.object;
 
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.Date;
 
 import javax.persistence.Column;
@@ -258,36 +257,9 @@ public class Event implements Serializable
 
    public static enum EventCategory implements Serializable
    {
-      SATELLITE("Satellite"),
-      GROUND_SEGMENT("Ground Segment"),
-      PRODUCT("Product"),
-      OTHER("Other");
-
-      private String category;
-
-      private EventCategory(String category)
-      {
-         this.category = category;
-      }
-
-      @Override
-      public String toString()
-      {
-         return category;
-      }
-
-      public static EventCategory fromString(String value)
-      {
-         for (EventCategory e: EventCategory.values())
-         {
-            if (e.category.equalsIgnoreCase(value))
-            {
-               return e;
-            }
-         }
-         throw new IllegalArgumentException(
-               "No enum constant fr.gael.dhus.database.object.Event.EventCategory."
-               + value + " - Possible values are: " + Arrays.toString(values()));
-      }
+      Satellite,
+      GroundSegment,
+      Product,
+      Other;
    }
 }

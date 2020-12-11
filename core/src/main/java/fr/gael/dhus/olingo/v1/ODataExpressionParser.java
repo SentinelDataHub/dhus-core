@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,53 +19,86 @@
  */
 package fr.gael.dhus.olingo.v1;
 
+import fr.gael.dhus.olingo.v1.entityset.ProductEntitySet;
+
+import java.util.Locale;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import org.apache.olingo.odata2.api.commons.HttpStatusCodes;
 import org.apache.olingo.odata2.api.edm.Edm;
 import org.apache.olingo.odata2.api.edm.EdmEntityType;
-import org.apache.olingo.odata2.api.edm.EdmException;
+import org.apache.olingo.odata2.api.exception.ODataApplicationException;
 import org.apache.olingo.odata2.api.exception.ODataMessageException;
 import org.apache.olingo.odata2.api.rt.RuntimeDelegate;
 import org.apache.olingo.odata2.api.uri.UriParser;
 import org.apache.olingo.odata2.api.uri.expression.FilterExpression;
 import org.apache.olingo.odata2.api.uri.expression.OrderByExpression;
 
-import fr.gael.dhus.olingo.v1.entityset.ProductEntitySet;
-
-/**
- *
- */
 public class ODataExpressionParser
 {
-   private final Edm edm;
+   private static final Logger LOGGER = LogManager.getLogger();
+
+   private static final Edm EDM;
+
+   private static final ODataExpressionParser PDT_EXP_PARSER;
+
+   static
+   {
+      Edm edm = null;
+      try
+      {
+         edm = RuntimeDelegate.createEdm(new Model());
+      }
+      catch (Throwable t)
+      {
+         LOGGER.fatal("Could not generate the EDM to parse OData filter/orderby expressions", t);
+      }
+      EDM = edm;
+
+      ODataExpressionParser expParser = null;
+
+      if (EDM != null)
+      {
+         try
+         {
+            EdmEntityType productType = EDM.getEntityType(Model.NAMESPACE, ProductEntitySet.ENTITY_NAME);
+            expParser = new ODataExpressionParser(productType);
+         }
+         catch (Throwable t)
+         {
+            LOGGER.fatal("Could not get the Product entity type to parse OData filter/orderby expressions", t);
+         }
+      }
+      PDT_EXP_PARSER = expParser;
+   }
+
+   public static ODataExpressionParser getProductExpressionParser() throws ODataMessageException, ODataApplicationException
+   {
+      if (PDT_EXP_PARSER != null)
+      {
+         return PDT_EXP_PARSER;
+      }
+
+      throw new ODataApplicationException("Could not create a Product filter/orderby expression parser",
+            Locale.ENGLISH, HttpStatusCodes.INTERNAL_SERVER_ERROR);
+   }
+
    private final EdmEntityType type;
 
-   private ODataExpressionParser(Edm edm, EdmEntityType type)
+   public ODataExpressionParser(EdmEntityType type)
    {
-      this.edm = edm;
       this.type = type;
    }
 
-   public static ODataExpressionParser getProductExpressionParser()
+   public FilterExpression parseFilterString(String filter) throws ODataMessageException, ODataApplicationException
    {
-      try
-      {
-         Edm edm = RuntimeDelegate.createEdm(new Model());
-         EdmEntityType productType = edm.getEntityType(Model.NAMESPACE, ProductEntitySet.ENTITY_NAME);
-
-         return new ODataExpressionParser(edm, productType);
-      }
-      catch (EdmException e)
-      {
-         throw new IllegalStateException(e);
-      }
+      return UriParser.parseFilter(EDM, type, filter);
    }
 
-   public FilterExpression parseFilterString(String filter) throws ODataMessageException
+   public OrderByExpression parseOrderByString(String orderBy) throws ODataMessageException, ODataApplicationException
    {
-      return UriParser.parseFilter(edm, type, filter);
-   }
-
-   public OrderByExpression parseOrderByString(String orderBy) throws ODataMessageException
-   {
-      return UriParser.parseOrderBy(edm, type, orderBy);
+      return UriParser.parseOrderBy(EDM, type, orderBy);
    }
 }

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017,2018 GAEL Systems
+ * Copyright (C) 2016-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,6 +20,10 @@
 package org.dhus.store.datastore;
 
 import java.util.List;
+import java.util.Map;
+
+import org.dhus.store.StoreException;
+import org.dhus.store.ingestion.IngestibleProduct;
 
 import fr.gael.dhus.datastore.Destination;
 
@@ -68,7 +72,7 @@ public interface DataStoreManager extends DataStore
     *
     * @param uuid the UUID of the product to delete
     * @param destination the destination of the product's data
-    * @throws DataStoreException
+    * @throws DataStoreException could not perform operation
     */
    // TODO remove destination from parameters and handle it in DataStoreManager implementation
    public void deleteProduct(String uuid, Destination destination) throws DataStoreException;
@@ -80,8 +84,32 @@ public interface DataStoreManager extends DataStore
     * @param dataStoreName the name of the DataStore where the product will be deleted
     * @param destination   the destination of the product's data
     * @param safeMode      if `true`, given product will be deleted from named DataStore only if it is stored in another DataStore
-    * @throws DataStoreException
+    * @throws DataStoreException could not perform operation
     */
    public void deleteProductFromDataStore(String uuid, String dataStoreName, Destination destination, Boolean safeMode)
          throws DataStoreException;
+
+   /**
+    * Retrieves all resource locations of a product.
+    *
+    * @param uuid the UUID of the product
+    * @return a map containing resource locations of the product grouped by data store name
+    * @throws DataStoreException could not perform operation
+    */
+   public Map<String, String> getResourceLocations(String uuid) throws DataStoreException;
+
+   @Override
+   default public void addProduct(IngestibleProduct inProduct) throws StoreException
+   {
+      addProduct(inProduct, null);
+   }
+
+   /**
+    * Adds a product into a specific data store.
+    *
+    * @param inProduct the product to store, must not be null
+    * @param targetDataStore name of target DataStore, may be null (insert in all DataStores)
+    * @throws StoreException could not perform operation
+    */
+   public void addProduct(IngestibleProduct inProduct, String targetDataStore) throws StoreException;
 }

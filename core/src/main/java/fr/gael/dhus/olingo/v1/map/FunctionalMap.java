@@ -71,10 +71,11 @@ public class FunctionalMap<K, V> implements Map<K, V>, SubMap<K, V>
       {
 
          @Override
+         @SuppressWarnings("unchecked")
          public Map<K, V> build()
          {
             // Creates an ExecutableExpressionTree from `filter`
-            ExecutableExpressionTree eet;
+            ExecutableExpressionTree<V> eet;
             if (filter != null)
             {
                try
@@ -88,7 +89,7 @@ public class FunctionalMap<K, V> implements Map<K, V>, SubMap<K, V>
             }
             else
             {
-               eet = new ExecutableExpressionTree(
+               eet = new ExecutableExpressionTree<>(
                      ExecutableExpressionTree.Node.createLeave(
                            ConstantFactory.constantFactory(Boolean.TRUE)));
             }
@@ -121,7 +122,7 @@ public class FunctionalMap<K, V> implements Map<K, V>, SubMap<K, V>
 
             if (this.orderBy != null)
             {
-               Comparator cmp;
+               Comparator<? super V> cmp;
                try
                {
                   cmp = Comparator.class.cast(orderBy.accept(transliterator));

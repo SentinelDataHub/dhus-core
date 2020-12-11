@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2017 GAEL Systems
+   Copyright (C) 2017,2019 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -63,13 +63,5 @@
       <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
       <listener-class>org.springframework.security.web.session.HttpSessionEventPublisher</listener-class>
    </listener>
-
-   <!-- Force JSESSIONID cookie path to be / -->
-   <session-config>
-      <cookie-config>
-        <name>JSESSIONID</name>
-        <path>/</path>
-      </cookie-config>
-   </session-config>
 
 </web-app>

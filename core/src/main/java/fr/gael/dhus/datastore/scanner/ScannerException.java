@@ -46,6 +46,11 @@ public class ScannerException extends Exception
       {
          super("Scanner #" + scannerId + " not found");
       }
+
+      public ScannerNotFoundException()
+      {
+         super("Scanner not found");
+      }
    }
 
    public static class ScannerAlreadyRunningException extends ScannerException
@@ -55,6 +60,24 @@ public class ScannerException extends Exception
       public ScannerAlreadyRunningException(Long scannerId)
       {
          super("Scanner #" + scannerId + " already running");
+      }
+   }
+
+   public static class BadScannerConfigException extends ScannerException
+   {
+      private static final long serialVersionUID = 1L;
+
+      public BadScannerConfigException()
+      {
+         super("Bad scanner config");
+      }
+   }
+
+   public static class CannotUpdateRunningScannerException extends ScannerException
+   {
+      public CannotUpdateRunningScannerException()
+      {
+         super("Cannot update or delete a running scanner");
       }
    }
 }

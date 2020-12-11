@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   Data Hub Service (DHuS) - For Space data distribution.
+   Copyright (C) 2019,2020 GAEL Systems
+
+   This file is part of DHuS software sources.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+<databaseChangeLog
+   xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
+
+   <changeSet  author="dihia" id="addColumnOnDemandToProducts">
+      <addColumn tableName="PRODUCTS">
+         <column defaultValue="false" name="ON_DEMAND" type="BOOLEAN">
+            <constraints nullable="false" />
+         </column>
+      </addColumn>
+   </changeSet>
+
+   <!-- Remove deleted or moved changesets from the changelog -->
+   <changeSet id="cleanChangeLog" author="jon">
+      <delete tableName="databasechangelog">
+         <where>ID='metadata-rework-part2-migration' OR ID='metadata-rework-part3-cleanup'</where>
+      </delete>
+      <delete tableName="databasechangelog">
+         <where>ID='persistent-DataStore-autoIncrementId' AND FILENAME='classpath:liquibase/changelog-1.0.2.xml'</where>
+      </delete>
+      <delete tableName="databasechangelog">
+         <where>ID='addInsertionDateColumn' AND FILENAME='classpath:liquibase/changelog-1.2.0.xml'</where>
+      </delete>
+   </changeSet>
+
+   <!-- Add a new index to optimise KeyStoreEntryDao#listForUuidAndTag -->
+   <changeSet id="addIndexKSEkey" author="jon">
+      <createIndex tableName="KEYSTOREENTRIES" indexName="IDX_KSE_ENTRYKEY">
+         <column name="ENTRYKEY" />
+      </createIndex>
+   </changeSet>
+
+</databaseChangeLog>

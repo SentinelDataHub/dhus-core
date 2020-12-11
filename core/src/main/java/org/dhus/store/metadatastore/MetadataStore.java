@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -50,9 +50,19 @@ public interface MetadataStore extends Store
    public Product getProduct(String uuid) throws StoreException;
 
    /**
-    * @param inProduct
-    * @param targetCollectionNames
-    * @throws StoreException
+    * Add a product in this MetadataStore.
+    *
+    * @param inProduct to store
+    * @param targetCollectionNames list of collections referencing this product
+    * @throws StoreException an error occurred
     */
    public void addProduct(IngestibleProduct inProduct, List<String> targetCollectionNames) throws StoreException;
+
+   /**
+    * Re-extracts the metadata, item class, footprint, quicklook of a product with the latest improvements.
+    *
+    * @param inProduct to repair
+    * @throws StoreException an error occurred
+    */
+   public void repairProduct(IngestibleProduct inProduct) throws StoreException;
 }

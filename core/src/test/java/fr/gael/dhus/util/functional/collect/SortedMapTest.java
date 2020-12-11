@@ -64,7 +64,7 @@ public class SortedMapTest
    @SuppressWarnings("ResultOfObjectAllocationIgnored")
    public void doubleNullTest()
    {
-      new SortedMap(null, null);
+      new SortedMap<>(null, null);
    }
 
    /** Constructor: If map param is null, must throw an IllegalArgumentException. */
@@ -72,7 +72,7 @@ public class SortedMapTest
    @SuppressWarnings("ResultOfObjectAllocationIgnored")
    public void nullMapTest()
    {
-      new SortedMap(null, new ComparableComparator<>());
+      new SortedMap<>(null, new ComparableComparator<>());
    }
 
    /** Constructor: If comparator param is null, must throw an IllegalArgumentException. */
@@ -80,14 +80,14 @@ public class SortedMapTest
    @SuppressWarnings("ResultOfObjectAllocationIgnored")
    public void nullComparatorTest()
    {
-      new SortedMap(Collections.EMPTY_MAP, null);
+      new SortedMap<>(Collections.emptyMap(), null);
    }
 
    /** Constructor: Empty map param. */
    @Test
    public void emptyMapTest()
    {
-      SortedMap sorted_map = new SortedMap(Collections.emptyMap(), cmp);
+      SortedMap<?, ?> sorted_map = new SortedMap<>(Collections.emptyMap(), cmp);
       Assert.assertTrue(sorted_map.isEmpty());
       Assert.assertEquals(sorted_map.size(), 0);
       Assert.assertFalse(sorted_map.keySet().iterator().hasNext());

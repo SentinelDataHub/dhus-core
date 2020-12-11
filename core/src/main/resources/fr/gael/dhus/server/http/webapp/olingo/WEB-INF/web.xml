@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2013,2014,2015 GAEL Systems
+   Copyright (C) 2014-2019 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -82,13 +82,5 @@
       <servlet-name>DHuS_OData_v2</servlet-name>
       <url-pattern>/v2/*</url-pattern>
    </servlet-mapping>
-
-   <!-- Force JSESSIONID cookie path to be / -->
-   <session-config>
-      <cookie-config>
-        <name>JSESSIONID</name>
-        <path>/</path>
-      </cookie-config>
-   </session-config>
 
 </web-app>

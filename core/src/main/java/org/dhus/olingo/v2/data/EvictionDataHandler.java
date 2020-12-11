@@ -40,7 +40,7 @@ import org.apache.olingo.commons.api.data.Parameter;
 import org.apache.olingo.commons.api.data.Property;
 import org.apache.olingo.commons.api.data.ValueType;
 import org.apache.olingo.commons.api.edm.EdmAction;
-import org.apache.olingo.commons.api.edm.EdmParameter;
+import org.apache.olingo.commons.api.edm.EdmNavigationProperty;
 import org.apache.olingo.commons.api.http.HttpMethod;
 import org.apache.olingo.commons.api.http.HttpStatusCode;
 import org.apache.olingo.odata2.api.exception.ODataException;
@@ -191,13 +191,15 @@ public class EvictionDataHandler implements DataHandler
    }
 
    @Override
-   public EntityCollection getRelatedEntityCollectionData(Entity sourceEntity) throws ODataApplicationException
+   public EntityCollection getRelatedEntityCollectionData(Entity sourceEntity, EdmNavigationProperty edmNavigationProperty)
+         throws ODataApplicationException
    {
       return null;
    }
 
    @Override
-   public Entity getRelatedEntityData(Entity entity) throws ODataApplicationException
+   public Entity getRelatedEntityData(Entity entity, EdmNavigationProperty edmNavigationProperty)
+         throws ODataApplicationException
    {
       String nameEntity = (String) entity.getProperty(DataStoreModel.PROPERTY_NAME).getValue();
 
@@ -221,7 +223,7 @@ public class EvictionDataHandler implements DataHandler
    }
 
    @Override
-   public Entity getRelatedEntityData(Entity entity, List<UriParameter> navigationKeyParameters)
+   public Entity getRelatedEntityData(Entity sourceEntity, List<UriParameter> navigationKeyParameters, EdmNavigationProperty edmNavigationProperty)
          throws ODataApplicationException
    {
       return null;
@@ -309,14 +311,14 @@ public class EvictionDataHandler implements DataHandler
          {
             eviction.checkAndSetOrderBy((String) DataHandlerUtil.getPropertyValue(entity, EvictionModel.ORDER_BY));
          }
-         catch (ODataException ex)
+         catch (IllegalArgumentException ex)
          {
             throw new ODataApplicationException(ex.getMessage(), HttpStatusCode.BAD_REQUEST.getStatusCode(), Locale.ENGLISH);
          }
       }
       else
       {
-         eviction.setOrderBy((String) EvictionModel.getDefaultValue(EvictionModel.ORDER_BY));
+         eviction.checkAndSetOrderBy((String) EvictionModel.getDefaultValue(EvictionModel.ORDER_BY));
       }
 
       eviction.setStatus(EvictionStatusEnum.fromValue(
@@ -467,8 +469,8 @@ public class EvictionDataHandler implements DataHandler
    }
 
    @Override
-   public Property performBoundActionPrimitive(List<UriParameter> keyPredicates, EdmAction action,
-         Map<String, Parameter> parameters) throws ODataApplicationException
+   public Object performBoundAction(List<UriParameter> keyPredicates, EdmAction action, Map<String, Parameter> parameters)
+         throws ODataApplicationException
    {
       ODataSecurityManager.checkPermission(Role.SYSTEM_MANAGER);
 

@@ -129,13 +129,7 @@ public class PreAuthFilter extends GenericFilterBean
       
       SecurityContextHolder.setContext (ctx);
 
-      // Update to clear security context on logout.
-      Object integrityAttr = request.getSession().getAttribute(CookieKey.INTEGRITY_ATTRIBUTE_NAME);
-      if (integrityAttr == null || integrityAttr != integrity)
-      {
-         request.getSession().setAttribute(CookieKey.INTEGRITY_ATTRIBUTE_NAME, integrity);
-         SEC_CTX_PROVIDER.saveSecurityContext(integrity, ctx);
-      }
+      SEC_CTX_PROVIDER.saveSecurityContext(integrity, ctx);
    }
    
    private void clearCookies (HttpServletRequest request, 

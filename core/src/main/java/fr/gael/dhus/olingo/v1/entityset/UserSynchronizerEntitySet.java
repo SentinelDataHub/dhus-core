@@ -162,7 +162,7 @@ public class UserSynchronizerEntitySet extends AbstractEntitySet<UserSynchronize
    }
 
    @Override
-   public Map getEntities()
+   public Map<Long, UserSynchronizer> getEntities()
    {
       return new UserSynchronizerMap();
    }

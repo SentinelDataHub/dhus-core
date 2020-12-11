@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,32 +19,30 @@
  */
 package fr.gael.dhus.olingo.v1.map.impl;
 
-import fr.gael.dhus.database.object.config.scanner.ScannerInfo;
 import fr.gael.dhus.olingo.v1.entity.Scanner;
-import fr.gael.dhus.olingo.v1.map.FunctionalMap;
-import fr.gael.dhus.olingo.v1.visitor.ScannerFunctionalVisitor;
-import fr.gael.dhus.spring.context.ApplicationContextProvider;
-import fr.gael.dhus.system.config.ConfigurationManager;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import fr.gael.dhus.olingo.v1.map.FunctionalMap;
+import fr.gael.dhus.olingo.v1.visitor.ScannerFunctionalVisitor;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import org.dhus.scanner.ScannerContainer;
 
 public class ScannerMap extends FunctionalMap<Long, Scanner>
 {
    public ScannerMap()
    {
-      super(toMap(ApplicationContextProvider.getBean(ConfigurationManager.class).getScannerManager().getScanners()),
-            new ScannerFunctionalVisitor());
+      super(toMap(ApplicationContextProvider.getBean(ScannerContainer.class).getScanners()), new ScannerFunctionalVisitor());
    }
 
-   private static Map<Long, Scanner> toMap(final List<ScannerInfo> list)
+   private static Map<Long, Scanner> toMap(final List<fr.gael.dhus.datastore.scanner.Scanner> list)
    {
       HashMap<Long, Scanner> res = new HashMap<>();
 
-      for (ScannerInfo scanner: list)
+      for (fr.gael.dhus.datastore.scanner.Scanner scanner: list)
       {
-         res.put(scanner.getId(), new Scanner(scanner));
+         res.put(scanner.getConfig().getId(), new Scanner(scanner));
       }
       return res;
    }

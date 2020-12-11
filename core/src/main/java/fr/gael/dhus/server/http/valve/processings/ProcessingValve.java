@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -31,10 +31,12 @@ import java.lang.management.ManagementFactory;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+
 import javax.management.MBeanServer;
 import javax.servlet.ServletException;
 import javax.servlet.http.Cookie;
@@ -59,7 +61,6 @@ import org.apache.logging.log4j.Logger;
 
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.crypto.codec.Base64;
 
 /**
  * This processing valve aims to manage the user processing time concerning the
@@ -228,7 +229,7 @@ public class ProcessingValve extends ValveBase
                   public void notifyElementRemoved(Ehcache cache, Element element)
                         throws CacheException
                   {
-                     UserKey user = (UserKey) element.getObjectKey();
+                     UserKey user = (UserKey) element.getObjectValue();
                      CacheManager cm = getCacheManager();
                      String user_cache_name = getCacheName(user);
                      if (cm.cacheExists(user_cache_name))
@@ -240,6 +241,12 @@ public class ProcessingValve extends ValveBase
 
                   @Override
                   public void notifyElementEvicted(Ehcache cache, Element element)
+                  {
+                     notifyElementRemoved(cache, element);
+                  }
+
+                  @Override
+                  public void notifyElementExpired(Ehcache cache, Element element)
                   {
                      notifyElementRemoved(cache, element);
                   }
@@ -265,9 +272,15 @@ public class ProcessingValve extends ValveBase
     */
    private synchronized Cache getWindowCache(UserKey user)
    {
-      Cache window = null;
+      String userName = user.getPi().getUsername();
+      // Call to refresh the userCache and force the expiry of the item if needed.
+      // Needs to be refreshed before getting from the cache.
+      // The expiry started above is also cleaning the window cache if needed.
+      getUserCache().get(userName);
+
       String window_cache_name = getCacheName(user);
-      if (!getCacheManager().cacheExists(window_cache_name))
+      Cache window = getCacheManager().getCache(window_cache_name);
+      if (window == null)
       {
          CacheConfiguration cacheConfiguration = new CacheConfiguration();
          cacheConfiguration.setName(window_cache_name);
@@ -280,14 +293,10 @@ public class ProcessingValve extends ValveBase
          getCacheManager().addCache(window);
 
          // The cache on user is only used to manage users windows evictions.
-         Element user_req_elem = new Element(user, null);
+         Element user_req_elem = new Element(userName, user);
          user_req_elem.setTimeToIdle((int) getIdleTimeBeforeReset());
          user_req_elem.setTimeToLive((int) getTimeWindow());
          getUserCache().put(user_req_elem);
-      }
-      else
-      {
-         window = getCacheManager().getCache(window_cache_name);
       }
       return window;
    }
@@ -333,33 +342,29 @@ public class ProcessingValve extends ValveBase
          // Check if authorized: throw ProcessingQuotaException otherwise.
          checkAccess(user_key, window);
 
+         Element request_element = new Element(pi.getDateNs(), pi);
+         // first put to avoid multiple requests simultaneously
+         window.put(request_element);
+
          // Run the request
          getNext().invoke(request, response);
 
          updateProcessingMetrics(pi);
          // Processing done: update the user window.
-         Element request_element = new Element(pi.getDateNs(), pi);
 
          // Time expected into the cache should be at least the window time
          // No matter about the accesses.
          request_element.setTimeToLive((int) 0); // Infinite
          request_element.setTimeToIdle((int) getTimeWindow()); // Window time
-
-         try
-         {
-            window.put(request_element);
-         }
-         catch (Exception e)
-         {
-            // Do nothing case of reset happen during the request invoke.
-         }
+        
+         window.put(request_element);
       }
       catch (ProcessingQuotaException e)
       {
+         response.addHeader("cause-message", e.getClass().getSimpleName() + ": " + e.getMessage());
          // quota exceeded, set user error message and error flag
          response.setError();
          response.sendError(429, e.getMessage());
-         getNext().invoke(request, response);
       }
       catch (IOException | ServletException e)
       {
@@ -507,6 +512,7 @@ public class ProcessingValve extends ValveBase
       SummaryStatistics cpu_time_stats = new SummaryStatistics();
       SummaryStatistics user_time_stats = new SummaryStatistics();
       SummaryStatistics memory_stats = new SummaryStatistics();
+      int nbRequests = 0;
       long now = System.nanoTime();
 
       for (Object o: window.getKeysWithExpiryCheck())
@@ -521,7 +527,7 @@ public class ProcessingValve extends ValveBase
             continue;
          }
          ProcessingInformation proc = (ProcessingInformation) window.get(o).getObjectValue();
-
+         nbRequests++;
          if (proc.getCpuTimeNs() != null)
          {
             cpu_time_stats.addValue(proc.getCpuTimeNs().doubleValue());
@@ -590,7 +596,7 @@ public class ProcessingValve extends ValveBase
       }
       // Checks the number of request in the time frame
       if (checkParameter(getMaxRequestNumberPerUserPerWindow())
-            && user_time_stats.getN() >= getMaxRequestNumberPerUserPerWindow())
+            && nbRequests >= getMaxRequestNumberPerUserPerWindow())
       {
          StringBuilder sb = new StringBuilder();
          sb.append("Maximum number of request exceeded (").
@@ -600,7 +606,7 @@ public class ProcessingValve extends ValveBase
                append("mn) - please wait and retry.");
 
          LOGGER.warn("[{}] Maximum number of request exceeded: {} (max={})",
-               username, user_time_stats.getN(),
+               username, nbRequests,
                getMaxRequestNumberPerUserPerWindow());
 
          throw new ProcessingQuotaException(sb.toString());
@@ -638,7 +644,7 @@ public class ProcessingValve extends ValveBase
       byte[] decoded;
       try
       {
-         decoded = Base64.decode(base64Token);
+         decoded = Base64.getDecoder().decode(base64Token);
       }
       catch (IllegalArgumentException e)
       {

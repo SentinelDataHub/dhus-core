@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -44,6 +44,11 @@ public class MetadataService extends WebService
    @Transactional
    public MetadataDefinition getMetadataDefinition(String name, String type, String category, String queryable)
    {
-      return metadataDefinitionDao.findAndCreateIfAbsent(name, category, type, queryable);
+      MetadataDefinition metadataDefinition = metadataDefinitionDao.find(name, category, type, queryable);
+      if (metadataDefinition == null)
+      {
+         metadataDefinition = metadataDefinitionDao.create(new MetadataDefinition(name, type, category, queryable));
+      }
+      return metadataDefinition;
    }
 }

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -105,7 +105,7 @@ public class EventService extends WebService
 
       /* Required fields without default values */
       event.setCategory(
-            EventCategory.fromString(Objects.requireNonNull(category)));
+            EventCategory.valueOf(Objects.requireNonNull(category)));
       event.setTitle(Objects.requireNonNull(title));
       event.setDescription(Objects.requireNonNull(description));
       event.setStartDate(Objects.requireNonNull(startDate));

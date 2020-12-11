@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -28,13 +28,14 @@ import fr.gael.odata.engine.data.DataHandlerUtil;
 
 import java.util.List;
 
+import org.dhus.api.olingo.v2.EntityProducer;
+
 import org.apache.olingo.commons.api.data.Entity;
 import org.apache.olingo.commons.api.data.EntityCollection;
 import org.apache.olingo.server.api.ODataApplicationException;
 import org.apache.olingo.server.api.uri.UriParameter;
 import org.dhus.olingo.v2.ODataSecurityManager;
 import org.dhus.olingo.v2.datamodel.SynchronizerModel;
-import org.dhus.olingo.v2.entity.EntityProducer;
 import org.dhus.olingo.v2.entity.TypeStore;
 
 public class SynchronizerDataHandler implements DataHandler

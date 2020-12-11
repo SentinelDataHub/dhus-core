@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017,2018 GAEL Systems
+ * Copyright (C) 2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -74,4 +74,6 @@ public abstract class ProductConstants
    // Other
    public static final String DATABASE_ID = "database.id";
    public static final String UUID = "uuid";
+   public static final String DATABASE_COLLECTION_NAMES = "database.collection.names";
+   public static final String USERNAME = "username";
 }

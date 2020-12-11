@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -51,6 +51,7 @@ public class StoreQuotaService
     * @param identifier of quota entry to insert
     * @param datetime of quota entry to insert
     */
+   @Transactional
    public void insertQuotaEntry(String storeName, String quotaName, UUID user, String identifier, long datetime)
    {
       StoreQuota entry = new StoreQuota();
@@ -101,6 +102,7 @@ public class StoreQuotaService
     * @param identifier of quota entry to find
     * @return true if quota entry exists in database
     */
+   @Transactional(readOnly = true)
    public boolean hasQuotaEntry(String storeName, String quotaName, UUID user, String identifier)
    {
       DetachedCriteria query = DetachedCriteria.forClass(StoreQuota.class);
@@ -118,6 +120,37 @@ public class StoreQuotaService
    public void deleteQuotaEntry(StoreQuota quotaEntry)
    {
       storeQuotaDao.delete(quotaEntry);
+   }
+
+   /**
+    * Finds the first StoreQuota entry matching the given parameters.
+    * Each null parameter will be omitted.
+    *
+    * @param storeName  StoreQuota.key.storeName
+    * @param quotaName  StoreQuota.key.quotaName
+    * @param userUUID   StoreQuota.key.userUUID
+    * @param identifier StoreQuota.key.identifier
+    * @return A StoreQuota instance or null if none found
+    */
+   @Transactional(readOnly = true)
+   public StoreQuota getAnyQuotaEntry(String storeName, String quotaName, String userUUID, String identifier)
+   {
+      DetachedCriteria query = DetachedCriteria.forClass(StoreQuota.class);
+      if ( storeName != null) query.add(Restrictions.eq("key.storeName",  storeName));
+      if ( quotaName != null) query.add(Restrictions.eq("key.quotaName",  quotaName));
+      if (  userUUID != null) query.add(Restrictions.eq("key.userUUID",   userUUID));
+      if (identifier != null) query.add(Restrictions.eq("key.identifier", identifier));
+      return storeQuotaDao.uniqueResult(query);
+   }
+
+   @Transactional
+   public void deleteQuotaEntry(String storeName, String quotaName, String identifier)
+   {
+      StoreQuota quotaEntry = getAnyQuotaEntry(storeName, quotaName, null, identifier);
+      if (quotaEntry != null)
+      {
+         storeQuotaDao.delete(quotaEntry);
+      }
    }
 
    /**

@@ -22,6 +22,7 @@ package fr.gael.dhus.service.job;
 import fr.gael.dhus.DHuS;
 import fr.gael.dhus.database.dao.interfaces.DaoUtils;
 import fr.gael.dhus.service.SearchService;
+import fr.gael.dhus.service.SystemService;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
 import org.apache.logging.log4j.LogManager;
@@ -48,6 +49,9 @@ public class SystemCheckJob extends AbstractJob
    @Autowired
    private ConfigurationManager configurationManager;
 
+   @Autowired
+   private SystemService systemService;
+   
    @Override
    public String getCronExpression()
    {
@@ -79,7 +83,7 @@ public class SystemCheckJob extends AbstractJob
             LOGGER.info("Control of Indexes coherence spent {} ms", (System.currentTimeMillis() - start));
 
             LOGGER.info("Optimizing database...");
-            DaoUtils.optimize();
+            systemService.optimize();
 
             LOGGER.info("SCHEDULER : Check system consistency done - {}ms", (System.currentTimeMillis() - start));
 

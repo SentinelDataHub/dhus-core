@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,21 +19,20 @@
  */
 package fr.gael.dhus.database.dao.interfaces;
 
-import fr.gael.dhus.olingo.v1.SQLVisitor;
-
 import java.io.Serializable;
 import java.lang.reflect.ParameterizedType;
-import java.sql.SQLException;
 import java.util.List;
 import javax.swing.event.EventListenerList;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import org.dhus.olingo.v2.visitor.SQLVisitorParameter;
+
 import org.hibernate.Criteria;
 import org.hibernate.HibernateException;
-import org.hibernate.Query;
-import org.hibernate.SQLQuery;
+import org.hibernate.query.Query;
+import org.hibernate.query.NativeQuery;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
@@ -42,8 +41,8 @@ import org.hibernate.criterion.Projections;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.support.DataAccessUtils;
-import org.springframework.orm.hibernate3.HibernateCallback;
-import org.springframework.orm.hibernate3.support.HibernateDaoSupport;
+import org.springframework.orm.hibernate5.HibernateCallback;
+import org.springframework.orm.hibernate5.support.HibernateDaoSupport;
 
 /**
  * Hibernate DAO Implementation, containing minimal CRUD operations.
@@ -146,11 +145,12 @@ public class HibernateDao<T, PK extends Serializable>
     * @param query_string
     * @return
     */
+   @SuppressWarnings("unchecked")
    public T first(String query_string)
    {
-      @SuppressWarnings("unchecked")
-      List<T> result = (List<T>) getHibernateTemplate().find(query_string);
-      return (result.isEmpty()) ? null : result.get(0);
+      return getHibernateTemplate().<T>execute((Session session) -> {
+         return (T) session.createQuery(query_string).setMaxResults(1).getSingleResult();
+      });
    }
 
    /**
@@ -172,24 +172,21 @@ public class HibernateDao<T, PK extends Serializable>
     */
    public int count()
    {
-      int count = 0;
-      @SuppressWarnings("unchecked")
-      List<Long> counts = find("select count(*) FROM " + entityClass.getName());
-      if (counts != null)
+      // FIXME return type should be long
+      return (int) DataAccessUtils.longResult(getHibernateTemplate().execute((Session session) ->
       {
-         for (Long c: counts)
-         {
-            count += c;
-         }
-      }
-      return count;
+         return session.createQuery("SELECT count (*) FROM " + entityClass.getName()).list();
+      }));
    }
 
    @SuppressWarnings("rawtypes")
    public List find(String query_string) throws DataAccessException
    {
       long start = System.currentTimeMillis();
-      List ret = getHibernateTemplate().find(query_string);
+
+      List ret = getHibernateTemplate().<List>execute((Session session) -> {
+         return session.createQuery(query_string).list();
+      });
 
       long end = System.currentTimeMillis();
       LOGGER.debug("Query \"{}\" spent {}ms", query_string, (end - start));
@@ -267,10 +264,10 @@ public class HibernateDao<T, PK extends Serializable>
       return DataAccessUtils.intResult(getHibernateTemplate().execute(new HibernateCallback<List>()
       {
          @Override
-         public List doInHibernate(Session session) throws HibernateException, SQLException
+         public List doInHibernate(Session session) throws HibernateException
          {
             String sql = "SELECT count (*) FROM INFORMATION_SCHEMA.SYSTEM_SESSIONS";
-            SQLQuery query = session.createSQLQuery(sql);
+            NativeQuery query = session.createNativeQuery(sql);
             return query.list();
          }
       }));
@@ -283,14 +280,13 @@ public class HibernateDao<T, PK extends Serializable>
             getHibernateTemplate().execute(new HibernateCallback<List>()
       {
          @Override
-         public List doInHibernate(Session session)
-               throws HibernateException, SQLException
+         public List doInHibernate(Session session) throws HibernateException
          {
             String sql =
                   "SELECT " + name
                   + " FROM INFORMATION_SCHEMA.SYSTEM_SESSIONS"
                   + " LIMIT  1 OFFSET " + index;
-            SQLQuery query = session.createSQLQuery(sql);
+            NativeQuery query = session.createNativeQuery(sql);
             return query.list();
          }
       })).toString();
@@ -313,7 +309,7 @@ public class HibernateDao<T, PK extends Serializable>
          // List must be instance of List<T> otherwise ClassCast
          @SuppressWarnings("unchecked")
          @Override
-         public List<T> doInHibernate(Session session) throws HibernateException, SQLException
+         public List<T> doInHibernate(Session session) throws HibernateException
          {
             Query hql_query = session.createQuery(query);
             hql_query.setFirstResult(skip);
@@ -327,7 +323,7 @@ public class HibernateDao<T, PK extends Serializable>
    public List<T> listCriteria(DetachedCriteria detached, int skip, int top)
    {
       SessionFactory factory = getSessionFactory();
-      org.hibernate.classic.Session session = factory.getCurrentSession();
+      Session session = factory.getCurrentSession();
 
       Criteria criteria = detached.getExecutableCriteria(session);
 
@@ -362,16 +358,15 @@ public class HibernateDao<T, PK extends Serializable>
 
    @SuppressWarnings("unchecked")
    public List<T> executeHQLQuery(final String hql,
-         final List<SQLVisitor.SQLVisitorParameter> parameters, final int skip, final int top)
+         final List<SQLVisitorParameter> parameters, final int skip, final int top)
    {
       Session session = getSessionFactory().getCurrentSession();
       Query query = session.createQuery(hql);
-      for (int i = 0; i < parameters.size(); i++)
-      {
-         SQLVisitor.SQLVisitorParameter param = parameters.get(i);
-         query.setParameter(i, param.getValue(), param.getType());
-      }
 
+      if (!parameters.isEmpty())
+      {
+         parameters.forEach((t) -> query.setParameter(t.getPosition(), t.getValue(), t.getType()));
+      }
       if (skip > 0)
       {
          query.setFirstResult(skip);
@@ -381,19 +376,15 @@ public class HibernateDao<T, PK extends Serializable>
          query.setMaxResults(top);
       }
       query.setReadOnly(true);
-      return (List<T>) query.list();
+      return query.list();
    }
 
-   public int countHQLQuery(String hql, List<SQLVisitor.SQLVisitorParameter> parameters)
+   public int countHQLQuery(String hql, List<SQLVisitorParameter> parameters)
    {
       String hqlQuery = "SELECT COUNT(*) " + hql;
       Session session = getSessionFactory().getCurrentSession();
       Query query = session.createQuery(hqlQuery);
-      for (int i = 0; i < parameters.size(); i++)
-      {
-         SQLVisitor.SQLVisitorParameter param = parameters.get(i);
-         query.setParameter(i, param.getValue(), param.getType());
-      }
+      parameters.forEach((t) -> query.setParameter(t.getPosition(), t.getValue(), t.getType()));
       query.setReadOnly(true);
 
       Object obj = query.uniqueResult();
@@ -408,5 +399,4 @@ public class HibernateDao<T, PK extends Serializable>
       }
       return result;
    }
-
 }

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017,2018 GAEL Systems
+ * Copyright (C) 2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -77,6 +77,7 @@ public class RelationalMetadataStore implements MetadataStore
       product.setUuid(inProduct.getUuid());
       product.setIdentifier(inProduct.getIdentifier());
       product.setItemClass(inProduct.getItemClass());
+      product.setOnDemand(inProduct.isOnDemand());
 
       product.setIngestionDate(inProduct.getIngestionDate());
       // creation date is set by ProductDao
@@ -122,6 +123,7 @@ public class RelationalMetadataStore implements MetadataStore
 
       // must be done after the product is created
       inProduct.setProperty(ProductConstants.DATABASE_ID, finalProduct.getId());
+      inProduct.setProperty(ProductConstants.CREATION_DATE, finalProduct.getCreated());
       LOGGER.info("Creating database entry successfully created", inProduct.getUuid());
    }
 
@@ -129,6 +131,26 @@ public class RelationalMetadataStore implements MetadataStore
    public void addProduct(IngestibleProduct inProduct) throws StoreException
    {
       addProduct(inProduct, Collections.<String>emptyList());
+   }
+
+   @Override
+   public void repairProduct(IngestibleProduct inProduct) throws StoreException
+   {
+      LOGGER.debug("Repairing database entry for product {}", inProduct.getUuid());
+
+      Product product = productService.repairProduct(
+            inProduct.getUuid(),
+            inProduct.getItemClass(),
+            inProduct.getMetadataIndexes(),
+            inProduct.getFootprint());
+
+      List<String> collectionNames = collectionService.getCollections(product)
+            .stream()
+            .map(collection -> collection.getName())
+            .collect(Collectors.toList());
+
+      inProduct.setProperty(ProductConstants.DATABASE_COLLECTION_NAMES, collectionNames);
+      inProduct.setProperty(ProductConstants.DATABASE_ID, product.getId());
    }
 
    /**
@@ -215,9 +237,10 @@ public class RelationalMetadataStore implements MetadataStore
    private List<LoggableProduct> internalGetProductUUIDs(String filter, String orderBy, String collectionName, int skip, int top)
          throws StoreException
    {
-      ODataExpressionParser productExpressionParser = ODataExpressionParser.getProductExpressionParser();
       try
       {
+         ODataExpressionParser productExpressionParser = ODataExpressionParser.getProductExpressionParser();
+
          FilterExpression filterExpression = null;
          if (filter != null)
          {
@@ -246,12 +269,6 @@ public class RelationalMetadataStore implements MetadataStore
    }
 
    @Override
-   public boolean isReadOnly()
-   {
-      return false;
-   }
-
-   @Override
    public boolean hasProduct(String uuid)
    {
       return productService.systemGetProduct(uuid) != null;
@@ -261,6 +278,11 @@ public class RelationalMetadataStore implements MetadataStore
    public org.dhus.Product getProduct(String uuid)
    {
       throw new UnsupportedOperationException();
+   }
+
+   public fr.gael.dhus.database.object.Product getDatabaseProduct(String uuid)
+   {
+      return productService.getProduct(uuid);
    }
 
    public void restoreProduct(String uuid, Long size, Map<String, String> checksums) throws ProductNotFoundException

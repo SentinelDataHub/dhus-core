@@ -243,8 +243,7 @@ public class SearchesJob extends AbstractJob
                         purl + "/$value\">" + product.getIdentifier () +
                         "</a> "+link+"</td>\n</tr>\n";
                   // Displays metadata
-                  List<MetadataIndex>indexes = new ArrayList<> (
-                        productService.getIndexes (product.getId ()));
+                  List<MetadataIndex> indexes = new ArrayList<>(productService.getIndexes(product.getUuid()));
                   Collections.sort (indexes, new Comparator<MetadataIndex>()
                   {
                      @Override

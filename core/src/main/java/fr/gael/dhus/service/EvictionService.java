@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,6 +19,9 @@
  */
 package fr.gael.dhus.service;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
+
 import fr.gael.dhus.database.object.DeletedProduct;
 import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.database.object.config.eviction.Eviction;
@@ -33,16 +36,14 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+
 import javax.annotation.PostConstruct;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.dhus.store.StoreException;
 import org.dhus.store.StoreService;
-
 import org.quartz.SchedulerException;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -59,9 +60,13 @@ public class EvictionService extends WebService
    @Autowired
    private ConfigurationManager cfgManager;
 
+   /** DataStore Service called to delete data. */
    @Autowired
-   /** Service called to perform evictions * */
    private StoreService storeService;
+
+   /* Monitoring. */
+   @Autowired
+   private MetricRegistry metricRegistry;
 
    /** Manages eviction objects and their configuration * */
    private EvictionManager evictionManager;
@@ -105,40 +110,46 @@ public class EvictionService extends WebService
     *
     * @param evictionName the name of the eviction to run
     */
-   private void queueEvict(String evictionName)
+   private boolean queueEvict(String evictionName)
    {
       Eviction configuredEviction = getEviction(evictionName);
       // check if eviction still exists
       if (configuredEviction == null)
       {
          LOGGER.warn("Eviction '{}' not found", evictionName);
-         return;
+         return false;
       }
       // do not queue the same eviction twice
       else if (configuredEviction.getStatus().equals(EvictionStatusEnum.QUEUED))
       {
          LOGGER.info("Eviction '{}' is already queued", evictionName);
-         return;
+         return false;
       }
 
       // TODO forbid queuing already STARTED evictions?
       // mark eviction as queued
       configuredEviction.setStatus(EvictionStatusEnum.QUEUED);
       evictionManager.save();
+      LOGGER.info("Eviction '{}' has been queued", evictionName);
+      return true;
    }
 
    public void doEvict(String evictionName, String targetDataStore, Boolean safeMode)
    {
-      queueEvict(evictionName);
-      // queue eviction in the executor
-      executor.execute(() -> performEviction(evictionName, targetDataStore, Long.MAX_VALUE, safeMode));
+      if (queueEvict(evictionName))
+      {
+         // queue eviction in the executor
+         executor.execute(() -> performTimedEviction(evictionName, targetDataStore, Long.MAX_VALUE, safeMode));
+      }
    }
 
    public void doEvict(String evictionName)
    {
-      queueEvict(evictionName);
-      // queue eviction in the executor
-      executor.execute(() -> performEviction(evictionName, null, Long.MAX_VALUE, false));
+      if (queueEvict(evictionName))
+      {
+         // queue eviction in the executor
+         executor.execute(() -> performTimedEviction(evictionName, null, Long.MAX_VALUE, false));
+      }
    }
 
    /**
@@ -150,9 +161,11 @@ public class EvictionService extends WebService
     */
    public void evictAtLeast(String evictionName, String dataStoreName, long dataSize)
    {
-      queueEvict(evictionName);
-      // queue eviction in the executor
-      executor.execute(() -> performEviction(evictionName, dataStoreName, dataSize, false));
+      if (queueEvict(evictionName))
+      {
+         // queue eviction in the executor
+         executor.execute(() -> performTimedEviction(evictionName, dataStoreName, dataSize, false));
+      }
    }
 
    /**
@@ -164,7 +177,8 @@ public class EvictionService extends WebService
    public void evictAtLeast(String dataStoreName, long sizeToEvict)
    {
       executor.execute(() -> {
-         try
+         String metric = MetricRegistry.name("eviction", "default", dataStoreName, "timer");
+         try (Timer.Context ctx = metricRegistry.timer(metric).time())
          {
             storeService.evictAtLeast(sizeToEvict, dataStoreName);
          }
@@ -175,25 +189,37 @@ public class EvictionService extends WebService
       });
    }
 
-   private long performEviction(String evictionName, String dataStoreName, long dataSize, boolean safeMode)
+   private long performTimedEviction(String evictionName, String dataStoreName, long dataSize, boolean safeMode)
    {
-      // this method MUST read the eviction configuration in order to handle
-      // cases where the eviction has been deleted
-      Eviction effectiveEviction = getEviction(evictionName);
-
+      Eviction eviction = getEviction(evictionName);
       // skip eviction if it has been deleted
-      if (effectiveEviction == null)
+      if (eviction == null)
       {
-         LOGGER.warn("Eviction '{}' has been deleted, skipping", evictionName);
+         LOGGER.warn("Eviction '{}' has been deleted, skipping", eviction);
          return 0L;
       }
+
+      String metric = MetricRegistry.name("eviction",
+            evictionName,
+            dataStoreName,
+            eviction.isSoftEviction()? "soft": null,
+            safeMode? "safe": null,
+            "timer");
+      try (Timer.Context ctx = metricRegistry.timer(metric).time())
+      {
+         return performEviction(eviction, dataStoreName, dataSize, safeMode);
+      }
+   }
+
+   private long performEviction(Eviction eviction, String dataStoreName, long dataSize, boolean safeMode)
+   {
       long evictAtLeast = 0L;
       try
       {
-         if (effectiveEviction.getStatus().equals(EvictionStatusEnum.CANCELED))
+         if (eviction.getStatus().equals(EvictionStatusEnum.CANCELED))
          {
             // skip eviction, nothing to do
-            LOGGER.info("Eviction '{}' has been cancelled, skipping", effectiveEviction.getName());
+            LOGGER.info("Eviction '{}' has been cancelled, skipping", eviction.getName());
          }
          else
          {
@@ -204,7 +230,7 @@ public class EvictionService extends WebService
                   (trashPath != null && !"".equals(trashPath)) ? Destination.TRASH : Destination.NONE;
 
             // mark eviction as STARTED
-            effectiveEviction.setStatus(EvictionStatusEnum.STARTED);
+            eviction.setStatus(EvictionStatusEnum.STARTED);
             evictionManager.save();
 
             // eviction triggered by datastore's autoeviction
@@ -213,11 +239,11 @@ public class EvictionService extends WebService
                evictAtLeast = storeService.evictAtLeast(
                      dataSize,
                      dataStoreName,
-                     buildFilter(effectiveEviction.getFilter(), getKeepPeriod(effectiveEviction.computeKeepPeriod())),
-                     effectiveEviction.getOrderBy(),
-                     effectiveEviction.getTargetCollection(),
-                     effectiveEviction.getMaxEvictedProducts(),
-                     effectiveEviction.isSoftEviction(),
+                     buildFilter(eviction.getFilter(), getKeepPeriod(eviction.computeKeepPeriod())),
+                     eviction.getOrderBy(),
+                     eviction.getTargetCollection(),
+                     eviction.getMaxEvictedProducts(),
+                     eviction.isSoftEviction(),
                      destination,
                      DeletedProduct.AUTO_EVICTION,
                      safeMode);
@@ -226,11 +252,11 @@ public class EvictionService extends WebService
             else
             {
                storeService.evictProducts(
-                     buildFilter(effectiveEviction.getFilter(), getKeepPeriod(effectiveEviction.computeKeepPeriod())),
-                     effectiveEviction.getOrderBy(),
-                     effectiveEviction.getTargetCollection(),
-                     effectiveEviction.getMaxEvictedProducts(),
-                     effectiveEviction.isSoftEviction(),
+                     buildFilter(eviction.getFilter(), getKeepPeriod(eviction.computeKeepPeriod())),
+                     eviction.getOrderBy(),
+                     eviction.getTargetCollection(),
+                     eviction.getMaxEvictedProducts(),
+                     eviction.isSoftEviction(),
                      destination,
                      DeletedProduct.AUTO_EVICTION);
             }
@@ -238,12 +264,12 @@ public class EvictionService extends WebService
       }
       catch (StoreException e)
       {
-         LOGGER.warn("Error during eviction '{}': {}", effectiveEviction.getName(), e.getMessage());
+         LOGGER.warn("Error during eviction '{}'", eviction.getName(), e);
       }
       finally
       {
          // mark eviction as STOPPED
-         effectiveEviction.setStatus(EvictionStatusEnum.STOPPED);
+         eviction.setStatus(EvictionStatusEnum.STOPPED);
          evictionManager.save();
       }
       return evictAtLeast;
@@ -253,25 +279,25 @@ public class EvictionService extends WebService
     * Add the minimal keeping period for the evicted products to the OData filter.
     *
     * @param filter          optional additional filter
-    * @param maxCreationDate threshold date to filter products
+    * @param maxModificationDate threshold date to filter products
     * @return an OData filter
     */
-   private String buildFilter(String filter, Date maxCreationDate)
+   private String buildFilter(String filter, Date maxModificationDate)
    {
-      if (filter == null && maxCreationDate == null)
+      if (filter == null && maxModificationDate == null)
       {
          return null;
       }
-      if (maxCreationDate == null)
+      if (maxModificationDate == null)
       {
          return filter;
       }
 
-      String maxDate = DATE_FORMATTER.format(maxCreationDate);
-      String newFilter = "CreationDate lt datetime'" + maxDate + "'";
+      String maxDate = DATE_FORMATTER.format(maxModificationDate);
+      String newFilter = "ModificationDate lt datetime'" + maxDate + "'";
       if (filter != null && !filter.trim().isEmpty())
       {
-         newFilter += " and " + filter;
+         newFilter += " and (" + filter + ")";
       }
       return newFilter;
    }
@@ -302,7 +328,7 @@ public class EvictionService extends WebService
          if (eviction.getCron() != null && eviction.getCron().isActive() && eviction.filter(product))
          {
             // Compute eviction date, sets the result reference if it is sooner
-            Date evictDate = new Date(product.getCreated().getTime() + eviction.computeKeepPeriod());
+            Date evictDate = new Date(product.getUpdated().getTime() + eviction.computeKeepPeriod());
             if (res == null || res.after(evictDate))
             {
                res = evictDate;

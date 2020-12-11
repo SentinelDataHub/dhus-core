@@ -21,6 +21,7 @@ package fr.gael.dhus.olingo.v1.entityset;
 
 import fr.gael.dhus.olingo.v1.Model;
 import fr.gael.dhus.olingo.v1.entity.AbstractEntity;
+import fr.gael.dhus.olingo.v1.entity.DeletedProduct;
 import fr.gael.dhus.olingo.v1.entity.Product;
 import fr.gael.dhus.olingo.v1.map.impl.DeletedProductsMap;
 import fr.gael.dhus.service.DeletedProductService;
@@ -188,7 +189,7 @@ public class DeletedProductEntitySet extends AbstractEntitySet<Product>
    }
 
    @Override
-   public Map getEntities()
+   public Map<String, DeletedProduct> getEntities()
    {
       return new DeletedProductsMap();
    }

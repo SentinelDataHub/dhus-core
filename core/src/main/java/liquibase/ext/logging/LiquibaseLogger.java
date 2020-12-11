@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2015,2016,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,8 +19,7 @@
  */
 package liquibase.ext.logging;
 
-import liquibase.changelog.ChangeSet;
-import liquibase.changelog.DatabaseChangeLog;
+import liquibase.logging.LogType;
 import liquibase.logging.core.AbstractLogger;
 
 import org.apache.logging.log4j.LogManager;
@@ -34,80 +33,100 @@ import org.apache.logging.log4j.Logger;
 public class LiquibaseLogger extends AbstractLogger
 {
    private static final Logger LOGGER = LogManager.getLogger(LiquibaseLogger.class);
-   private String name = "";
 
    @Override
-   public void setName (String name)
+   public void severe(String message)
    {
-      this.name = name;
+      LOGGER.error(message);
    }
 
    @Override
-   public void severe (String message)
+   public void severe(String message, Throwable t)
    {
-      LOGGER.error ("{} {}", name, message);
+      LOGGER.error(message, t);
    }
 
    @Override
-   public void severe (String message, Throwable e)
+   public void warning(String message)
    {
-      LOGGER.error ("{} {}", name, message, e);
+      LOGGER.warn(message);
    }
 
    @Override
-   public void warning (String message)
+   public void warning(String message, Throwable t)
    {
-      LOGGER.warn ("{} {}", name, message);
+      LOGGER.warn(message, t);
    }
 
    @Override
-   public void warning (String message, Throwable e)
+   public void info(String message)
    {
-      LOGGER.warn ("{} {}", name, message, e);
+      LOGGER.info(message);
    }
 
    @Override
-   public void info (String message)
+   public void info(String message, Throwable t)
    {
-      LOGGER.info ("{} {}", name, message);
+      LOGGER.info(message, t);
    }
 
    @Override
-   public void info (String message, Throwable e)
+   public void debug(String message)
    {
-      LOGGER.info ("{} {}", name, message, e);
+      LOGGER.debug(message);
    }
 
    @Override
-   public void debug (String message)
+   public void debug(String message, Throwable t)
    {
-      LOGGER.debug ("{} {}", name, message);
+      LOGGER.debug(message, t);
    }
 
    @Override
-   public void debug (String message, Throwable e)
+   public void severe(LogType lt, String message)
    {
-      LOGGER.debug ("{} {}", message, e);
+      LOGGER.error(message);
    }
 
    @Override
-   public void setLogLevel (String logLevel, String logFile)
+   public void severe(LogType lt, String message, Throwable t)
    {
+      LOGGER.error(message, t);
    }
 
    @Override
-   public void setChangeLog (DatabaseChangeLog databaseChangeLog)
+   public void warning(LogType lt, String message)
    {
+      LOGGER.warn(message);
    }
 
    @Override
-   public void setChangeSet (ChangeSet changeSet)
+   public void warning(LogType lt, String message, Throwable t)
    {
+      LOGGER.warn(message, t);
    }
 
    @Override
-   public int getPriority ()
+   public void info(LogType lt, String message)
    {
-      return Integer.MAX_VALUE;
+      LOGGER.info(message);
+   }
+
+   @Override
+   public void info(LogType lt, String message, Throwable t)
+   {
+      LOGGER.info(message, t);
+   }
+
+   @Override
+   public void debug(LogType lt, String message)
+   {
+      LOGGER.debug(message);
+   }
+
+   @Override
+   public void debug(LogType lt, String message, Throwable t)
+   {
+      LOGGER.debug(message, t);
    }
 }

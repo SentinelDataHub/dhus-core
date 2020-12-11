@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2014-2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,18 +19,7 @@
  */
 package fr.gael.dhus.database.dao.interfaces;
 
-import java.sql.SQLException;
-
-import org.hibernate.HibernateException;
-import org.hibernate.SQLQuery;
-import org.hibernate.Session;
-import org.hibernate.SessionFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.orm.hibernate3.HibernateCallback;
-import org.springframework.orm.hibernate3.support.HibernateDaoSupport;
-import org.springframework.stereotype.Repository;
-
-import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import org.springframework.stereotype.Service;
 
 public class DaoUtils
 {
@@ -53,34 +42,5 @@ public class DaoUtils
    {
       if (s==null) return null;
       return s.replace ("'", "''");
-   }
-      
-   public static void optimize ()
-   {
-      HibernateDaoLocalSupport support = ApplicationContextProvider.getBean (
-            HibernateDaoLocalSupport.class);
-      support.getHibernateTemplate ().flush ();
-      support.getHibernateTemplate ().executeWithNativeSession (
-         new HibernateCallback<Void> ()
-         {
-            @Override
-            public Void doInHibernate (Session session) throws
-                  HibernateException, SQLException
-            {
-               SQLQuery query = session.createSQLQuery ("CHECKPOINT DEFRAG");
-               query.executeUpdate ();
-               return null;
-            }
-         });
-   }
-   
-   @Repository ("hibernateDaoLocalSupport")
-   private static class HibernateDaoLocalSupport extends HibernateDaoSupport
-   {           
-      @Autowired
-      public void init (SessionFactory session_factory)
-      {
-         setSessionFactory (session_factory);
-      }
    }
 }

@@ -65,7 +65,14 @@ public class ProductUploadService extends WebService
       {
          Collection c;
          c = collectionService.getCollection(uuid);
-         collections.add (c);
+         if (c != null)
+         {
+            collections.add (c);
+         }
+         else
+         {
+            LOGGER.warn("Collection with UUID '"+uuid+"' not found. Cannot upload product into it.");
+         }
       }
 
       String fileName = product.getName ();

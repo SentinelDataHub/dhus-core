@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2015-2018 GAEL Systems
+ * Copyright (C) 2015-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,8 +20,18 @@
 
 package fr.gael.dhus.server.http.valve;
 
+import fr.gael.dhus.olingo.v1.entity.Connection;
+import fr.gael.dhus.server.http.valve.AccessInformation.FailureConnectionStatus;
+import fr.gael.dhus.server.http.valve.AccessInformation.PendingConnectionStatus;
+import fr.gael.dhus.server.http.valve.AccessInformation.SuccessConnectionStatus;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.spring.context.SecurityContextProvider;
+import fr.gael.dhus.spring.security.CookieKey;
+import fr.gael.dhus.spring.security.authentication.ProxyWebAuthenticationDetails;
+
 import java.io.IOException;
 import java.net.InetAddress;
+import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -32,10 +42,15 @@ import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletException;
 import javax.servlet.http.Cookie;
 
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheManager;
+import net.sf.ehcache.Element;
+
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
 import org.apache.catalina.util.RequestUtil;
 import org.apache.catalina.valves.ValveBase;
+
 import org.apache.http.HttpStatus;
 
 import org.apache.logging.log4j.LogManager;
@@ -43,20 +58,6 @@ import org.apache.logging.log4j.Logger;
 
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.crypto.codec.Base64;
-
-import fr.gael.dhus.olingo.v1.entity.Connection;
-import fr.gael.dhus.server.http.valve.AccessInformation.FailureConnectionStatus;
-import fr.gael.dhus.server.http.valve.AccessInformation.PendingConnectionStatus;
-import fr.gael.dhus.server.http.valve.AccessInformation.SuccessConnectionStatus;
-import fr.gael.dhus.spring.context.ApplicationContextProvider;
-import fr.gael.dhus.spring.context.SecurityContextProvider;
-import fr.gael.dhus.spring.security.CookieKey;
-import fr.gael.dhus.spring.security.authentication.ProxyWebAuthenticationDetails;
-
-import net.sf.ehcache.Cache;
-import net.sf.ehcache.CacheManager;
-import net.sf.ehcache.Element;
 
 public class AccessValve extends ValveBase
 {
@@ -254,7 +255,7 @@ public class AccessValve extends ValveBase
       ai.setRemoteHost(ProxyWebAuthenticationDetails.getRemoteHost(request));
    }
 
-   private String[] extractAndDecodeHeader(String header) throws IOException
+   public static String[] extractAndDecodeHeader(String header) throws IOException
    {
       if (header == null || header.isEmpty ())
       {
@@ -264,7 +265,7 @@ public class AccessValve extends ValveBase
       byte[] decoded;
       try
       {
-         decoded = Base64.decode(base64Token);
+         decoded = Base64.getDecoder().decode(base64Token);
       }
       catch (IllegalArgumentException e)
       {

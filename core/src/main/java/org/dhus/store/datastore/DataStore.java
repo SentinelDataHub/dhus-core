@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017,2018 GAEL Systems
+ * Copyright (C) 2016-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -24,6 +24,7 @@ import java.util.List;
 import org.dhus.Product;
 import org.dhus.Util;
 import org.dhus.store.Store;
+import org.dhus.store.datastore.config.DataStoreRestriction;
 
 /**
  * A DataStore is a means to store, access, and manage the physical data of unaltered products.
@@ -64,7 +65,9 @@ public interface DataStore extends Store, AutoCloseable
     * @param product the product to store
     *
     * @throws DataStoreException an error occurred
+    * @deprecated use {@link Store#addProduct(IngestibleProduct) addProduct} instead.
     */
+   @Deprecated
    public void set(String uuid, Product product) throws DataStoreException;
 
    /**
@@ -109,6 +112,17 @@ public interface DataStore extends Store, AutoCloseable
    public boolean addProductReference(String uuid, Product product) throws DataStoreException;
 
    /**
+    * Remove a reference to a product, does not delete the data.
+    * (undo what {@code addProductReference} does).
+    *
+    * @see #addProductReference(String, Product)
+    *
+    * @param uuid of product reference du delete
+    * @throws DataStoreException reference not found or modifying references is restricted
+    */
+   public default void deleteProductReference(String uuid) throws DataStoreException {} // Default No-Op implementation
+
+   /**
     * Returns a list of products known to this DataStore.
     *
     * @return return a non-null list of products
@@ -131,4 +145,24 @@ public interface DataStore extends Store, AutoCloseable
    @Override
    public default void close() throws Exception {} // Default No-Op implementation
 
+   /**
+    * Defines if this DataStore can handle derived products.
+    *
+    * @return true if this DataStore can handle derived products
+    */
+   public abstract boolean canHandleDerivedProducts();
+
+   /**
+    * Defines if this DataStore can modify product references
+    *
+    * @see DataStoreRestriction
+    * @return true if this DataStore can modify product references
+    */
+   public boolean canModifyReferences();
+
+   /**
+    * Returns true if this DataStore has a KeyStore in the database.
+    * @return true if this DataStore has a KeyStore in the database
+    */
+   public boolean hasKeyStore();
 }

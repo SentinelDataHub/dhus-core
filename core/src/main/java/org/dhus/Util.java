@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -21,6 +21,7 @@ package org.dhus;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
 
 public class Util
 {
@@ -50,5 +51,19 @@ public class Util
       }
 
       return list.subList(skip, lastIndex);
+   }
+
+   /**
+    * Escapes regex special characters from the input string, so it can be matched by a Matcher.
+    * <p>
+    * Escaped characters: { } ( ) [ ] . + * ? ^ $ |
+    *
+    * @param str input string
+    * @return the input string whose special characters have been escaped
+    */
+   public static String escapeSpecialRegexChars(String str)
+   {
+      Pattern regexChars = Pattern.compile("[{}()\\[\\].+*?^$\\\\|]");
+      return regexChars.matcher(str).replaceAll("\\\\$0");
    }
 }

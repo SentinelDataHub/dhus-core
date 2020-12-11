@@ -32,6 +32,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import org.dhus.store.StoreException;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.DataStoreProduct;
@@ -43,6 +46,8 @@ import org.dhus.store.derived.DerivedProductStoreService;
  */
 public class QuicklookProduct extends Product
 {
+   private static final Logger LOGGER = LogManager.getLogger();
+
    // xpath_attributes is a set of xpath returning nodes (ClasscastException
    // overwise)
    private static String[] xpath_attributes = { "image/FormatName",
@@ -62,7 +67,10 @@ public class QuicklookProduct extends Product
                .getDerivedProduct(product.getUuid(), DerivedProductStore.QUICKLOOK_TAG)
                .getImpl(DataStoreProduct.class);
       }
-      catch (StoreException suppressed) {}
+      catch (StoreException ex)
+      {
+         LOGGER.warn("Could not get quicklook from datastore", ex);
+      }
       return new QuicklookProduct(product, data);
    }
 
@@ -89,6 +97,12 @@ public class QuicklookProduct extends Product
    public String getName ()
    {
       return "QL-" + product.getIdentifier ();
+   }
+
+   @Override
+   public String getContentType ()
+   {
+      return "image/jpeg";
    }
 
    @Override

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -248,7 +248,7 @@ public class ODataEventSynchronizer extends Synchronizer
                update = false;
             }
 
-            event.setCategory(EventCategory.fromString(category));
+            event.setCategory(EventCategory.valueOf(category));
             event.setSubcategory(subcategory);
             event.setTitle(title);
             event.setDescription(description);

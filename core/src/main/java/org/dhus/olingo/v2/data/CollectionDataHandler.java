@@ -21,6 +21,8 @@ package org.dhus.olingo.v2.data;
 
 import fr.gael.dhus.database.object.Collection;
 import fr.gael.dhus.database.object.Role;
+import fr.gael.dhus.database.object.config.scanner.ScannerConfiguration.Collections;
+import fr.gael.dhus.datastore.scanner.Scanner;
 import fr.gael.dhus.service.CollectionService;
 import fr.gael.dhus.service.exception.CollectionNameExistingException;
 import fr.gael.dhus.service.exception.RequiredFieldMissingException;
@@ -36,6 +38,7 @@ import org.apache.olingo.commons.api.data.Entity;
 import org.apache.olingo.commons.api.data.EntityCollection;
 import org.apache.olingo.commons.api.data.Property;
 import org.apache.olingo.commons.api.data.ValueType;
+import org.apache.olingo.commons.api.edm.EdmNavigationProperty;
 import org.apache.olingo.commons.api.http.HttpMethod;
 import org.apache.olingo.commons.api.http.HttpStatusCode;
 import org.apache.olingo.server.api.ODataApplicationException;
@@ -43,11 +46,15 @@ import org.apache.olingo.server.api.uri.UriParameter;
 
 import org.dhus.olingo.v2.ODataSecurityManager;
 import org.dhus.olingo.v2.datamodel.CollectionModel;
+import org.dhus.olingo.v2.datamodel.ScannerModel;
+import org.dhus.scanner.service.ScannerServiceImpl;
 
 public class CollectionDataHandler implements DataHandler
 {
    private static final CollectionService COLLECTION_SVC =
          ApplicationContextProvider.getBean(CollectionService.class);
+   private static final ScannerServiceImpl SCANNER_SERVICE =
+         ApplicationContextProvider.getBean(ScannerServiceImpl.class);
 
    private Collection getCollectionFromParameters(List<UriParameter> keyParameters)
    {
@@ -77,6 +84,11 @@ public class CollectionDataHandler implements DataHandler
                CollectionModel.PROPERTY_NAME,
                ValueType.PRIMITIVE,
                collection.getName()));
+         
+         entity.addProperty(new Property(null,
+               CollectionModel.PROPERTY_UUID,
+               ValueType.PRIMITIVE,
+               collection.getUUID()));
 
          entity.addProperty(new Property(
                null,
@@ -100,6 +112,57 @@ public class CollectionDataHandler implements DataHandler
    public Entity getEntityData(List<UriParameter> keyParameters) throws ODataApplicationException
    {
       return toOlingoEntity(getCollectionFromParameters(keyParameters));
+   }
+
+   @Override
+   public EntityCollection getRelatedEntityCollectionData(Entity sourceEntity,
+         EdmNavigationProperty edmNavigationProperty) throws ODataApplicationException
+   {
+      if (ScannerModel.isScannerSubType(sourceEntity.getType()))
+      {
+         Scanner scanner = SCANNER_SERVICE.getScanner((Long) sourceEntity.getProperty(ScannerModel.PROPERTY_ID).getValue());
+         EntityCollection entities = new EntityCollection();
+         Collections collections = scanner.getConfig().getCollections();
+         if (collections != null)
+         {
+            collections.getCollection().forEach(collectionName
+                  -> entities.getEntities().add(toOlingoEntity(COLLECTION_SVC.getCollectionByName(collectionName))));
+         }
+         return entities;
+      }
+      else
+      {
+         return null;
+      }
+   }
+
+   @Override
+   public Entity getRelatedEntityData(Entity sourceEntity,
+         List<UriParameter> navigationKeyParameters, EdmNavigationProperty edmNavigationProperty)
+         throws ODataApplicationException
+   {
+      if (ScannerModel.isScannerSubType(sourceEntity.getType()))
+      {
+         Scanner scanner = SCANNER_SERVICE.getScanner((Long) sourceEntity.getProperty(ScannerModel.PROPERTY_ID).getValue());
+         String collectionName = DataHandlerUtil.getSingleStringKeyParameterValue(navigationKeyParameters, CollectionModel.PROPERTY_NAME);
+         Collections collections = scanner.getConfig().getCollections();
+         if (collections != null)
+         {
+            return collections.getCollection()
+                  .stream()
+                  .filter(collName -> collName.equals(collectionName))
+                  .map(collName -> toOlingoEntity(COLLECTION_SVC.getCollectionByName(collName)))
+                  .findFirst().orElse(null);
+         }
+         else
+         {
+            return null;
+         }
+      }
+      else
+      {
+         return null;
+      }
    }
 
    @Override

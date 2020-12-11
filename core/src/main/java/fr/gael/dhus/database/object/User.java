@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2013-2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -18,6 +18,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package fr.gael.dhus.database.object;
+
+import fr.gael.dhus.database.object.restriction.AccessRestriction;
+import fr.gael.dhus.network.CurrentQuotas;
+import fr.gael.dhus.service.exception.UserBadEncryptionException;
 
 import java.io.Serializable;
 import java.security.MessageDigest;
@@ -47,14 +51,12 @@ import javax.persistence.Transient;
 
 import org.hibernate.annotations.Cascade;
 import org.hibernate.annotations.CascadeType;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.codec.Hex;
-
-import fr.gael.dhus.database.object.restriction.AccessRestriction;
-import fr.gael.dhus.network.CurrentQuotas;
-import fr.gael.dhus.service.exception.UserBadEncryptionException;
 
 @Entity
 @Table (name = "USERS")
@@ -194,6 +196,15 @@ public class User extends AbstractTimestampEntity implements Serializable,
    @Column (name = "SUBUSAGE", nullable = false,
             columnDefinition = "VARCHAR(255) default 'unknown'")
    private String subUsage = "unknown";
+
+   // Added to properly cascade delete operations
+   @OneToMany(mappedBy = "key.owner", orphanRemoval = true, fetch = FetchType.LAZY, cascade = javax.persistence.CascadeType.REMOVE)
+   @OnDelete(action = OnDeleteAction.CASCADE)
+   private Set<OrderOwner> orders = new HashSet<>();
+
+   @OneToMany(mappedBy = "userKey.user", orphanRemoval = true, fetch = FetchType.LAZY, cascade = javax.persistence.CascadeType.REMOVE)
+   @OnDelete(action = OnDeleteAction.CASCADE)
+   private Set<UserTransformation> userTransformations = new HashSet<UserTransformation>();
 
    public String getUsername ()
    {

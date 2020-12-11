@@ -223,8 +223,6 @@ public class CopyProductImagesBlobToFile implements CustomTaskChange
                LOGGER.warn("Cannot close Statement !");
             }
          }
-         //if (db_connection!=null) try { db_connection.close (); }
-         // catch (Exception e) {}
       }
    }
    

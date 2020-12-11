@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,10 +19,15 @@
  */
 package org.dhus.store.ingestion;
 
+import static org.dhus.metrics.Utils.ItemClass;
+
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
+
 import fr.gael.dhus.datastore.processing.fair.FairCallable;
 import fr.gael.dhus.datastore.processing.fair.FairThreadPoolTaskExecutor;
-import fr.gael.dhus.datastore.scanner.FileScannerWrapper;
 import fr.gael.dhus.datastore.scanner.Scanner;
+import fr.gael.dhus.datastore.scanner.ScannerStatus;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 
 import java.util.List;
@@ -32,6 +37,7 @@ import java.util.concurrent.RejectedExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import org.dhus.ProductConstants;
 import org.dhus.store.StoreException;
 import org.dhus.store.StoreService;
 
@@ -45,6 +51,10 @@ public class ProcessingManager
 
    private static final StoreService STORE_SERVICE =
          ApplicationContextProvider.getBean(StoreService.class);
+
+   /** Metric Registry, for monitoring purposes. */
+   private static final MetricRegistry METRIC_REGISTRY =
+         ApplicationContextProvider.getBean(MetricRegistry.class);
 
    private static final Logger LOGGER = LogManager.getLogger();
 
@@ -66,7 +76,7 @@ public class ProcessingManager
     *         {@code get()} will return null, see {@link ScannerProcessingCallable#call()}.
     */
    public static Future<Object> processProduct(IngestibleProduct product,
-         List<String> collectionNames, Scanner scanner, FileScannerWrapper wrapper)
+         List<String> collectionNames, Scanner scanner, ScannerStatus wrapper)
    {
       return process(new ScannerProcessingCallable(product, collectionNames, scanner, wrapper));
    }
@@ -102,6 +112,17 @@ public class ProcessingManager
       return future;
    }
 
+   /**
+    * Returns the size in bytes of the given product's data.
+    * @param product not null
+    * @return the size or {@code null}
+    */
+   @SuppressWarnings("unchecked")
+   public static Long getVolume(IngestibleProduct product)
+   {
+      return (Long) product.getProperty(ProductConstants.DATA_SIZE);
+   }
+
    /*
     * Reported from DefaultDataStrore
     */
@@ -110,10 +131,10 @@ public class ProcessingManager
       private final IngestibleProduct product;
       private final Scanner scanner;
       private final List<String> collectionNames;
-      private final FileScannerWrapper wrapper;
+      private final ScannerStatus wrapper;
 
       public ScannerProcessingCallable(IngestibleProduct product, List<String> collectionNames,
-            Scanner scanner, FileScannerWrapper wrapper)
+            Scanner scanner, ScannerStatus wrapper)
       {
          super (scanner.toString ());
          this.product = product;
@@ -125,7 +146,22 @@ public class ProcessingManager
       @Override
       public Object call() throws StoreException
       {
-         STORE_SERVICE.addProduct(product, collectionNames, scanner, wrapper);
+         String metricPrefix = "ingestion." + ItemClass.toMetricNamePart(product.getItemClass(), ItemClass.Precision.FINE);
+         try (Timer.Context context = METRIC_REGISTRY.timer(metricPrefix + ".timer").time())
+         {
+            STORE_SERVICE.addProduct(product, collectionNames, scanner, wrapper);
+            METRIC_REGISTRY.counter(metricPrefix + ".counters.success").inc();
+            Long size = getVolume(product);
+            if (size != null)
+            {
+               METRIC_REGISTRY.counter(metricPrefix + ".counters.volume").inc(size);
+            }
+         }
+         catch (Throwable t)
+         {
+            METRIC_REGISTRY.counter(metricPrefix + ".counters.failure").inc();
+            throw t;
+         }
          return null;
       }
    }
@@ -147,7 +183,22 @@ public class ProcessingManager
       @Override
       public Object call() throws Exception
       {
-         STORE_SERVICE.addProduct(product, collectionNames, removeSource);
+         String metricPrefix = "ingestion." + ItemClass.toMetricNamePart(product.getItemClass(), ItemClass.Precision.FINE);
+         try (Timer.Context context = METRIC_REGISTRY.timer(metricPrefix + ".timer").time())
+         {
+            STORE_SERVICE.addProduct(product, collectionNames, removeSource);
+            METRIC_REGISTRY.counter(metricPrefix + ".counters.success").inc();
+            Long size = getVolume(product);
+            if (size != null)
+            {
+               METRIC_REGISTRY.counter(metricPrefix + ".counters.volume").inc(size);
+            }
+         }
+         catch (Throwable t)
+         {
+            METRIC_REGISTRY.counter(metricPrefix + ".counters.failure").inc();
+            throw t;
+         }
          return null;
       }
    }

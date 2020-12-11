@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017,2018 GAEL Systems
+ * Copyright (C) 2016-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -26,16 +26,15 @@ import fr.gael.dhus.spring.context.ApplicationContextProvider;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.dhus.Product;
 import org.dhus.store.StoreException;
 import org.dhus.store.datastore.config.DataStoreConf;
+import org.dhus.store.datastore.config.DataStoreRestriction;
 import org.dhus.store.derived.DerivedProductStore;
 import org.dhus.store.ingestion.IngestibleProduct;
 import org.dhus.store.keystore.KeyStore;
@@ -55,7 +54,7 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
          ApplicationContextProvider.getBean(EvictionService.class);
 
    private final String name;
-   private final boolean readOnly;
+   private final DataStoreRestriction restriction;
    private final int priority;
    private final long maximumSize;
    protected final boolean autoEviction;
@@ -64,32 +63,20 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
    private KeyStore keystore;
 
    /**
-    * Data stores properties configuration.
-    * These properties are controlled by the sub-implementation to customize the product manipulation within the stores.
-    * The list may contains:
-    *
-    *    transfer.compute.digests=md5,sha1,sha256 (comma separated list)
-    *    transfer.compression.ratio=[1-9]
-    *
-    * Specific sub-implementation my also define their own dedicated settings.
-    * The DataStores implementation may or may not implement each settings according to their capabilities.
-    */
-   private final Properties properties = new Properties();
-
-   /**
     * Creates new instance.
     *
     * @param name         of this DataStore
-    * @param readOnly     if it is read-only
+    * @param restriction  access restrictions of this DataStore
     * @param priority     position of this DataStore
     * @param maximumSize  maximum size in bytes of this DataStore
     * @param currentSize  overall size of this DataStore (disk usage)
     * @param autoEviction true to activate auto-eviction based on disk usage
     */
-   protected AbstractDataStore(String name, boolean readOnly, int priority, long maximumSize, long currentSize, boolean autoEviction)
+   protected AbstractDataStore(String name, DataStoreRestriction restriction, int priority, long maximumSize,
+         long currentSize, boolean autoEviction)
    {
       this.name = Objects.requireNonNull(name);
-      this.readOnly = readOnly;
+      this.restriction = restriction;
       this.priority = priority;
       this.maximumSize = maximumSize;
       this.currentSize = new AtomicLong(currentSize);
@@ -101,17 +88,6 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
    public final String getName()
    {
       return name;
-   }
-
-   /**
-    * Returns read only status.
-    *
-    * @return true, if this DataStore is on read only
-    */
-   @Override
-   public final boolean isReadOnly()
-   {
-      return readOnly;
    }
 
    @Override
@@ -153,39 +129,8 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
       this.keystore = keystore;
    }
 
-   /**
-    * A reference to the internal properties set.
-    *
-    * @return the properties set
-    */
-   public Properties getProperties()
-   {
-      return properties;
-   }
-
-   /**
-    * Sets the property value for the given key. If the key already exists, it is overwritten.
-    *
-    * @param key
-    * @param value
-    */
-   public void setProperty(String key, String value)
-   {
-      this.properties.setProperty(key, value);
-   }
-
-   /**
-    * Remove the key/value association from these properties for the given key.
-    *
-    * @param key
-    */
-   public void removeProperty(String key)
-   {
-      this.properties.remove(key);
-   }
-
    @Override
-   public final Product getDerivedProduct(String uuid, String tag) throws DataStoreException
+   public final DataStoreProduct getDerivedProduct(String uuid, String tag) throws DataStoreException
    {
       return internalGetProduct(uuid, tag);
    }
@@ -204,7 +149,7 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
     * @return a product
     * @throws DataStoreException
     */
-   protected abstract Product internalGetProduct(String uuid, String tag) throws DataStoreException;
+   protected abstract DataStoreProduct internalGetProduct(String uuid, String tag) throws DataStoreException;
 
    /**
     * Retrieves a product resource location from the given id key.
@@ -222,12 +167,20 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
    @Override
    public final void set(String uuid, Product product) throws DataStoreException
    {
+      if (restriction != DataStoreRestriction.NONE)
+      {
+         throw new ReadOnlyDataStoreException(getName() + " datastore is read only");
+      }
       internalAddProduct(uuid, UNALTERED_PRODUCT_TAG, product);
    }
 
    @Override
    public final void addDerivedProduct(String uuid, String tag, Product product) throws StoreException
    {
+      if (restriction != DataStoreRestriction.NONE)
+      {
+         throw new ReadOnlyDataStoreException(getName() + " datastore is read only");
+      }
       internalAddProduct(uuid, tag, product);
    }
 
@@ -263,40 +216,67 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
    @Override
    public void addProduct(IngestibleProduct inProduct) throws StoreException
    {
+      // read only test done in set method
       set(inProduct.getUuid(), inProduct);
    }
 
    @Override
    public final void deleteProduct(String uuid) throws DataStoreException
    {
+      if (restriction == DataStoreRestriction.READ_ONLY)
+      {
+         throw new ReadOnlyDataStoreException(getName() + " datastore is read only");
+      }
       if (!internalHasProduct(uuid, UNALTERED_PRODUCT_TAG))
       {
          throw new ProductNotFoundException();
       }
 
       String resourceLocation = getResource(uuid, UNALTERED_PRODUCT_TAG);
-      removeResource(uuid, UNALTERED_PRODUCT_TAG);
+      deleteProductReference(uuid);
 
-      if (!isReadOnly())
+      if (restriction == DataStoreRestriction.NONE)
       {
          internalDeleteProduct(resourceLocation);
       }
    }
 
    @Override
-   public final void deleteDerivedProduct(String uuid, String tag) throws DataStoreException
+   public final void deleteProductReference(String uuid) throws DataStoreException
    {
+      if (canModifyReferences())
+      {
+          removeResource(uuid, UNALTERED_PRODUCT_TAG);
+      }
+   }
+
+   @Override
+   public final void deleteDerivedProduct(String uuid, String tag) throws StoreException
+   {
+      if (restriction == DataStoreRestriction.READ_ONLY)
+      {
+         throw new ReadOnlyDataStoreException(getName() + " datastore is read only");
+      }
       if (!internalHasProduct(uuid, tag))
       {
          throw new ProductNotFoundException();
       }
 
       String resourceLocation =  getResource(uuid, tag);
-      removeResource(uuid, tag);
+      deleteDerivedProductReference(uuid, tag);
 
-      if (!isReadOnly())
+      if (restriction == DataStoreRestriction.NONE)
       {
          internalDeleteProduct(resourceLocation);
+      }
+   }
+
+   @Override
+   public final void deleteDerivedProductReference(String uuid, String tag) throws StoreException
+   {
+      if (canModifyReferences())
+      {
+         removeResource(uuid, tag);
       }
    }
 
@@ -309,8 +289,12 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
    protected abstract void internalDeleteProduct(String resourceLocation) throws DataStoreException;
 
    @Override
-   public final void deleteDerivedProducts(String uuid) throws DataStoreException
+   public final void deleteDerivedProducts(String uuid) throws StoreException
    {
+      if (restriction == DataStoreRestriction.READ_ONLY)
+      {
+         throw new ReadOnlyDataStoreException(getName() + " datastore is read only");
+      }
       List<KeyStoreEntry> entries = keystore.getEntriesByUuid(uuid);
       for (KeyStoreEntry entry: entries)
       {
@@ -372,12 +356,20 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
    @Override
    public final boolean addProductReference(String uuid, Product product) throws DataStoreException
    {
+      if (!canModifyReferences())
+      {
+          throw new ReadOnlyDataStoreException(getName() + " datastore is not allowed to modify references");
+      }
       return internalAddProductReference(uuid, UNALTERED_PRODUCT_TAG, product);
    }
 
    @Override
    public final boolean addDerivedProductReference(String uuid, String tag, Product product) throws StoreException
    {
+      if (!canModifyReferences())
+      {
+         throw new ReadOnlyDataStoreException(getName() + " datastore is not allowed to modify references");
+      }
       return internalAddProductReference(uuid, tag, product);
    }
 
@@ -493,7 +485,7 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
       if (obj instanceof AbstractDataStore)
       {
          AbstractDataStore other = (AbstractDataStore) obj;
-         return other.isReadOnly() == readOnly
+         return other.restriction == restriction
                && other.getName().equals(name)
                && other.priority == priority;
       }
@@ -503,7 +495,7 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
    @Override
    public int hashCode()
    {
-      return name.hashCode() + Boolean.valueOf(readOnly).hashCode() + priority;
+      return name.hashCode() + restriction.hashCode() + priority;
    }
 
    @Override
@@ -532,5 +524,28 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
    {
       DataStoreConf dataStore = DS_SERVICE.getNamedDataStore(name);
       return dataStore.getEvictionName();
+   }
+
+   @Override
+   public boolean canHandleDerivedProducts()
+   {
+      return true;
+   }
+
+   @Override
+   public boolean canModifyReferences()
+   {
+      return restriction == DataStoreRestriction.NONE || restriction == DataStoreRestriction.REFERENCES_ONLY;
+   }
+
+   public DataStoreRestriction getRestriction()
+   {
+      return this.restriction;
+   }
+
+   @Override
+   public boolean hasKeyStore()
+   {
+      return true;
    }
 }

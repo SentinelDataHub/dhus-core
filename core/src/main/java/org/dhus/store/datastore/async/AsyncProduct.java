@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,6 +19,8 @@
  */
 package org.dhus.store.datastore.async;
 
+import fr.gael.dhus.database.object.Order;
+
 import org.dhus.AbstractProduct;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.DataStoreProduct;
@@ -29,25 +31,26 @@ import org.dhus.store.datastore.DataStoreProduct;
 public class AsyncProduct extends AbstractProduct implements DataStoreProduct
 {
    /** Back link to store for {@link #asyncFetchData()}. */
-   private final AsyncDataSource source;
+   private final AsyncDataStore source;
 
    /**
     * Data or not data ... that is the question!
     * @param source Source store
     */
-   public AsyncProduct(AsyncDataSource source)
+   public AsyncProduct(AsyncDataStore source)
    {
       this.source = source;
    }
 
    /**
     * Please fetch that product for me.
+    * @return a non null Order instance
     * @throws DataStoreException could not perform fetch
-    * @see AsyncDataSource#fetch(AsyncProduct)
+    * @see AsyncDataStore#fetch(AsyncProduct)
     */
-   public void asyncFetchData() throws DataStoreException
+   public Order asyncFetchData() throws DataStoreException
    {
-      this.source.fetch(this);
+      return this.source.fetch(this);
    }
 
    @Override
@@ -63,7 +66,7 @@ public class AsyncProduct extends AbstractProduct implements DataStoreProduct
    {
       if (DataStoreProduct.class.isAssignableFrom(cl))
       {
-         return (T)this;
+         return cl.cast(this);
       }
       throw new UnsupportedOperationException("Unsupported impl " + cl.getName());
    }

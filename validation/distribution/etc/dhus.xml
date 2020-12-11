@@ -43,9 +43,6 @@
       <!-- Cron used to clean database dumps.
          - keep: defines how dumps are stored. -->
       <cron:cleanDatabaseDump active="true" schedule="0 0 4 ? * *" keep="10" />
-      <!-- Cron used to execute user saved filescanners.
-         - sourceRemove: defines if found products shall be removed from source -->
-      <cron:fileScanners active="true" schedule="0 0 22 ? * *" sourceRemove="false"/>
       <!-- Cron used to execute user saved searches and send results to users -->
       <cron:searches active="true" schedule="0 0 5 ? * *" />
       <!-- Cron used to send system logs.

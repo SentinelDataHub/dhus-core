@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -18,6 +18,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 package fr.gael.dhus.spring.context;
+
+import java.util.Optional;
 
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
@@ -41,7 +43,7 @@ public class ApplicationContextProvider implements ApplicationContextAware
    {
       ApplicationContextProvider.ctx = ctx;
    }
-   
+
    public static ApplicationContext getApplicationContext ()
    {
       return ctx;
@@ -50,5 +52,17 @@ public class ApplicationContextProvider implements ApplicationContextAware
    public static <T> T getBean (Class<T> clazz)
    {
       return ctx.getBean (clazz);
+   }
+
+   public static <T> Optional<T> getOptionalBean(Class<T> clazz)
+   {
+      try
+      {
+         return Optional.<T>of(ctx.getBean(clazz));
+      }
+      catch (RuntimeException suppressed)
+      {
+         return Optional.empty();
+      }
    }
 }

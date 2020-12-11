@@ -156,7 +156,7 @@ public class EventSynchronizerEntitySet extends AbstractEntitySet<EventSynchroni
    }
 
    @Override
-   public Map getEntities()
+   public Map<Long, EventSynchronizer> getEntities()
    {
       return new EventSynchronizerMap();
    }

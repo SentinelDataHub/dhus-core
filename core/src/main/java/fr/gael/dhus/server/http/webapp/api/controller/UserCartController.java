@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL,2017 Systems
+ * Copyright (C) 2015-2017,2019 GAEL,2017 Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -40,6 +40,9 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.DataStoreManager;
 
@@ -58,22 +61,25 @@ public class UserCartController
 {
    @Autowired
    private ConfigurationManager configurationManager;
-   
+
    @Autowired
    private ProductCartService productCartService;
 
    @Autowired
    private DataStoreManager dataStoreService;
-   
+
+   private static final Logger LOGGER = LogManager.getLogger();
+
    @PreAuthorize ("hasRole('ROLE_DOWNLOAD')")
    @RequestMapping (value = "/cart")
    public void cartToMetalink (Principal principal, HttpServletResponse res)
          throws UserNotExistingException, IOException,
          ParserConfigurationException, TransformerException
    {
+      LOGGER.warn("This API endpoint is deprected, please use the OData API instead");
       User user = (User)((UsernamePasswordAuthenticationToken)principal).
             getPrincipal ();
-      
+
       if (!productCartService.hasProducts(user.getUUID()))
          return;
 
@@ -84,7 +90,7 @@ public class UserCartController
       res.getWriter ().println(makeMetalinkDocument (
          productCartService.getProductsOfCart(user.getUUID(), -1, -1)));
    }
-   
+
    /** Makes the metalink XML Document for given products. 
     * @throws ParserConfigurationException 
     * @throws TransformerException */
@@ -92,7 +98,7 @@ public class UserCartController
          throws ParserConfigurationException, TransformerException
    {
       MetalinkBuilder mb = new MetalinkBuilder ();
-      
+
       for (Product p: lp)
       {
          String filename;
@@ -106,21 +112,23 @@ public class UserCartController
          }
          catch (DataStoreException e)
          {
-            throw new IllegalStateException("Product " +p.getIdentifier() + " is not accessible", e);
+            // FIXME wrong for products that are not ZIPs
+            LOGGER.warn("Product {} is not accessible, using made up filename", p.getIdentifier(), e);
+            filename = p.getIdentifier() + ".zip";
          }
 
          MetalinkFileBuilder fb = mb.addFile (filename).
             addUrl (product_entity, null, 0);
-         
+
          if (!p.getDownload ().getChecksums ().isEmpty ())
          {
             Map<String,String>checksums = p.getDownload ().getChecksums (); 
             for (String algo:checksums.keySet ())
                fb.setHash (algo, checksums.get (algo));
          }
-      }                  
+      }
       StringWriter sw = new StringWriter ();
-      
+
       Document doc = mb.build ();
       Transformer transformer = TransformerFactory.newInstance()
             .newTransformer();

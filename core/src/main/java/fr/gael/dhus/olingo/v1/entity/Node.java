@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2014-2018 GAEL Systems
+ * Copyright (C) 2014-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -30,8 +30,10 @@ import fr.gael.dhus.olingo.v1.Model;
 import fr.gael.dhus.olingo.v1.MediaResponseBuilder;
 import fr.gael.dhus.olingo.v1.entityset.NodeEntitySet;
 import fr.gael.dhus.olingo.v1.map.impl.NodesMap;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.util.DownloadActionRecordListener;
 import fr.gael.dhus.util.DownloadStreamCloserListener;
+import fr.gael.dhus.util.stream.ListenableStream;
 
 import fr.gael.drb.DrbAttribute;
 import fr.gael.drb.DrbAttributeList;
@@ -54,8 +56,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.commons.io.IOUtils;
+import java.util.Optional;
 
 import org.apache.commons.net.io.CopyStreamAdapter;
 import org.apache.commons.net.io.CopyStreamListener;
@@ -68,6 +69,8 @@ import org.apache.olingo.odata2.api.processor.ODataResponse;
 import org.apache.olingo.odata2.api.processor.ODataSingleProcessor;
 import org.apache.olingo.odata2.api.uri.NavigationSegment;
 
+import org.dhus.metrics.DownloadMetrics;
+
 /**
  * The OData representation of a DRB Node.
  */
@@ -76,6 +79,9 @@ public class Node extends Item implements Closeable
    private static final Logger LOGGER = LogManager.getLogger(Node.class);
 
    private final long ONE_YEAR_MS = (long)365.25*24*60*60*1000;
+
+   protected static final Optional<DownloadMetrics> DL_METRICS =
+         ApplicationContextProvider.getOptionalBean(DownloadMetrics.class);
 
    protected DrbNode drbNode;
    private String path;
@@ -366,15 +372,18 @@ public class Node extends Item implements Closeable
       initNode ();
       if (hasStream ())
       {
-         InputStream is = null;
+         InputStream input = null;
          try
          {
+            input = attach_stream? getStream(): null;
             User u = Security.getCurrentUser();
             String user_name = (u == null ? null : u.getUsername ());
+            DownloadMetrics.DownloadActionListener metrics = null;
 
+            InputStream is = null;
             if (attach_stream)
             {
-               is = new BufferedInputStream(getStream());
+               is = new BufferedInputStream(input);
                RegulatedInputStream.Builder builder =
                      new RegulatedInputStream.Builder(is, TrafficDirection.OUTBOUND);
                builder.userName(user_name);
@@ -382,6 +391,7 @@ public class Node extends Item implements Closeable
                CopyStreamAdapter adapter = new CopyStreamAdapter();
                CopyStreamListener recorder =
                      new DownloadActionRecordListener(this.getId(), this.getName(), u);
+
                CopyStreamListener closer = new DownloadStreamCloserListener(is);
                adapter.addCopyStreamListener(recorder);
                adapter.addCopyStreamListener(closer);
@@ -391,6 +401,12 @@ public class Node extends Item implements Closeable
                   builder.streamSize(getContentLength());
                }
                is = builder.build();
+
+               if (DL_METRICS.isPresent())
+               {
+                  metrics = new DownloadMetrics.DownloadActionListener(DL_METRICS.get(), getItemClass().getUri(), user_name);
+                  is = new ListenableStream(is, metrics);
+               }
             }
 
             String etag = getName () + "-" + getContentLength ();
@@ -403,13 +419,24 @@ public class Node extends Item implements Closeable
             // As a stream exists, this control is probably obsolete.
             long content_length = getContentLength ()==0?-1:getContentLength ();
 
-            return MediaResponseBuilder.prepareMediaResponse(etag, getName(),
-               getContentType (), last_modified, content_length,
-               processor.getContext (), is);
+            ODataResponse response = MediaResponseBuilder.prepareMediaResponse(
+                  etag,
+                  getName(),
+                  getContentType(),
+                  last_modified,
+                  content_length,
+                  processor.getContext(),
+                  is);
+            if (metrics != null)
+            {
+               DL_METRICS.get().recordDownloadStart(getItemClass().getUri(), user_name);
+               metrics.setRequestedBytes(Integer.decode(response.getHeader("Content-Length")));
+            }
+            return response;
          }
-         catch (Exception e)
+         catch (IOException | RuntimeException e)
          {
-            IOUtils.closeQuietly(is);
+            forceClose(input);
             throw new ODataException (
                "An exception occured while creating the stream for node " + 
                getName(), e);
@@ -418,6 +445,18 @@ public class Node extends Item implements Closeable
       else
       {
          throw new ODataException ("No stream for node " + getName ());
+      }
+   }
+
+   protected void forceClose(Closeable toClose)
+   {
+      if (toClose != null)
+      {
+         try
+         {
+            toClose.close();
+         }
+         catch (IOException suppressed) {}
       }
    }
 
@@ -513,7 +552,7 @@ public class Node extends Item implements Closeable
    }
 
    @Override
-   public List<Map<String, Object>> expand(String navlink_name, String self_url)
+   public List<Map<String, Object>> expand(String navlink_name, String self_url) throws ODataException
    {
       switch(navlink_name)
       {

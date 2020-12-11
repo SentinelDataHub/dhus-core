@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2013,2014,2015,2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,30 +19,60 @@
  */
 package fr.gael.dhus.datastore.scanner;
 
+import fr.gael.drbx.cortex.DrbCortexItemClass;
+import fr.gael.dhus.datastore.scanner.listener.AsynchronousLinkedList;
+
 import java.util.List;
 
-import fr.gael.drbx.cortex.DrbCortexItemClass;
+import org.dhus.scanner.config.ScannerInfo;
 
 /**
  * Scanner aims to scan uri in order to retrieve data.
  */
-public interface Scanner 
+public interface Scanner
 {
+   void processScan();
+
+   void stop();
+
    /**
     * Scan
+    *
     * @return number of products found, or -1 if not implemented
     * @throws InterruptedException is user stop called.
     */
-   int scan () throws InterruptedException;
-   void stop ();
-   public boolean isStopped ();
+   int scan() throws InterruptedException;
+
+   boolean isStopped();
+
    AsynchronousLinkedList<URLExt> getScanList();
-   void setSupportedClasses (List<DrbCortexItemClass>supported);
+
+   void setSupportedClasses(List<DrbCortexItemClass> supported);
+
    /**
-    * Force the navigation through the scanned directories even if the 
-    * directory has been recognized.(default false)
+    * Force the navigation through the scanned directories even if the directory has been recognised.
+    * (defaults to false).
+    *
+    * @param force
     */
-   public void setForceNavigate (boolean force);
-   public boolean isForceNavigate();
-   public void setUserPattern (String pattern);
+   void setForceNavigate(boolean force);
+
+   boolean isForceNavigate();
+
+   /**
+    * Defines the user pattern to restricts recursive search among scanned directories.
+    * Passed pattern string in not stored in this class, but automatically compiled with {@link Pattern#compile(String)}.
+    * Once called, and even if this method throws exception, The stored pattern is reset.
+    *
+    * @param pattern to set
+    */
+   void setUserPattern(String pattern);
+
+   ScannerStatus getStatus();
+
+   void setStatus(ScannerStatus status);
+
+   ScannerInfo getConfig();
+
+   void setConfig(ScannerInfo config);
 }

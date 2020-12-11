@@ -226,7 +226,7 @@ public class IngestEntitySet extends AbstractEntitySet<Ingest>
    }
 
    @Override
-   public Map getEntities()
+   public Map<Long, Ingest> getEntities()
    {
       return Ingest.getMappable();
    }

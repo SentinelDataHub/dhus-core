@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2014-2018 GAEL Systems
+ * Copyright (C) 2014-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -71,6 +71,7 @@ import org.apache.olingo.odata2.api.commons.InlineCount;
 import org.apache.olingo.odata2.api.edm.Edm;
 import org.apache.olingo.odata2.api.edm.EdmEntitySet;
 import org.apache.olingo.odata2.api.edm.EdmEntityType;
+import org.apache.olingo.odata2.api.edm.EdmException;
 import org.apache.olingo.odata2.api.edm.EdmFunctionImport;
 import org.apache.olingo.odata2.api.edm.EdmLiteral;
 import org.apache.olingo.odata2.api.edm.EdmLiteralKind;
@@ -91,11 +92,14 @@ import org.apache.olingo.odata2.api.uri.KeyPredicate;
 import org.apache.olingo.odata2.api.uri.NavigationSegment;
 import org.apache.olingo.odata2.api.uri.PathSegment;
 import org.apache.olingo.odata2.api.uri.UriInfo;
+import org.apache.olingo.odata2.api.uri.UriNotMatchingException;
 import org.apache.olingo.odata2.api.uri.UriParser;
+import org.apache.olingo.odata2.api.uri.UriSyntaxException;
 import org.apache.olingo.odata2.api.uri.expression.FilterExpression;
 import org.apache.olingo.odata2.api.uri.expression.OrderByExpression;
 import org.apache.olingo.odata2.api.uri.info.DeleteUriInfo;
 import org.apache.olingo.odata2.api.uri.info.GetComplexPropertyUriInfo;
+import org.apache.olingo.odata2.api.uri.info.GetEntityLinkUriInfo;
 import org.apache.olingo.odata2.api.uri.info.GetEntitySetCountUriInfo;
 import org.apache.olingo.odata2.api.uri.info.GetEntitySetLinksUriInfo;
 import org.apache.olingo.odata2.api.uri.info.GetEntitySetUriInfo;
@@ -208,10 +212,20 @@ public class Processor extends ODataSingleProcessor
       {
          if (uri_info.getFormat().equals(MetalinkBuilder.CONTENT_TYPE))
          {
+            if (results.values().size() == 0)
+            {
+               // No data sent with the NO CONTENT (204) status code
+               throw new ExpectedException("", HttpStatusCodes.NO_CONTENT);
+            }
             return MetalinkFormatter.writeFeed(targetES, results.values(), makeLink().toString());
          }
          if (uri_info.getFormat().equals(CsvFormatter.CONTENT_TYPE))
          {
+            if (results.values().size() == 0)
+            {
+               // No data sent with the NO CONTENT (204) status code
+               throw new ExpectedException("", HttpStatusCodes.NO_CONTENT);
+            }
             return CsvFormatter.writeFeed(targetES, results.values(), uri_info.getSelect());
          }
       }
@@ -376,7 +390,7 @@ public class Processor extends ODataSingleProcessor
             .expandSelectTree(expand_select_tree)
             .callbacks(makeCallbacks(
                   entity.getExpandableNavLinkNames(),
-                  new Expander(makeLink(false), entity)))
+                  new Expander<>(makeLink(false), entity)))
             .build();
 
       return EntityProvider.writeEntry(content_type, targetES, data, prop);
@@ -389,6 +403,26 @@ public class Processor extends ODataSingleProcessor
    {
       String targetName = uri_info.getTargetEntitySet().getName();
       return Model.getEntitySet(targetName).getEntityMedia(uri_info, this);
+   }
+
+   /* Writes a single link eg: http://dhus.gael.fr/odata/v1/Synchronizers(0L)/$links/TargetCollection */
+   @Override
+   public ODataResponse readEntityLink(GetEntityLinkUriInfo uriInfo, String contentType)
+         throws ODataException
+   {
+      // Target of the link to create
+      EdmEntitySet linkTargetES = uriInfo.getTargetEntitySet();
+
+      // Gets the primary key of the start entity
+      KeyPredicate startKP = (uriInfo.getKeyPredicates().isEmpty()) ? null : uriInfo.getKeyPredicates().get(0);
+
+      // Navigate to requested data
+      AbstractEntity result = Navigator.<AbstractEntity>navigate(uriInfo.getStartEntitySet(), startKP,
+            uriInfo.getNavigationSegments(), null);
+
+      Map<String, Object> data = result.toEntityResponse(makeLink().toString());
+
+      return EntityProvider.writeLink(contentType, linkTargetES, data, null);
    }
 
    /* Writes Links eg: http://dhus.gael.fr/odata/v1/Collections(10)/$links/Products */
@@ -673,17 +707,7 @@ public class Processor extends ODataSingleProcessor
 
       // Reads and parses the link
       String link = UriParsingUtils.extractResourcePath(EntityProvider.readLink(content_type, target_es, content));
-
-      // Use Olingo's UriParser
-      UriParser urip = RuntimeDelegate.getUriParser(getContext().getService().getEntityDataModel());
-      List<PathSegment> path_segments = new ArrayList<>();
-      StringTokenizer st = new StringTokenizer(link, "/");
-      while (st.hasMoreTokens())
-      {
-         path_segments.add(UriParser.createPathSegment(st.nextToken(), null));
-      }
-
-      UriInfo uilink = urip.parse(path_segments, Collections.<String, String>emptyMap());
+      UriInfo uilink = parseNavLinkUri(getContext().getService().getEntityDataModel(), link);
 
       // get affected entity and create link
       String key = uri_info.getKeyPredicates().get(0).getLiteral();
@@ -697,6 +721,39 @@ public class Processor extends ODataSingleProcessor
          Scanner scanner = Scanner.get(Long.decode(key));
          scanner.createLink(uilink);
       }
+
+      // Empty answer with HTTP code 204: no content
+      return ODataResponse.newBuilder().build();
+   }
+
+   @Override
+   public ODataResponse updateEntityLink(PutMergePatchUriInfo uriInfo, InputStream content, String requestContentType, String contentType)
+         throws ODataException
+   {
+      // Gets the entityset containing the navigation link to `link_target_es`
+      EdmEntitySet  target_es = getLinkFromES(new AdaptableUriInfo(uriInfo));
+
+      // Check permission
+      fr.gael.dhus.database.object.User current_user = Security.getCurrentUser();
+      AbstractEntitySet<?> es = Model.getEntitySet(target_es.getName());
+      if (!es.isAuthorized(current_user))
+      {
+         throw new NotAllowedException();
+      }
+
+      // Reads and parses the link
+      String link = UriParsingUtils.extractResourcePath(EntityProvider.readLink(contentType, target_es, content));
+
+      // Gets the primary key of the start entity
+      KeyPredicate startKP = (uriInfo.getKeyPredicates().isEmpty()) ? null : uriInfo.getKeyPredicates().get(0);
+
+      // Navigate to affected entity
+      List<NavigationSegment> navSegments = uriInfo.getNavigationSegments(); // Remove the last segment that is to be created/updated
+      navSegments = (navSegments == null || navSegments.size() <= 1) ? Collections.<NavigationSegment>emptyList() : navSegments.subList(0, navSegments.size() - 1);
+      AbstractEntity result = Navigator.<AbstractEntity>navigate(uriInfo.getStartEntitySet(), startKP, navSegments, null);
+
+      // Call to createLink to create/update link
+      result.createLink(parseNavLinkUri(getContext().getService().getEntityDataModel(), link));
 
       // Empty answer with HTTP code 204: no content
       return ODataResponse.newBuilder().build();
@@ -1108,7 +1165,7 @@ public class Processor extends ODataSingleProcessor
       }
    }
 
-   private Map<String, ODataCallback> makeCallbacks(List<String> expandables, Expander expander)
+   private Map<String, ODataCallback> makeCallbacks(List<String> expandables, Expander<?> expander)
    {
       Objects.requireNonNull(expandables);
       Objects.requireNonNull(expander);
@@ -1123,6 +1180,22 @@ public class Processor extends ODataSingleProcessor
          res.put(navlink_name, expander);
       }
       return res;
+   }
+
+   /* Parse '<uri link...>' to create/update links */
+   private UriInfo parseNavLinkUri(Edm edm, String uri)
+         throws EdmException, UriNotMatchingException, UriSyntaxException
+   {
+      // Use Olingo's UriParser
+      UriParser urip = RuntimeDelegate.getUriParser(edm);
+      List<PathSegment> path_segments = new ArrayList<>();
+      StringTokenizer st = new StringTokenizer(uri, "/");
+      while (st.hasMoreTokens())
+      {
+         path_segments.add(UriParser.createPathSegment(st.nextToken(), null));
+      }
+
+      return urip.parse(path_segments, Collections.<String, String>emptyMap());
    }
 
 }

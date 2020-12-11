@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017,2018 GAEL Systems
+ * Copyright (C) 2016-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -71,7 +71,16 @@ public class MetalinkFormatter
             root = root + (root.endsWith("/") ? "" : "/");
             String url = root + Model.PRODUCT.getName() + "('" + p.getId() + "')/" + "$value";
 
-            mb.addFile(p.getMediaName())
+            String filename = p.getMediaName();
+
+            // no physical file
+            if (filename == null)
+            {
+               // FIXME wrong for products that are not ZIPs
+               filename = p.getName() + ".zip";
+            }
+
+            mb.addFile(filename)
                   .addUrl(url, null, 0)
                   .setSize(p.getContentLength())
                   .setHash(p.getChecksumAlgorithm(), p.getChecksumValue());
@@ -92,6 +101,8 @@ public class MetalinkFormatter
 
    public static class MetalinkException extends ExpectedException
    {
+      private static final long serialVersionUID = 1L;
+
       public MetalinkException(String typename)
       {
          super("Entity type " + typename + " does not support Metalink formatting");

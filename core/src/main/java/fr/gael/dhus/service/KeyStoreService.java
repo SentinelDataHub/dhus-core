@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016-2018 GAEL Systems
+ * Copyright (C) 2016-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,6 +22,7 @@ package fr.gael.dhus.service;
 import java.util.Iterator;
 import java.util.List;
 
+import org.dhus.store.datastore.DataStore;
 import org.hibernate.ScrollableResults;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,8 @@ import org.springframework.stereotype.Service;
 import fr.gael.dhus.database.dao.KeyStoreEntryDao;
 import fr.gael.dhus.database.object.KeyStoreEntry;
 import fr.gael.dhus.database.object.KeyStoreEntry.Key;
+
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class KeyStoreService
@@ -41,6 +44,7 @@ public class KeyStoreService
     *
     * @param entry to create
     */
+   @Transactional
    public void createEntry(KeyStoreEntry entry)
    {
       keyStoreEntryDao.create(entry);
@@ -53,6 +57,7 @@ public class KeyStoreService
     * @param entryKey
     * @return
     */
+   @Transactional(readOnly = true)
    public KeyStoreEntry getEntry(String keyStoreName, String entryKey, String tag)
    {
       return getEntry(new Key(keyStoreName, entryKey, tag));
@@ -64,6 +69,7 @@ public class KeyStoreService
     * @param key
     * @return
     */
+   @Transactional(readOnly = true)
    public KeyStoreEntry getEntry(Key key)
    {
       return keyStoreEntryDao.read(key);
@@ -74,6 +80,7 @@ public class KeyStoreService
     *
     * @param entry
     */
+   @Transactional
    public void updateEntry(KeyStoreEntry entry)
    {
       KeyStoreEntry ks = keyStoreEntryDao.read(entry.getKey());
@@ -93,6 +100,7 @@ public class KeyStoreService
     *
     * @param entry
     */
+   @Transactional
    public void deleteEntry(KeyStoreEntry entry)
    {
       keyStoreEntryDao.delete(entry);
@@ -105,6 +113,7 @@ public class KeyStoreService
     * @param entryKey
     * @return
     */
+   @Transactional(readOnly = true)
    public boolean exists(String keyStoreName, String entryKey, String tag)
    {
       return exists(new Key(keyStoreName, entryKey, tag));
@@ -116,6 +125,7 @@ public class KeyStoreService
     * @param key
     * @return
     */
+   @Transactional(readOnly = true)
    public boolean exists(Key key)
    {
       return keyStoreEntryDao.read(key) != null;
@@ -126,6 +136,7 @@ public class KeyStoreService
     * @param keyStoreName the name of the keyStore
     * @return an Iterator of KeyStoreEntry
     */
+   @Transactional(readOnly = true)
    public Iterator<KeyStoreEntry> getOldestEntries(String keyStoreName)
    {
       final ScrollableResults entries = keyStoreEntryDao.readOldestEntries(keyStoreName);
@@ -151,6 +162,7 @@ public class KeyStoreService
       };
    }
 
+   @Transactional(readOnly = true)
    public List<KeyStoreEntry> getByUuid(String uuid)
    {
       return keyStoreEntryDao.getByUuid(uuid);
@@ -162,6 +174,7 @@ public class KeyStoreService
     * @param keyStoreName name of KeyStore to query
     * @return list of KeyStoreEntry
     */
+   @Transactional(readOnly = true)
    public List<KeyStoreEntry> getUnalteredProductEntries(String keyStoreName)
    {
       return keyStoreEntryDao.getUnalteredProductEntries(keyStoreName, null, null);
@@ -175,8 +188,21 @@ public class KeyStoreService
     * @param top maximum number of entries to return (size of returned list it at most `top`)
     * @return list of KeyStoreEntry
     */
+   @Transactional(readOnly = true)
    public List<KeyStoreEntry> getUnalteredProductEntries(String keyStoreName, int skip, int top)
    {
       return keyStoreEntryDao.getUnalteredProductEntries(keyStoreName, skip, top);
+   }
+
+   @Transactional(readOnly = true)
+   public List<KeyStoreEntry> listUnalteredForUuid(String uuid)
+   {
+      return keyStoreEntryDao.listForUuidAndTag(uuid, DataStore.UNALTERED_PRODUCT_TAG);
+   }
+
+   @Transactional(readOnly = true)
+   public List<KeyStoreEntry> listDerivedForUuid(String uuid, String tag)
+   {
+      return keyStoreEntryDao.listForUuidAndTag(uuid, tag);
    }
 }

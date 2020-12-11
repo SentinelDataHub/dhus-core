@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -50,6 +50,7 @@ import org.apache.logging.log4j.io.IoBuilder;
 import org.dhus.store.datastore.DataStoreFactory;
 import org.dhus.store.datastore.DataStoreManager;
 import org.dhus.store.datastore.config.DataStoreConf;
+import org.dhus.transformation.TransformationManager;
 
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
@@ -74,6 +75,9 @@ public class DHuS
    {
       // Overriding default BusFactory to remove the ClientAbortException stacktrace
       System.setProperty("org.apache.cxf.bus.factory","fr.gael.dhus.util.log.ClientAbortRemovalBusFactory");
+
+      // CXF to use Log4j
+      System.setProperty("org.apache.cxf.Logger", "org.apache.cxf.common.logging.Log4jLogger");
 
       // Sets up the JUL --> Log4J brigde
       System.setProperty("java.util.logging.manager", "org.apache.logging.log4j.jul.LogManager");
@@ -143,12 +147,6 @@ public class DHuS
          }
       }));
 
-      // Always add JMSAppender
-      //Logger rootLogger = LogManager.getRootLogger ();
-      //org.apache.logging.log4j.core.Logger coreLogger =
-      //(org.apache.logging.log4j.core.Logger)rootLogger;
-      //JMSAppender jmsAppender = JMSAppender.createAppender ();
-      //coreLogger.addAppender (jmsAppender);
       try
       {
          // Activates the resolver for Drb
@@ -158,17 +156,9 @@ public class DHuS
       catch (IOException e)
       {
          LOGGER.error ("Resolver cannot be handled.");
-         //logger.error (new Message(MessageType.SYSTEM,
-         //"Resolver cannot be handled."));
       }
 
       LOGGER.info ("Launching Data Hub Service...");
-      //logger.info (new Message(MessageType.SYSTEM,
-      //"Loading Data Hub Service..."));
-
-      ClassPathXmlApplicationContext migrationContext =
-            new ClassPathXmlApplicationContext("classpath:fr/gael/dhus/spring/dhus-core-migration.xml");
-      migrationContext.close();
 
       ClassPathXmlApplicationContext context
             = new ClassPathXmlApplicationContext (
@@ -192,7 +182,6 @@ public class DHuS
          context.addApplicationListener (sync_sv);
 
          // Initialize DHuS loggers
-         //jmsAppender.cleanWaitingLogs ();
          //logger.info (new Message(MessageType.SYSTEM, "DHuS Started"));
 
          server = ApplicationContextProvider.getBean (TomcatServer.class);
@@ -218,6 +207,7 @@ public class DHuS
 
          context.getBean(DatabasePostInit.class).init();
          context.getBean(ISynchronizerService.class).init();
+         context.getBean(TransformationManager.class).init();
 
          LOGGER.info ("Server is ready...");
          started = true;

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ * Copyright (C) 2013-2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -33,6 +33,9 @@ import javax.persistence.ManyToMany;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
 
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+
 /**
  * User product cart
  */
@@ -47,8 +50,9 @@ public class ProductCart implements Serializable
    private String uuid = UUID.randomUUID ().toString ();
 
    @OneToOne (fetch=FetchType.LAZY)
+   @OnDelete(action = OnDeleteAction.CASCADE)
    private User user;
-   
+
    @ManyToMany (fetch = FetchType.LAZY)
    @JoinTable (name = "CART_PRODUCTS",
                joinColumns = { @JoinColumn (name = "CART_UUID") },
@@ -110,5 +114,11 @@ public class ProductCart implements Serializable
       int result = uuid != null ? uuid.hashCode () : 0;
       result = 31 * result + (user != null ? user.hashCode () : 0);
       return result;
+   }
+
+   @Override
+   public String toString()
+   {
+      return "Cart of user: " + user.getUsername();
    }
 }

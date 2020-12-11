@@ -34,6 +34,8 @@ import java.net.URL;
 import java.nio.file.Paths;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.dhus.AbstractProduct;
 import org.dhus.store.datastore.DataStoreProduct;
 
@@ -42,6 +44,8 @@ import org.dhus.store.datastore.DataStoreProduct;
  */
 public class HfsProduct extends AbstractProduct implements DataStoreProduct
 {
+   private static final Logger LOGGER = LogManager.getLogger();
+
    private File product_file = null;
    private DrbNode product_node = null;
    private URL product_url = null;
@@ -107,9 +111,10 @@ public class HfsProduct extends AbstractProduct implements DataStoreProduct
                throw new IllegalStateException("Product was not correctly constructed");
             }
          }
-         catch (MalformedURLException ex)
+         catch (MalformedURLException ex) // Should never happen
          {
-         } // Should never happen
+            LOGGER.debug("Unexpected MalformedURLException", ex);
+         }
       }
       return this.product_url;
    }
@@ -124,6 +129,7 @@ public class HfsProduct extends AbstractProduct implements DataStoreProduct
          }
          else if (this.product_url != null)
          {
+            // FIXME will always cause NPE
             this.product_node = DrbFactory.openURI(this.product_file.getAbsolutePath());
          }
       }

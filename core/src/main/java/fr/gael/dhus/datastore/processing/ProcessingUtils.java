@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -31,7 +31,7 @@ import com.vividsolutions.jts.operation.valid.TopologyValidationError;
 
 import fr.gael.dhus.database.object.MetadataIndex;
 import fr.gael.dhus.factory.MetadataFactory;
-import fr.gael.dhus.util.UnZip;
+import fr.gael.dhus.util.DrbChildren;
 import fr.gael.drb.DrbAttribute;
 import fr.gael.drb.DrbFactory;
 import fr.gael.drb.DrbNode;
@@ -176,7 +176,7 @@ public class ProcessingUtils
 
          node = (DrbNode)sequence.getItem(0);
       }
-      if (UnZip.supported (location))
+      if (DrbChildren.shouldIngestionUseFirstChild(location, node))
       {
          return node.getFirstChild();
       }
@@ -208,7 +208,7 @@ public class ProcessingUtils
       {
          throw new UnsupportedOperationException("Class cannot be retrieved for product " + node.getPath());
       }
-      LOGGER.info("Class \"{}\" for product {}", cl.getLabel(), node.getName());
+      LOGGER.debug("Class \"{}\" for product {}", cl.getLabel(), node.getName());
       return cl;
    }
 

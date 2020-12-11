@@ -39,6 +39,7 @@ public class SynchronizerModel implements EntityModel
    public static final String ABSTRACT_ENTITY_SET_NAME = "Synchronizers";
    public static final FullQualifiedName ABSTRACT_FULL_QUALIFIED_NAME =
          new FullQualifiedName(DHuSODataServlet.NAMESPACE, ABSTRACT_ENTITY_TYPE_NAME);
+
    public static final String PROPERTY_ID = "Id";
    public static final String PROPERTY_CREATED_DATE = "CreationDate";
    public static final String PROPERTY_UPDATED_DATE = "ModificationDate";

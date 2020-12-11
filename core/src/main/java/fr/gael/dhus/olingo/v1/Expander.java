@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016 GAEL Systems
+ * Copyright (C) 2016-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -38,7 +38,7 @@ import org.apache.olingo.odata2.api.ep.callback.WriteEntryCallbackResult;
 import org.apache.olingo.odata2.api.ep.callback.WriteFeedCallbackContext;
 import org.apache.olingo.odata2.api.ep.callback.WriteFeedCallbackResult;
 import org.apache.olingo.odata2.api.exception.ODataApplicationException;
-import org.apache.olingo.odata2.api.exception.ODataMessageException;
+import org.apache.olingo.odata2.api.exception.ODataException;
 
 /**
  * This class handles $expand requests, it deleguates to the Entity or the EntitySet if the
@@ -52,16 +52,16 @@ import org.apache.olingo.odata2.api.exception.ODataMessageException;
  * <li>{@link AbstractEntitySet#expand(String, String, Map, Map)}
  * </ul>
  */
-public class Expander implements OnWriteEntryContent, OnWriteFeedContent
+public class Expander<T extends AbstractEntity> implements OnWriteEntryContent, OnWriteFeedContent
 {
    /** The root par of the URI to this OData service. */
    private final URI serviceRoot;
 
    /** Feed expended with retrieveFeedResult(). */
-   private final Map<?, AbstractEntity> feed;
+   private final Map<? extends Object, ? extends AbstractEntity> feed;
 
    /** EntitySet of feed to expand. */
-   private final AbstractEntitySet entitySet;
+   private final AbstractEntitySet<T> entitySet;
 
    /** Entity expanded with retrieveEntryResult(). */
    private final AbstractEntity entity;
@@ -72,7 +72,7 @@ public class Expander implements OnWriteEntryContent, OnWriteFeedContent
     * @param entity_set of feed to expand.
     * @param feed to expand.
     */
-   public Expander(URI service_root, AbstractEntitySet entity_set, Map<?, AbstractEntity> feed)
+   public Expander(URI service_root, AbstractEntitySet<T> entity_set, Map<?, AbstractEntity> feed)
    {
       Objects.requireNonNull(service_root);
       Objects.requireNonNull(entity_set);
@@ -119,7 +119,7 @@ public class Expander implements OnWriteEntryContent, OnWriteFeedContent
             return this.entitySet.expand(navlink_name, this.serviceRoot.toString(), feed, key);
          }
       }
-      catch(ODataMessageException ex)
+      catch(ODataException ex)
       {
          // rethrow programmatic exception
          throw new RuntimeException(ex);
@@ -209,9 +209,11 @@ public class Expander implements OnWriteEntryContent, OnWriteFeedContent
     * @param key that identifies the Entity from the feed being served to the client.
     * @param keykey key to get the single key from the `key` map.
     * @return the expanded data (non null, may be empty).
+    * @throws ODataException could not expand
     */
    public static List<Map<String, Object>> expandFeedSingletonKey(String navlink_name,
-         String self_url, Map<?, AbstractEntity> entities, Map<String, Object> key, String keykey)
+         String self_url, Map<? extends Object, ? extends AbstractEntity> entities, Map<String, Object> key, String keykey)
+         throws ODataException
    {
       if (entities == null)
       {

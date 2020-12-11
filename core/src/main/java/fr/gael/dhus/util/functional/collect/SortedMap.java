@@ -106,10 +106,10 @@ public class SortedMap<K, V> implements Map<K, V>
    @Override
    public Set<K> keySet()
    {
-      return new AbstractSet()
+      return new AbstractSet<K>()
       {
          @Override
-         public Iterator iterator()
+         public Iterator<K> iterator()
          {
             return iterableKeys.iterator();
          }
@@ -131,13 +131,13 @@ public class SortedMap<K, V> implements Map<K, V>
    @Override
    public Set<Entry<K, V>> entrySet()
    {
-      return new AbstractSet()
+      return new AbstractSet<Entry<K, V>>()
       {
          @Override
-         public Iterator iterator()
+         public Iterator<Entry<K, V>> iterator()
          {
             final Iterator<K> it = iterableKeys.iterator();
-            return new Iterator()
+            return new Iterator<Entry<K, V>>()
             {
 
                @Override
@@ -147,7 +147,7 @@ public class SortedMap<K, V> implements Map<K, V>
                }
 
                @Override
-               public Object next()
+               public Entry<K, V> next()
                {
                   K key = it.next();
                   return new AbstractMap.SimpleImmutableEntry<>(key, index.get(key));

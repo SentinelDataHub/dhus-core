@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -62,14 +62,17 @@ public class SynchronizerManager extends Synchronizers
 
    public SynchronizerConfiguration create(SynchronizerConfiguration sc, boolean save)
    {
-      sc.setId(getNextId());
-      getSynchronizer().add(sc);
-      if (save)
+      synchronized(this)
       {
-         save();
+         sc.setId(getNextId());
+         getSynchronizer().add(sc);
+         if (save)
+         {
+            save();
+         }
+         LOGGER.info("Synchronizer#{} created", sc.getId());
+         return sc;
       }
-      LOGGER.info("Synchronizer#{} created", sc.getId());
-      return sc;
    }
 
    /**
@@ -79,21 +82,24 @@ public class SynchronizerManager extends Synchronizers
     */
    public void update(final SynchronizerConfiguration update)
    {
-      if (update == null)
+      synchronized(this)
       {
-         return;
-      }
-
-      for (int i = 0; i < getSynchronizer().size(); i++)
-      {
-         SynchronizerConfiguration scan = getSynchronizer().get(i);
-         if (scan != null && scan.getId() == update.getId())
+         if (update == null)
          {
-            getSynchronizer().set(i, update);
-            break;
+            return;
          }
+
+         for (int i = 0; i < getSynchronizer().size(); i++)
+         {
+            SynchronizerConfiguration scan = getSynchronizer().get(i);
+            if (scan != null && scan.getId() == update.getId())
+            {
+               getSynchronizer().set(i, update);
+               break;
+            }
+         }
+         save();
       }
-      save();
    }
 
    public int count()
@@ -128,10 +134,13 @@ public class SynchronizerManager extends Synchronizers
 
    public void delete(SynchronizerConfiguration scan)
    {
-      if (scan != null)
+      synchronized(this)
       {
-         getSynchronizer().remove(scan);
-         save();
+         if (scan != null)
+         {
+            getSynchronizer().remove(scan);
+            save();
+         }
       }
    }
 

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2016,2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -92,38 +92,24 @@ public class CacheAspectDefinition
          Cache cache = getCacheManager().getCache(PRODUCT_CACHE_NAME);
          synchronized (cache)
          {
-            cache.evict(p.getId());
             cache.evict(p.getUuid());
-            cache.put(p.getId(), p);
             cache.put(p.getUuid(), p);
          }
 
-         incrementProductCount(cacheManager);
+         // increment global 'product_count' and clear others key
+         cache = cacheManager.getCache(PRODUCT_COUNT_CACHE_NAME);
+         synchronized (cache)
+         {
+            Integer oldValue = cache.get(PRODUCT_COUNT_TOTAL_KEY, Integer.class);
+            if (oldValue != null)
+            {
+               cache.clear();
+               cache.put(PRODUCT_COUNT_TOTAL_KEY, (oldValue + 1));
+            }
+         }
 
          // clear 'products' cache
          getCacheManager().getCache(PRODUCTS_CACHE_NAME).clear();
-      }
-   }
-
-   /* FIXME This method was made public static to fix cached product count
-    * inconsistencies in fr.gael.dhus.datastore.Ingester ingest method
-    * 
-    * put this code back into addProduct above once the ingestion process
-    * has been fully incorporated into the Stores architecture
-    */
-   @Deprecated
-   public static void incrementProductCount(CacheManager cacheManager)
-   {
-      // increment global 'product_count' and clear others key
-      Cache cache = cacheManager.getCache(PRODUCT_COUNT_CACHE_NAME);
-      synchronized (cache)
-      {
-         Integer oldValue = cache.get(PRODUCT_COUNT_TOTAL_KEY, Integer.class);
-         if (oldValue != null)
-         {
-            cache.clear();
-            cache.put(PRODUCT_COUNT_TOTAL_KEY, (oldValue + 1));
-         }
       }
    }
 
@@ -145,13 +131,16 @@ public class CacheAspectDefinition
          Cache cache = getCacheManager().getCache(PRODUCT_CACHE_NAME);
          synchronized (cache)
          {
-            cache.evict(p.getId());
             cache.evict(p.getUuid());
          }
 
          // clear 'indexes' cache of the given product
          cache = getCacheManager().getCache(INDEXES_CACHE_NAME);
-         cache.evict(p.getId());
+         synchronized (cache)
+         {
+            cache.evict(p.getUuid());
+         }
+
 
          // decrement global 'product_count' and clear others key
          cache = getCacheManager().getCache(PRODUCT_COUNT_CACHE_NAME);

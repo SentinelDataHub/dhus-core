@@ -50,7 +50,7 @@ public class IDPManager
       if (idpName == null || (idpURL == null && idpFile == null))
       {
          LOGGER.warn("No idp configured.");
-         return Collections.EMPTY_LIST;
+         return Collections.emptyList();
       }
 
       AbstractMetadataProvider provider;

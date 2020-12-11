@@ -50,6 +50,7 @@ import fr.gael.dhus.olingo.v1.entity.AbstractEntity;
 import fr.gael.dhus.olingo.v1.map.impl.ConnectionMap;
 import fr.gael.dhus.server.http.valve.AccessValve;
 import java.util.Map;
+import org.apache.olingo.odata2.api.exception.ODataException;
 import org.apache.olingo.odata2.api.uri.KeyPredicate;
 
 public class ConnectionEntitySet extends AbstractEntitySet<Connection>
@@ -188,7 +189,7 @@ public class ConnectionEntitySet extends AbstractEntitySet<Connection>
    }
 
    @Override
-   public Map getEntities()
+   public Map<String, Connection> getEntities()
    {
       return new ConnectionMap();
    }
@@ -208,7 +209,8 @@ public class ConnectionEntitySet extends AbstractEntitySet<Connection>
 
    @Override
    public List<Map<String, Object>> expand(String navlink_name, String self_url,
-         Map<?, AbstractEntity> entities, Map<String, Object> key)
+         Map<? extends Object, ? extends AbstractEntity> entities, Map<String, Object> key)
+         throws ODataException
    {
       return Expander.expandFeedSingletonKey(navlink_name, self_url, entities, key, ConnectionEntitySet.ID);
    }

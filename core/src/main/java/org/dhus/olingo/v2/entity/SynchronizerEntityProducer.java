@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -25,6 +25,9 @@ import org.apache.olingo.commons.api.data.ComplexValue;
 import org.apache.olingo.commons.api.data.Entity;
 import org.apache.olingo.commons.api.data.Property;
 import org.apache.olingo.commons.api.data.ValueType;
+
+import org.dhus.api.olingo.v2.EntityProducer;
+import org.dhus.api.olingo.v2.TypeInfo;
 
 import org.dhus.olingo.v2.datamodel.SynchronizerModel;
 import org.dhus.olingo.v2.datamodel.complex.CronComplexType;

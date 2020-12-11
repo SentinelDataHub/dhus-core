@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017-2019 GAEL Systems
+ * Copyright (C) 2017-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,8 +22,7 @@ package org.dhus.store.datastore.async.gmp;
 import com.jolbox.bonecp.BoneCPConfig;
 import com.jolbox.bonecp.BoneCPDataSource;
 
-import fr.gael.dhus.service.ProductService;
-import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.database.object.Order;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -34,44 +33,29 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.List;
+import java.util.Date;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Timer;
-import java.util.TimerTask;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import org.dhus.Product;
-import org.dhus.ProductConstants;
-import org.dhus.store.StoreException;
-import org.dhus.store.StoreService;
-import org.dhus.store.datastore.DataStore;
+import org.dhus.api.JobStatus;
 import org.dhus.store.datastore.DataStoreException;
-import org.dhus.store.datastore.ReadOnlyDataStoreException;
-import org.dhus.store.datastore.async.AsyncDataSource;
-import org.dhus.store.datastore.async.AsyncProduct;
+import org.dhus.store.datastore.async.AbstractAsyncCachedDataStore;
 import org.dhus.store.datastore.config.GmpDataStoreConf;
-import org.dhus.store.datastore.hfs.HfsDataStore;
-import org.dhus.store.datastore.hfs.HfsManager;
+import org.dhus.store.datastore.config.PatternReplace;
 import org.dhus.store.datastore.hfs.HfsProduct;
-import org.dhus.store.ingestion.IngestibleProduct;
 
 /**
  * A store backed by GMP.
  * <p>See: https://github.com/gisab/gmp
  */
-public final class GmpDataStore implements DataStore, AsyncDataSource
+public final class GmpDataStore extends AbstractAsyncCachedDataStore
 {
    /** Log. */
    private static final Logger LOGGER = LogManager.getLogger();
-
-   /** Data Store identifier. */
-   private final String name;
-
-   /** maxQueuedRequest until the DHuS has to refuse a new download using GMP. */
-   private final int maxQueuedRequests;
 
    /** Where GMP downloads and zips products. */
    private final String gmpRepoLocation;
@@ -82,90 +66,61 @@ public final class GmpDataStore implements DataStore, AsyncDataSource
    /** Target defined in GMP. */
    private final String targetId;
 
-   /** To get Identifier from product UUID. */
-   private final ProductService productService;
-
-   /** To "restore" fetched products. */
-   private final StoreService storeService;
-
    /** Use a connection pool because this DS may have to handle a lot of queries. */
    private final BoneCPDataSource dataSource;
 
-   /** Local HFS cache. */
-   private final HfsDataStore cache;
-
-   /** GMP Ingest Job. */
+   /** Ingest Job. */
    private final Timer timer;
-
-   /** Position of this datastore among all other datastores */
-   private final int priority;
 
    /**
     * Creates a GMP data store.
     *
-    * @param name              of this store (used by DHuS to identify DataStores)
-    * @param priority          DataStores are ordered, this DataStore MUST have the highest priority because it is a yes-store
-    * @param isManager         true to enable the ingest job in this instance of the DHuS (only one instance per cluster)
-    * @param gmpRepoLocation   path to the repository configured in GMP
-    * @param hfsLocation       path to the local HFS cache
-    * @param maxQueuedRequests maximum number of queued product at the same time in the `queue` table of GMP
-    * @param mySqlURL          URL to connect to the DataBase of GMP
-    * @param mySqlUser         user to log into the DataBase of GMP
-    * @param mySqlPass         password to log into the DataBase of GMP
-    * @param agentId           agent to download products, must exist in table `agent`
-    * @param targetId          target to download products, must exist in table `target`
-    * @param maximumSize       maximum size in bytes of the local HFS cache DataStore
-    * @param currentSize       overall size of the local HFS cache DataStore (disk usage)
-    * @param autoEviction      true to activate auto-eviction based on disk usage on the local HFS cache DataStore
+    * @param name                of this store (used by DHuS to identify DataStores)
+    * @param priority            DataStores are ordered, this DataStore MUST have the highest priority because it is a yes-store
+    * @param isManager           true to enable the ingest job in this instance of the DHuS (only one instance per cluster)
+    * @param gmpRepoLocation     path to the repository configured in GMP
+    * @param hfsLocation         path to the local HFS cache
+    * @param patternReplaceIn    pattern to extract the product identifier from the id column of the queue table of GMP
+    * @param patternReplaceOut   pattern to transform the identifier to be used in the queue table of GMP
+    * @param maxPendingRequests  maximum number of pending orders at the same time
+    * @param maxRunningRequests  maximum number of running orders at the same time
+    * @param mySqlURL            URL to connect to the DataBase of GMP
+    * @param mySqlUser           user to log into the DataBase of GMP
+    * @param mySqlPass           password to log into the DataBase of GMP
+    * @param agentId             agent to download products, must exist in table `agent`
+    * @param targetId            target to download products, must exist in table `target`
+    * @param maximumSize         maximum size in bytes of the local HFS cache DataStore
+    * @param currentSize         overall size of the local HFS cache DataStore (disk usage)
+    * @param autoEviction        true to activate auto-eviction based on disk usage on the local HFS cache DataStore
+    * @param hashAlgorithms      to compute on restore
     *
     * @throws DataStoreException could not create a GMP DataStore
     */
-   public GmpDataStore(String name, int priority, boolean isManager,
-         String gmpRepoLocation, String hfsLocation, Integer maxQueuedRequests,
-         String mySqlURL, String mySqlUser, String mySqlPass,
-         String agentId, String targetId,
-         long maximumSize, long currentSize, boolean autoEviction) throws DataStoreException
+   public GmpDataStore(String name, int priority, boolean isManager, String gmpRepoLocation, String hfsLocation,
+         PatternReplace patternReplaceIn, PatternReplace patternReplaceOut, Integer maxPendingRequests, Integer maxRunningRequests,
+         String mySqlURL, String mySqlUser, String mySqlPass, String agentId, String targetId, long maximumSize,
+         long currentSize, boolean autoEviction, String[] hashAlgorithms)
+         throws DataStoreException
    {
-      Objects.requireNonNull(name);
+      super(name, priority, hfsLocation, patternReplaceIn, patternReplaceOut, maxPendingRequests, maxRunningRequests,
+            maximumSize, currentSize, autoEviction, hashAlgorithms);
+
       Objects.requireNonNull(gmpRepoLocation);
-      Objects.requireNonNull(hfsLocation);
-      Objects.requireNonNull(name);
       Objects.requireNonNull(mySqlURL);
       Objects.requireNonNull(mySqlUser);
       Objects.requireNonNull(mySqlPass);
       Objects.requireNonNull(agentId);
       Objects.requireNonNull(targetId);
 
-      this.name = name;
-      this.priority = priority;
       this.gmpRepoLocation = gmpRepoLocation;
       this.targetId = targetId;
       this.agentId = agentId;
 
-      /*
-       * setting the HFS cache's name as this GMPDataStore's name allows the
-       * cache to update this GMPDataStore's database entry (currentSize) when
-       * products are inserted or evicted on a cache level
-       */
-      this.cache = new HfsDataStore(
-            this.name,
-            new HfsManager(hfsLocation, 10,1024),
-            false,
-            0, // unused
-            maximumSize,
-            currentSize,
-            autoEviction);
-
-      this.maxQueuedRequests = (maxQueuedRequests != null)? maxQueuedRequests: 4;
-
       LOGGER.info("New GMP DataStore, name={} url={} repo={} hfs={} max_queued_requests={}",
-            getName(), mySqlURL, gmpRepoLocation, hfsLocation, maxQueuedRequests);
+            getName(), mySqlURL, gmpRepoLocation, hfsLocation, maxRunningRequests);
 
       // If this instance is cluster manager, it is tasked with managing the GMP
       LOGGER.info("This DHuS instance {} the GMP manager", isManager? "is": "isn't");
-
-      this.productService = ApplicationContextProvider.getBean(ProductService.class);
-      this.storeService = ApplicationContextProvider.getBean(StoreService.class);
 
       // Test SQL connection
       try (Connection conn = DriverManager.getConnection(mySqlURL, mySqlUser, mySqlPass)) {}
@@ -185,10 +140,11 @@ public final class GmpDataStore implements DataStore, AsyncDataSource
       config.setPartitionCount(1);
       this.dataSource = new BoneCPDataSource(config);
 
+      // FIXME the handling of manager/timer shouldn't be duplicated between PdgsDS and GmpDS
       if (isManager)
       {
-         timer = new Timer("GMP Ingest Job", true);
-         timer.schedule(new IngestJob(), 0, 300_000);
+         this.timer = new Timer("GMP Ingest Job", true);
+         this.timer.schedule(new IngestJob(), 0, 300_000);
       }
       else
       {
@@ -214,18 +170,40 @@ public final class GmpDataStore implements DataStore, AsyncDataSource
     * Factory method, creates a new GmpDatastore from given configuration.
     *
     * @param configuration for this DataStore
+    * @param hashAlgorithms to compute on restore
     * @return a new instance of GMP DataStore (never null)
     * @throws DataStoreException could not create a GMP DataStore
     */
-   public static GmpDataStore make(GmpDataStoreConf configuration) throws DataStoreException
+   public static GmpDataStore make(GmpDataStoreConf configuration, String[] hashAlgorithms) throws DataStoreException
    {
+      // patternReplaceIn default value
+      if (configuration.getPatternReplaceIn() == null)
+      {
+         PatternReplace patternReplaceIn = new PatternReplace();
+         patternReplaceIn.setPattern("\\.SAFE$");
+         patternReplaceIn.setReplacement("");
+         configuration.setPatternReplaceIn(patternReplaceIn);
+      }
+
+      // patternReplaceOut default value
+      if (configuration.getPatternReplaceOut() == null)
+      {
+         PatternReplace patternReplaceOut = new PatternReplace();
+         patternReplaceOut.setPattern("$");
+         patternReplaceOut.setReplacement(".SAFE");
+         configuration.setPatternReplaceOut(patternReplaceOut);
+      }
+
       return new GmpDataStore(
             configuration.getName(),
             configuration.getPriority(),
             configuration.isIsMaster(),
-            configuration.getGmpRepoLocation(),
+            configuration.getRepoLocation(),
             configuration.getHfsLocation(),
-            configuration.getMaxQueuedRequest(),
+            configuration.getPatternReplaceIn(),
+            configuration.getPatternReplaceOut(),
+            configuration.getMaxPendingRequests(),
+            configuration.getMaxRunningRequests(),
             configuration.getMysqlConnectionInfo().getValue(),
             configuration.getMysqlConnectionInfo().getUser(),
             configuration.getMysqlConnectionInfo().getPassword(),
@@ -233,110 +211,48 @@ public final class GmpDataStore implements DataStore, AsyncDataSource
             configuration.getConfiguration().getTargetid(),
             configuration.getMaximumSize(),
             configuration.getCurrentSize(), // datastore coming from xml configuration
-            configuration.isAutoEviction());
+            configuration.isAutoEviction(),
+            hashAlgorithms);
    }
 
    @Override
-   public String getName()
+   protected Order internalFetch(String localIdentifier, String remoteIdentifier, String uuid, Long size)
+         throws DataStoreException
    {
-      return this.name;
-   }
-
-   @Override
-   public boolean hasProduct(String uuid)
-   {
-      return cache.hasProduct(uuid);
-   }
-
-   @Override
-   public boolean hasAsyncProduct(String uuid)
-   {
-      return Boolean.TRUE;
-   }
-
-   @Override
-   public Product get(String id) throws DataStoreException
-   {
-      // If is in cache ...
-      if (this.cache.hasProduct(id))
-      {
-         LOGGER.debug("get of cached product {}", id);
-         return cache.get(id);
-      }
-      else
-      {
-         fr.gael.dhus.database.object.Product prod = productService.getProduct(id);
-         String gmp_id = prod.getIdentifier() + ".SAFE";
-         // Return AsyncProduct is present in GMP
-         LOGGER.debug("get of product {} ({})", id, gmp_id);
-         AsyncProduct res = new AsyncProduct(this);
-         res.setName(gmp_id);
-         res.setProperty(ProductConstants.DATA_SIZE, prod.getSize());
-         res.setProperty(ProductConstants.UUID, prod.getUuid());
-         return res;
-      }
-   }
-
-   @Override
-   public void fetch(AsyncProduct to_fetch) throws DataStoreException
-   {
-      String identifier = to_fetch.getName();
-      String uuid = (String) to_fetch.getProperty(ProductConstants.UUID);
-      String username = (String) to_fetch.getProperty("username"); // Hack to satisfy SD-3153, property `username` is set by the FetchLimiter decorator
-      Long   size =   (Long) to_fetch.getProperty(ProductConstants.DATA_SIZE);
-      LOGGER.info("fetch request for product {}", identifier);
       try (Connection conn = this.dataSource.getConnection())
       {
          // Checks that the requested product isn't queued already
-         if (isQueuedOrCompleted(conn, identifier))
+         if (isQueued(conn, remoteIdentifier))
          {
-            LOGGER.info("Fetch request from '{}' for product {} ({}) (~{} bytes) already in queue", username, identifier, uuid, size);
-            return;
-         }
-
-         // Checks that table `queue` is not full
-         if (!checkQueueQuota(conn))
-         {
-            LOGGER.info("Table `queue` is full (more than {} rows)", this.maxQueuedRequests);
-            LOGGER.info("Fetch request from '{}' for product {} ({}) (~{} bytes) failed due to max active order per instance reached", username, identifier, uuid, size);
-            throw new DataStoreException("The retrieval of offline data is temporary unavailable, please try again later");
+            LOGGER.info("Fetch request from '{}' for product {} ({}) (~{} bytes) already in queue (GMP)",
+                  "user" /* FIXME get username from order database object */, localIdentifier, uuid, size);
+            return new Order(
+                  getName(),
+                  uuid,
+                  remoteIdentifier,
+                  JobStatus.RUNNING,
+                  new Date(),
+                  null,
+                  null);
          }
 
          // Enqueue product to fetch
-         enQueue(conn, identifier);
+         enQueue(conn, remoteIdentifier);
+
+         return new Order(
+               getName(),
+               uuid,
+               remoteIdentifier,
+               JobStatus.RUNNING,
+               new Date(),
+               null,
+               null);
       }
       catch (SQLException ex)
       {
          LOGGER.error("Cannot use the database of GMP", ex);
          throw new DataStoreException("Cannot submit fetch request", ex);
       }
-      LOGGER.info("Fetch request from '{}' for product {} ({}) (~{} bytes) successfully submitted", username, identifier, uuid, size);
-   }
-
-   @Override
-   public int getPriority()
-   {
-      return priority;
-   }
-
-   @Override
-   public boolean isReadOnly()
-   {
-      return true;
-   }
-
-   /**
-    * Removes the '.SAFE' extension (if any).
-    * @param identifier product identifier (should ends with '.SAFE')
-    * @return identifier without the '.SAFE' extension
-    */
-   private String unSafe(String identifier)
-   {
-      if (identifier.endsWith(".SAFE"))
-      {
-         return identifier.substring(0, identifier.length()-5);
-      }
-      return identifier;
    }
 
    /**
@@ -346,7 +262,7 @@ public final class GmpDataStore implements DataStore, AsyncDataSource
     * @return true if `dwnstatus` == 'Q' OR 'C'
     * @throws SQLException in case of connectivity issues
     */
-   private boolean isQueuedOrCompleted(Connection conn, String qid) throws SQLException
+   private boolean isQueued(Connection conn, String qid) throws SQLException
    {
       try (Statement sta = conn.createStatement())
       {
@@ -390,133 +306,101 @@ public final class GmpDataStore implements DataStore, AsyncDataSource
       }
    }
 
-   /**
-    * Checks if the queue is overquota
-    * @param conn connection to use
-    * @return true if calling code may queue a fetch
-    * @throws SQLException in case of connectivity issues
-    */
-   private boolean checkQueueQuota(Connection conn) throws SQLException
+   /** Used by the `queue` gauge. */
+   private int gmpQueueSize()
    {
-      try (Statement sta = conn.createStatement())
+      try (Connection conn = this.dataSource.getConnection())
       {
-         // Checks that table `queue` is not full
-         try (ResultSet rs = sta.executeQuery("SELECT COUNT(*) FROM `queue` WHERE `dwnstatus`<>'C'"))
+         try (Statement sta = conn.createStatement())
          {
-            return !rs.first() || rs.getInt(1) < this.maxQueuedRequests;
+            try (ResultSet rs = sta.executeQuery("SELECT COUNT(*) FROM `queue` WHERE `dwnstatus`<>'C'"))
+            {
+               return (rs.first()) ? rs.getInt(1) : 0;
+            }
          }
       }
-   }
-
-   // vvvv Not implemented because this DS is read-only vvvv
-
-   @Override
-   public boolean canAccess(String resource_location)
-   {
-      // Is read only, should not be target of synchronisers
-      return false;
-   }
-
-   @Override
-   public void set(String id, Product product) throws DataStoreException
-   {
-      throw new ReadOnlyDataStoreException("GMP DataStore is read-only");
-   }
-
-   @Override
-   public void addProduct(IngestibleProduct inProduct) throws StoreException
-   {
-      throw new ReadOnlyDataStoreException("GMP DataStore is read-only");
-   }
-
-   @Override
-   public void deleteProduct(String uuid) throws DataStoreException
-   {
-      cache.deleteProduct(uuid);
-   }
-
-   @Override
-   public boolean addProductReference(String id, Product product) throws DataStoreException
-   {
-      return false;
-   }
-
-   @Override
-   public List<String> getProductList()
-   {
-      return cache.getProductList();
-   }
-
-   @Override
-   public List<String> getProductList(int skip, int top)
-   {
-      return cache.getProductList(skip, top);
+      catch (SQLException suppressed) {}
+      return 0;
    }
 
    /**
     * This Job put all completed downloads in the cache datastore.
     */
-   private final class IngestJob extends TimerTask
+   private final class IngestJob extends IngestTask
    {
+      // TODO cleanup this method and split into smaller ones
       @Override
-      public void run()
+      protected int ingestCompletedFetches()
       {
-         // Select all completed downloads
+         int res = 0;
+         // Select all downloads in queue
          try (Connection conn = dataSource.getConnection();
                Statement sta = conn.createStatement();
-               ResultSet rs = sta.executeQuery("SELECT * FROM `queue` WHERE dwnstatus='C'"))
+               ResultSet rs = sta.executeQuery("SELECT * FROM `queue`"))
          {
             while (rs.next())
             {
-               String qid = rs.getString("id");
+               String remoteIdentifier = rs.getString("id");
+               String localIdentifier = doPatternReplaceIn(remoteIdentifier);
+
                String finstatus = rs.getString("finstatus");
-               if (finstatus != null && finstatus.equals("NOK"))
+               String dwnstatus = rs.getString("dwnstatus");
+               String productUUID = getProductUUID(localIdentifier);
+               if (productUUID == null)
                {
-                  LOGGER.error("Fetch of product {} failed", qid);
-                  enQueue(conn, qid);
+                  LOGGER.error("Cannot match database product {} to GMP product {}", localIdentifier, remoteIdentifier);
+                  continue;
                }
-               else
+
+               // Refresh existing order only if not Completed
+               if (!dwnstatus.equals("C"))
                {
-                  String identifier = unSafe(qid);
-                  String uuid = productService.getProducBytIdentifier(identifier).getUuid();
-                  Path productPath = getProductFile(identifier);
+                  refreshOrder(productUUID, getName(), remoteIdentifier, getStatus(dwnstatus, finstatus), null, null);
+               }
+
+               // only execute the following instructions if this instance is manager
+               if (finstatus != null && finstatus.equals("NOK")) // check for failures
+               {
+                  LOGGER.error("Fetch of product {} failed", localIdentifier);
+                  enQueue(conn, remoteIdentifier); // SQL constraint error, do not modify, fits the operational scenario
+               }
+               else if(dwnstatus.equals("C")) // download is completed, proceed with restore
+               {
+                  Path productPath = getProductFile(localIdentifier);
+
                   if (productPath == null)
                   {
-                     LOGGER.error("Fetched file for product {} ({}) could not be found in repository", identifier, uuid);
+                     LOGGER.warn("Fetched file for product {} ({}) could not be found in repository", localIdentifier, productUUID);
+                     // Just waiting for caronte to zip the product file, not an error, DO NOT deQueue the fetch request
                      continue;
                   }
-                  LOGGER.info("Moving product {} ({}) from {} to cache", identifier, uuid, productPath);
-                  HfsProduct prod  = new HfsProduct(productPath.toFile());
+
+                  // move product to cache
+                  HfsProduct hfsProduct = new HfsProduct(productPath.toFile());
                   try
                   {
-                     // FIXME: remove surrounding try-catch block when set() cleans on error as it should do
-                     try
-                     {
-                        cache.set(uuid, prod);
-                     }
-                     catch (DataStoreException | RuntimeException ex)
-                     {
-                        cache.deleteProduct(uuid);
-                        throw ex;
-                     }
-
-                     Files.deleteIfExists(productPath);
-
-                     //Set checksum and content length in database
-                     long size = (Long) prod.getProperty(ProductConstants.DATA_SIZE);
-                     storeService.restoreProduct(uuid, size, ProductConstants.getChecksums(prod));
-                     LOGGER.info("Product {} ({}) ({} bytes) successfully restored", identifier, uuid, size);
-
-                     deQueue(conn, qid);
+                     moveProductToCache(hfsProduct, productUUID);
+                     refreshOrder(productUUID, getName(), remoteIdentifier, JobStatus.COMPLETED, null, null);
                   }
                   catch (DataStoreException ex)
                   {
-                     LOGGER.error("Cannot move product {} ({}) from {} to cache", identifier, uuid, productPath, ex);
+                     refreshOrder(productUUID, getName(), remoteIdentifier, JobStatus.FAILED, null, null);
                   }
-                  catch (IOException ex)
+
+                  // cleanup
+                  try
                   {
-                     LOGGER.warn("Cannot delete data file ({}) of product {} ({})", productPath, identifier, uuid, ex);
+                     Files.deleteIfExists(productPath);
                   }
+                  catch (IOException e)
+                  {
+                     LOGGER.warn("Cannot delete data file ({}) of product {} ({})",
+                           productPath, hfsProduct.getName(), productUUID, e);
+                  }
+
+                  deQueue(conn, remoteIdentifier);
+
+                  res++;
                }
             }
          }
@@ -529,6 +413,7 @@ public final class GmpDataStore implements DataStore, AsyncDataSource
             // Catch-all needed because an uncaught exception kills the timer!
             LOGGER.error("Uncaught exception", ex);
          }
+         return res;
       }
    }
 
@@ -553,5 +438,21 @@ public final class GmpDataStore implements DataStore, AsyncDataSource
          LOGGER.error("Could not read repository", ex);
       }
       return null;
+   }
+
+   private JobStatus getStatus(String status, String finstatus)
+   {
+      if (finstatus != null && finstatus.equals("NOK"))
+      {
+         return JobStatus.FAILED;
+      }
+      if (status.equals("C"))
+      {
+         return JobStatus.COMPLETED;
+      }
+      else
+      {
+         return JobStatus.RUNNING;
+      }
    }
 }

@@ -276,6 +276,19 @@
                indexed="true"
                stored="true" />
          </metadataType>
+
+         <metadataType
+            id="ondemand"
+            name="ondemand"
+            contentType="text/plain"
+            category="product">
+            <solrField
+               name="ondemand"
+               type="boolean"
+               indexed="true"
+               stored="true"/>
+         </metadataType>
+
       </dhus:metadataTypes>
 
       <dhus:metadataExtractor  rdf:parseType="Literal">

@@ -30,7 +30,7 @@ public class HierarchicalDirectoryBuilderTest
    public void getDirectory() throws IOException
    {
       HierarchicalDirectoryBuilder db=new HierarchicalDirectoryBuilder(tmp,3,5);
-      File f = db.getDirectory ();
+      File f = db.getDirectory(null);
       Assert.assertTrue (f.exists ());
       String fileName = "file";
       f = db.getDirectory (fileName);
@@ -44,14 +44,14 @@ public class HierarchicalDirectoryBuilderTest
    public void getDirectoryChange() throws IOException
    {
       HierarchicalDirectoryBuilder db=new HierarchicalDirectoryBuilder(tmp,3,5);
-      File f = db.getDirectory ();
-      f = db.getDirectory ();
+      File f = db.getDirectory(null);
+      f = db.getDirectory(null);
       for (int i = 0; i < 5; i++)
       {
          File file = new File (f, "file"+i);
          file.createNewFile ();
       }
-      File f2 = db.getDirectory ();
+      File f2 = db.getDirectory(null);
       Assert.assertNotEquals (f.getAbsolutePath (), f2.getAbsolutePath ());
    }
    
@@ -61,15 +61,15 @@ public class HierarchicalDirectoryBuilderTest
       HierarchicalDirectoryBuilder db=new HierarchicalDirectoryBuilder(tmp,3,5);
       for (int j = 0; j < 10; j++)
       {
-         File f = db.getDirectory ();
-         f = db.getDirectory ();
+         File f = db.getDirectory(null);
+         f = db.getDirectory(null);
          for (int i = 0; i < 5; i++)
          {
             File file = new File (f, "file"+i);
             file.createNewFile ();
          }
       }
-      File f2 = db.getDirectory ();
+      File f2 = db.getDirectory(null);
       Assert.assertTrue (f2.getAbsolutePath ().contains ("x0/x1"));
    }
      

@@ -5,18 +5,11 @@ import java.util.List;
 
 import javax.xml.bind.JAXBException;
 
-import org.testng.Assert;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
-import org.xml.sax.SAXException;
-
 import fr.gael.dhus.database.object.config.Configuration;
-import fr.gael.dhus.database.object.config.cron.ArchiveSynchronizationCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.CleanDatabaseCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.CleanDatabaseDumpCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.CronConfiguration;
 import fr.gael.dhus.database.object.config.cron.DumpDatabaseCronConfiguration;
-import fr.gael.dhus.database.object.config.cron.FileScannersCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.SearchesCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.SendLogsCronConfiguration;
 import fr.gael.dhus.database.object.config.cron.SystemCheckCronConfiguration;
@@ -40,6 +33,10 @@ import fr.gael.dhus.database.object.config.system.SupportConfiguration;
 import fr.gael.dhus.database.object.config.system.SystemConfiguration;
 import fr.gael.dhus.database.object.config.system.TomcatConfiguration;
 import fr.gael.dhus.system.config.ConfigurationManager.ConfigurationLoader;
+import org.testng.Assert;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
+import org.xml.sax.SAXException;
 
 public class ConfigurationManagerTest
 {
@@ -55,12 +52,6 @@ public class ConfigurationManagerTest
      CronConfiguration cron = conf.getCronConfiguration ();
      Assert.assertNotNull (cron, "cron configuration is null.");
      
-     ArchiveSynchronizationCronConfiguration as = 
-        cron.getArchiveSynchronizationConfiguration ();
-     Assert.assertNotNull (as, "ArchivesSync :");
-     Assert.assertNotNull (as.getSchedule (), "ArchivesSync schedule :");
-     Assert.assertNotNull (as.isActive (), "ArchivesSync active flag :");
-     
      CleanDatabaseCronConfiguration db = cron.getCleanDatabaseConfiguration ();
      Assert.assertNotNull (db, "CleanDB :");
      Assert.assertNotNull (db.getSchedule (), "CleanDB schedule :");
@@ -70,20 +61,7 @@ public class ConfigurationManagerTest
         "db cleanup stats keep period: ");
 
   }
-  @Test (dependsOnMethods="checkConfigurationLoaderCron")
-  public void  checkConfigurationLoaderCronArchiveSynchronization ()
-  {
-     CronConfiguration cron = conf.getCronConfiguration ();
-     
-     ArchiveSynchronizationCronConfiguration as = 
-        cron.getArchiveSynchronizationConfiguration ();
-     
-     Assert.assertNotNull (as, "archiveSynchronization: ");
-     Assert.assertNotNull (as.getSchedule (),
-        "archiveSynchronization schedule:");
-     Assert.assertNotNull (as.isActive (),
-        "archiveSynchronization active flag :");
-  }
+
   @Test (dependsOnMethods="checkConfigurationLoaderCron")
   public void  checkConfigurationLoaderCronCleanDatabse () 
   {
@@ -126,19 +104,7 @@ public class ConfigurationManagerTest
      Assert.assertNotNull (cdd.isActive (),"cleanDatabaseDump active flag :");
      Assert.assertNotNull (cdd.getKeep (),"cleanDatabaseDump keep :");
   }
-  @Test (dependsOnMethods="checkConfigurationLoaderCron")
-  public void  checkConfigurationLoaderCronFileScanners ()
-  {
-     CronConfiguration cron = conf.getCronConfiguration ();
-     
-     FileScannersCronConfiguration fs = cron.getFileScannersConfiguration ();
-     
-     Assert.assertNotNull (fs, "fileScanners: ");
-     Assert.assertNotNull (fs.getSchedule (),"fileScanners schedule:");
-     Assert.assertNotNull (fs.isActive (),"fileScanners active flag :");
-     Assert.assertNotNull (fs.isSourceRemove (),
-        "fileScanners remove source flag :");
-  }
+
   @Test (dependsOnMethods="checkConfigurationLoaderCron")
   public void  checkConfigurationLoaderCronSearches ()
   {

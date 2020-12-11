@@ -85,6 +85,7 @@ public class RemoveDeletedProductBlobFields implements CustomTaskChange
                   id = get_result.getLong("ID");
                   Blob blob = get_result.getBlob("CHECKSUMS");
                   byte[] data = blob.getBytes(1, (int) blob.length());
+                  @SuppressWarnings("unchecked")
                   Map<String, String> checksums = (Map<String, String>) deserialize(data);
 
                   if (!checksums.isEmpty())

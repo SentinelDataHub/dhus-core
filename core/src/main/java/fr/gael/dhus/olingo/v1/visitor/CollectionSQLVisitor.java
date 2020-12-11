@@ -53,6 +53,9 @@ public class CollectionSQLVisitor extends SQLVisitor
       if (uri_literal.equals (CollectionEntitySet.DESCRIPTION))
          return new Member ("description");
 
+      if (uri_literal.equals (CollectionEntitySet.UUID))
+         return new Member("uuid");
+
       throw new IllegalArgumentException ("Property not supported: " +
             uri_literal);
    }

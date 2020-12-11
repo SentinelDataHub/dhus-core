@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ * Copyright (C) 2015-2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -22,6 +22,7 @@ package fr.gael.dhus.spring.security.handler;
 import fr.gael.dhus.database.object.User.PasswordEncryption;
 import fr.gael.dhus.spring.context.SecurityContextProvider;
 import fr.gael.dhus.spring.security.CookieKey;
+import fr.gael.dhus.system.config.ConfigurationManager;
 import fr.gael.dhus.util.encryption.EncryptPassword;
 
 import java.util.Date;
@@ -31,6 +32,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -45,28 +47,31 @@ public class LoginSuccessHandler implements AuthenticationSuccessHandler
    @Autowired
    private SecurityContextProvider securityContextProvider;
 
+   @Autowired
+   private ConfigurationManager confManager;
+
    @Override
    public void onAuthenticationSuccess (HttpServletRequest request,
       HttpServletResponse response, Authentication authentication)
    {
       String name = authentication.getName ();
+      String extPath = confManager.getServerConfiguration().getExternalPath();
       try
       {
          name = EncryptPassword.encrypt (name, PasswordEncryption.MD5);
          Cookie authCookie = new Cookie(CookieKey.AUTHENTICATION_COOKIE_NAME, name);
-         authCookie.setPath ("/");
+         authCookie.setPath(extPath != null && !extPath.isEmpty() ? extPath : "/");
          authCookie.setHttpOnly (true);
          authCookie.setMaxAge (-1);
 
          String integrity = EncryptPassword.encrypt(name + new Date(), PasswordEncryption.SHA1);
          Cookie integrityCookie = new Cookie(CookieKey.INTEGRITY_COOKIE_NAME, integrity);
-         integrityCookie.setPath ("/");
+         integrityCookie.setPath(extPath != null && !extPath.isEmpty() ? extPath : "/");
          integrityCookie.setHttpOnly (true);
          integrityCookie.setMaxAge (-1);
 
          response.addCookie (authCookie);
          response.addCookie (integrityCookie);
-         request.getSession().setAttribute(CookieKey.INTEGRITY_ATTRIBUTE_NAME, integrity);
          securityContextProvider.saveSecurityContext(integrity, SecurityContextHolder.getContext());
       }
       catch (Exception e)

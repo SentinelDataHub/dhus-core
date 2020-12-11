@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017,2018 GAEL Systems
+ * Copyright (C) 2016-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -43,11 +43,4 @@ public interface Store
     * @throws StoreException an error occurred
     */
    public void deleteProduct(String uuid) throws StoreException;
-
-   /**
-    * Returns whether or not a Store is read-only.
-    *
-    * @return true if that Store is read-only, false otherwise
-    */
-   public boolean isReadOnly();
 }

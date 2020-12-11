@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2015-2018 GAEL Systems
+ * Copyright (C) 2015-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -90,12 +90,13 @@ public class SearchController
       List<String> suggestions = searchService.getSuggestions(query);
       res.setStatus(HttpServletResponse.SC_OK);
       res.setContentType("text/plain");
-      try (ServletOutputStream outputStream = res.getOutputStream())
+
+      // Do not use try with resource !!
+      // Closing that stream commits the response, this is not the right place to do that
+      ServletOutputStream outputStream = res.getOutputStream();
+      for (String suggestion: suggestions)
       {
-         for (String suggestion: suggestions)
-         {
-            outputStream.println(suggestion);
-         }
+         outputStream.println(suggestion);
       }
    }
 
@@ -119,17 +120,19 @@ public class SearchController
       String short_name = configurationManager.getNameConfiguration().getShortName();
       String contact_mail = configurationManager.getSupportConfiguration().getMail();
 
-      InputStream is = ClassLoader.getSystemResourceAsStream(DESCRIPTION_FILE);
-      if (is == null)
+      try (InputStream is = ClassLoader.getSystemResourceAsStream(DESCRIPTION_FILE))
       {
-         throw new IOException("Cannot find \"" + DESCRIPTION_FILE
-               + "\" OpenSearch description file.");
-      }
+         if (is == null)
+         {
+            throw new IOException("Cannot find \"" + DESCRIPTION_FILE
+                  + "\" OpenSearch description file.");
+         }
 
-      LineIterator li = IOUtils.lineIterator(is, "UTF-8");
+         LineIterator li = IOUtils.lineIterator(is, "UTF-8");
 
-      try (ServletOutputStream os = res.getOutputStream())
-      {
+         // Do not use try with resource !!
+         // Closing that stream commits the response, this is not the right place to do that
+         ServletOutputStream os = res.getOutputStream();
          while (li.hasNext())
          {
             String line = li.next();
@@ -155,11 +158,6 @@ public class SearchController
 
             os.write(line.getBytes());
          }
-      }
-      finally
-      {
-         IOUtils.closeQuietly(is);
-         LineIterator.closeQuietly(li);
       }
    }
 
@@ -237,19 +235,19 @@ public class SearchController
 
       try (InputStream is = solrDao.streamSelect(solrQuery))
       {
-         try (ServletOutputStream os = res.getOutputStream())
+         // Do not use try with resource !!
+         // Closing that stream commits the response, this is not the right place to do that
+         ServletOutputStream os = res.getOutputStream();
+         res.setStatus(HttpServletResponse.SC_OK);
+         if ("json".equalsIgnoreCase(format))
          {
-            res.setStatus(HttpServletResponse.SC_OK);
-            if ("json".equalsIgnoreCase(format))
-            {
-               res.setContentType("application/json");
-               xmlToJson(is, os);
-            }
-            else
-            {
-               res.setContentType("application/xml");
-               IOUtils.copy(is, os);
-            }
+            res.setContentType("application/json");
+            xmlToJson(is, os);
+         }
+         else
+         {
+            res.setContentType("application/xml");
+            IOUtils.copy(is, os);
          }
       }
       catch (Exception e)

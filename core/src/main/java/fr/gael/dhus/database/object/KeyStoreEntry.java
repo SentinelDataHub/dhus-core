@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016,2017,2018 GAEL Systems
+ * Copyright (C) 2016-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -136,6 +136,12 @@ public class KeyStoreEntry implements Serializable
    public int hashCode()
    {
       return Objects.hashCode(this.key);
+   }
+
+   @Override
+   public String toString()
+   {
+      return key.toString() + " (" + value + ")";
    }
 
    @Embeddable

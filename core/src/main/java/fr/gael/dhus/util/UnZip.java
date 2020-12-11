@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2018 GAEL Systems
+ * Copyright (C) 2013-2016,2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -137,8 +137,8 @@ public class UnZip
           file.toLowerCase ().endsWith (".tar") ||
           file.toLowerCase ().endsWith (".tgz") ||
           file.toLowerCase ().endsWith (".tar.gz")*/;
-      File fileObject = new File (path);
-      is_supported &= fileObject.exists () && fileObject.isFile ();
+      //File fileObject = new File (path);
+      //is_supported &= fileObject.exists () && fileObject.isFile ();
       return is_supported;
    }
 

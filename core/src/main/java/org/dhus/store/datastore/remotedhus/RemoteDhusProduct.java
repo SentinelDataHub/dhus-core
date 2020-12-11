@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -32,32 +32,84 @@ import java.net.URL;
 import java.util.Arrays;
 
 import org.dhus.store.datastore.DataStoreProduct;
+import org.dhus.store.datastore.ProductNotFoundException;
 
 // TODO refactor without DownloadableProduct
 public class RemoteDhusProduct extends DownloadableProduct implements DataStoreProduct
 {
-   private final String serviceUrl;
    private final String uuid;
    private final String login;
    private final String password;
    private final ODataClient odataClient;
 
-   // make a factory method instead ?
-   public RemoteDhusProduct(String serviceUrl, String uuid, String login, String password, ODataClient odataClient)
-         throws IOException, InterruptedException
+   private final String entryUri;
+
+   public static RemoteDhusProduct initialize(String serviceUrl, String uuid, String login, String password, ODataClient odataClient)
+         throws IOException, InterruptedException, ProductNotFoundException
+   {
+      String productEntryURI = getProductEntryURI(serviceUrl, uuid);
+      String productStreamURI = getProductStreamURI(serviceUrl, uuid);
+      try
+      {
+         return new RemoteDhusProduct(uuid, login, password, odataClient, productStreamURI, productEntryURI);
+      }
+      catch (DownloadableProductException e)
+      {
+         if (e.getHttpStatusCode() == 404)
+         {
+            throw new ProductNotFoundException("Product " + uuid + " not found at: " + productEntryURI);
+         }
+         else
+         {
+            throw e;
+         }
+      }
+   }
+
+   public static RemoteDhusProduct initializeDerived(String serviceUrl, String uuid, String tag, String login, String password, ODataClient odataClient)
+         throws InterruptedException, IOException, ProductNotFoundException
+   {
+      String derivedProductStreamURI = getDerivedProductStreamURI(serviceUrl, uuid, tag);
+      String derivedProductEntryURI = getDerivedProductEntryURI(serviceUrl, uuid, tag);
+      try
+      {
+         return new RemoteDhusProduct(uuid, login, password, odataClient, derivedProductStreamURI, derivedProductEntryURI);
+      }
+      catch (DownloadableProductException e)
+      {
+         if (e.getHttpStatusCode() == 404 || e.getHttpStatusCode() == 500) // 500 means the derived doesn't exist
+         {
+            throw new ProductNotFoundException("Derived product " + uuid + " not found at: " + derivedProductEntryURI);
+         }
+         else
+         {
+            throw e;
+         }
+      }
+   }
+
+   private RemoteDhusProduct(String uuid, String login, String password,
+         ODataClient odataClient, String streamUri, String entryUri) throws IOException, DownloadableProductException, InterruptedException
    {
       super(
             new InterruptibleHttpClient(new BasicAuthHttpClientProducer(login, password)),
             1,
-            getProductStreamURI(serviceUrl, uuid),
+            streamUri,
             null,
             "unknown");
-      this.serviceUrl = serviceUrl;
       this.uuid = uuid;
       this.login = login;
       this.password = password;
       this.odataClient = odataClient;
+
+      this.entryUri = entryUri;
+
       setName(filename);
+   }
+
+   public String getUuid()
+   {
+      return uuid;
    }
 
    @Override
@@ -99,9 +151,9 @@ public class RemoteDhusProduct extends DownloadableProduct implements DataStoreP
       if (claff.isAssignableFrom(DrbNode.class))
       {
          return claff.cast(new DhusODataV1Node(
-               getProductEntryURI(serviceUrl, uuid), 
-               login, 
-               password, 
+               entryUri,
+               login,
+               password,
                odataClient));
       }
       if (claff.isAssignableFrom(DataStoreProduct.class))
@@ -131,5 +183,21 @@ public class RemoteDhusProduct extends DownloadableProduct implements DataStoreP
    private static String getProductEntryURI(String serviceUrl, String uuid)
    {
       return serviceUrl + "/Products('" + uuid + "')";
+   }
+
+   private static String getDerivedProductStreamURI(String serviceUrl, String uuid, String tag)
+   {
+      return getDerivedProductEntryURI(serviceUrl, uuid, tag) + "/$value";
+   }
+
+   private static String getDerivedProductEntryURI(String serviceUrl, String uuid, String tag)
+   {
+      if (tag != null && !Character.isUpperCase(tag.charAt(0)))
+      {
+         StringBuilder sb = new StringBuilder(tag);
+         sb.setCharAt(0, Character.toUpperCase(tag.charAt(0)));
+         tag = sb.toString();
+      }
+      return getProductEntryURI(serviceUrl, uuid) + "/Products('" + tag + "')";
    }
 }

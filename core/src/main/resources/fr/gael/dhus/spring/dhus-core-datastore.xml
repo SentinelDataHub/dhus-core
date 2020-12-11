@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2016,2017 GAEL Systems
+   Copyright (C) 2016,2017,2019,2020 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -22,11 +22,11 @@
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xsi:schemaLocation=
              "http://www.springframework.org/schema/beans
-             http://www.springframework.org/schema/beans/spring-beans-4.1.xsd">
+             http://www.springframework.org/schema/beans/spring-beans.xsd">
 
    <!-- services -->
    <bean name="storeService" class="org.dhus.store.StoreService"></bean>
-   <bean name="defaultDataStoreManager" class="org.dhus.store.datastore.DefaultDataStoreManager"></bean>
+   <bean name="defaultDataStoreManager" class="org.dhus.store.datastore.DefaultDataStoreManager"/>
    <bean name="metadataStoreService" class="org.dhus.store.metadatastore.MetadataStoreService"></bean>
 
    <!-- stores -->

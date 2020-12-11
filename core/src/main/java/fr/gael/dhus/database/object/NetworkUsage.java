@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2017 GAEL Systems
+ * Copyright (C) 2014,2015,2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -28,10 +28,14 @@ import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import javax.persistence.JoinColumn;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
+
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 
 /**
@@ -58,6 +62,8 @@ public class NetworkUsage implements Serializable
     * The user associated to this network usage record.
     */
    @OneToOne (fetch=FetchType.EAGER)
+   @JoinColumn(name = "USER_UUID")
+   @OnDelete(action = OnDeleteAction.CASCADE)
    private User user;
 
    /**
@@ -163,6 +169,12 @@ public class NetworkUsage implements Serializable
    public void setSize (Long size)
    {
       this.size = size;
+   }
+
+   @Override
+   public String toString()
+   {
+      return "NetworkUsage: " + id.toString() + "(user: " + user + " date: "+date+")";
    }
 
 } // End NetworkUsage class

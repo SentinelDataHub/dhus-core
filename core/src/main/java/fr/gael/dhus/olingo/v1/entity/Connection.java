@@ -195,7 +195,7 @@ public class Connection extends AbstractEntity
    }
 
    @Override
-   public List<Map<String, Object>> expand(String navlink_name, String self_url)
+   public List<Map<String, Object>> expand(String navlink_name, String self_url) throws ODataException
    {
       if (navlink_name.equals("User"))
       {

@@ -23,6 +23,7 @@ import fr.gael.dhus.DHuS;
 import fr.gael.dhus.database.dao.UserDao;
 import fr.gael.dhus.database.dao.interfaces.DaoUtils;
 import fr.gael.dhus.database.object.config.cron.CleanDatabaseCronConfiguration;
+import fr.gael.dhus.service.SystemService;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
 import org.apache.logging.log4j.LogManager;
@@ -48,6 +49,9 @@ public class CleanDatabaseJob extends AbstractJob
    @Autowired
    private ConfigurationManager configurationManager;
 
+   @Autowired
+   private SystemService systemService;
+   
    public CleanDatabaseJob ()
    {
    }
@@ -81,7 +85,7 @@ public class CleanDatabaseJob extends AbstractJob
          getKeepPeriod ());
 
       // optimize database
-      DaoUtils.optimize ();
+      systemService.optimize ();
 
       LOGGER.info("SCHEDULER : Cleanup database done - " +
          (System.currentTimeMillis ()-start) + "ms");

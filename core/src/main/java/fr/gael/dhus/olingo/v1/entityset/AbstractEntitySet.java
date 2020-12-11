@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2014-2018 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -93,7 +93,7 @@ public abstract class AbstractEntitySet<T extends AbstractEntity>
     */
    public List<AssociationSet> getAssociationSets()
    {
-      return Collections.EMPTY_LIST;
+      return Collections.<AssociationSet>emptyList();
    }
 
    /**
@@ -101,7 +101,7 @@ public abstract class AbstractEntitySet<T extends AbstractEntity>
     */
    public List<Association> getAssociations()
    {
-      return Collections.EMPTY_LIST;
+      return Collections.<Association>emptyList();
    }
 
    /**
@@ -206,9 +206,9 @@ public abstract class AbstractEntitySet<T extends AbstractEntity>
     *
     * @return an instance of Map, never null.
     */
-   public Map<?, AbstractEntity> getEntities()
+   public Map<? extends Object, ? extends AbstractEntity> getEntities()
    {
-      return Collections.EMPTY_MAP;
+      return Collections.emptyMap();
    }
 
    /**
@@ -246,11 +246,14 @@ public abstract class AbstractEntitySet<T extends AbstractEntity>
     * @param key that identifies the Entity from the feed being served to the client.
     *
     * @return a non null list that may be empty.
+    *
+    * @throws ODataException could not expand
     */
    public List<Map<String, Object>> expand(String navlink_name, String self_url,
-         Map<?, AbstractEntity> entities, Map<String, Object> key)
+         Map<? extends Object, ? extends AbstractEntity> entities, Map<String, Object> key)
+         throws ODataException
    {
-      throw new IllegalStateException("NavLink " + navlink_name + " cannot be expanded");
+      throw new ODataException("NavLink " + navlink_name + " cannot be expanded");
    }
 
    public static String generateEntitySetName(String entityName)

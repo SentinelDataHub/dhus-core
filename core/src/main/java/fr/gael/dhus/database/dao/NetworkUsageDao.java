@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015 GAEL Systems
+ * Copyright (C) 2014-2016,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -27,10 +27,9 @@ import org.hibernate.HibernateException;
 import org.hibernate.Session;
 import org.hibernate.criterion.Projections;
 import org.hibernate.criterion.Restrictions;
-import org.springframework.orm.hibernate3.HibernateCallback;
+import org.springframework.orm.hibernate5.HibernateCallback;
 import org.springframework.stereotype.Repository;
 
-import java.sql.SQLException;
 import java.util.Date;
 
 @Repository
@@ -43,7 +42,7 @@ public class NetworkUsageDao extends HibernateDao<NetworkUsage, Long>
             {
                @Override
                public Long doInHibernate (Session session)
-                     throws HibernateException, SQLException
+                     throws HibernateException
                {
                   Criteria criteria = session.createCriteria (
                         NetworkUsage.class);
@@ -64,7 +63,7 @@ public class NetworkUsageDao extends HibernateDao<NetworkUsage, Long>
             {
                @Override
                public Long doInHibernate (Session session)
-                     throws HibernateException, SQLException
+                     throws HibernateException
                {
                   Criteria criteria = session.createCriteria (
                         NetworkUsage.class);

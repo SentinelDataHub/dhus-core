@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2016-2018 GAEL Systems
+ * Copyright (C) 2016-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -23,7 +23,6 @@ import fr.gael.dhus.database.dao.interfaces.HibernateDao;
 import fr.gael.dhus.database.object.KeyStoreEntry;
 import fr.gael.dhus.database.object.KeyStoreEntry.Key;
 
-import java.sql.SQLException;
 import java.util.List;
 
 import org.dhus.store.datastore.DataStore;
@@ -35,8 +34,8 @@ import org.hibernate.ScrollableResults;
 import org.hibernate.Session;
 import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Restrictions;
-
-import org.springframework.orm.hibernate3.HibernateCallback;
+import org.hibernate.query.Query;
+import org.springframework.orm.hibernate5.HibernateCallback;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -52,7 +51,7 @@ public class KeyStoreEntryDao extends HibernateDao<KeyStoreEntry, Key>
       return getHibernateTemplate().execute(new HibernateCallback<String>()
       {
          @Override
-         public String doInHibernate(Session session) throws HibernateException, SQLException
+         public String doInHibernate(Session session) throws HibernateException
          {
             Criteria criteria = session.createCriteria(entityClass);
             criteria.add(Restrictions.like("value", "%" + sub_value + "%"));
@@ -77,7 +76,7 @@ public class KeyStoreEntryDao extends HibernateDao<KeyStoreEntry, Key>
       {
          @Override
          public ScrollableResults doInHibernate(Session session)
-               throws HibernateException, SQLException
+               throws HibernateException
          {
             Criteria criteria = session.createCriteria(entityClass);
             criteria.add(Restrictions.eq("key.keyStore", keyStoreName));
@@ -92,11 +91,30 @@ public class KeyStoreEntryDao extends HibernateDao<KeyStoreEntry, Key>
       return getHibernateTemplate().execute(new HibernateCallback<List<KeyStoreEntry>>()
       {
          @Override
-         public List<KeyStoreEntry> doInHibernate(Session session) throws HibernateException, SQLException
+         @SuppressWarnings("unchecked")
+         public List<KeyStoreEntry> doInHibernate(Session session) throws HibernateException
          {
             Criteria criteria = session.createCriteria(entityClass);
             criteria.add(Restrictions.eq("key.entryKey", uuid));
-            return criteria.list();  
+            return criteria.list();
+         }
+      });
+   }
+
+   // TODO other methods should be rewritten using this approach instead of Criteria
+   public List<KeyStoreEntry> listForUuidAndTag(final String uuid, String tag)
+   {
+      String hql = "FROM KeyStoreEntry WHERE entrykey=?1 AND tag=?2";
+      return getHibernateTemplate().execute(new HibernateCallback<List<KeyStoreEntry>>()
+      {
+         @Override
+         @SuppressWarnings("unchecked")
+         public List<KeyStoreEntry> doInHibernate(Session session) throws HibernateException
+         {
+            Query<KeyStoreEntry> query = session.createQuery(hql);
+            query.setParameter(1, uuid);
+            query.setParameter(2, tag);
+            return query.list();
          }
       });
    }
@@ -106,7 +124,8 @@ public class KeyStoreEntryDao extends HibernateDao<KeyStoreEntry, Key>
       return getHibernateTemplate().execute(new HibernateCallback<List<KeyStoreEntry>>()
       {
          @Override
-         public List<KeyStoreEntry> doInHibernate(Session session) throws HibernateException, SQLException
+         @SuppressWarnings("unchecked")
+         public List<KeyStoreEntry> doInHibernate(Session session) throws HibernateException
          {
             Criteria criteria = session.createCriteria(entityClass);
             criteria.add(Restrictions.eq("key.keyStore", keyStoreName));

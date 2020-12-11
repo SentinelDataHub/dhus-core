@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2013,2014,2015 GAEL Systems
+   Copyright (C) 2015,2016,2019,2020 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -22,9 +22,9 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
 	xmlns:security="http://www.springframework.org/schema/security"
 	xsi:schemaLocation="
-		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.0.xsd
-       	http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.0.xsd
-       	http://www.springframework.org/schema/security http://www.springframework.org/schema/security/spring-security-3.2.xsd">
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       	http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+       	http://www.springframework.org/schema/security https://www.springframework.org/schema/security/spring-security.xsd">
 
 	<bean class="fr.gael.dhus.spring.context.DHuSContextLoader" />
 	
@@ -34,7 +34,7 @@
 	</bean>
 	
 	<security:http entry-point-ref="solrAuthEntryPoint" use-expressions="true"
-		disable-url-rewriting="true">
+		disable-url-rewriting="true" create-session="never">
 
 		<security:custom-filter position="PRE_AUTH_FILTER"
 			ref="preAuthFilter" />
@@ -42,6 +42,7 @@
 			ref="basicAuthFilter" />
 		<security:intercept-url pattern="/**"
 			access="hasRole('ROLE_SYSTEM_MANAGER')" />
-			
+		<security:session-management session-fixation-protection="none" />
+		<security:csrf disabled="true" />
 	</security:http>
 </beans>

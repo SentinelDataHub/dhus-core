@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2017 GAEL Systems
+   Copyright (C) 2017,2019,2020 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -21,9 +21,9 @@
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
        xmlns:security="http://www.springframework.org/schema/security"
-       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.0.xsd
-         http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.0.xsd
-         http://www.springframework.org/schema/security http://www.springframework.org/schema/security/spring-security-3.2.xsd">
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+         http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+         http://www.springframework.org/schema/security https://www.springframework.org/schema/security/spring-security.xsd">
 
    <bean class="fr.gael.dhus.spring.context.DHuSContextLoader" />
    <context:annotation-config/>
@@ -33,13 +33,15 @@
    <!-- Initialization of OpenSAML library-->
    <bean class="org.springframework.security.saml.SAMLBootstrap"/>
 
-   <security:http entry-point-ref="samlEntryPoint" use-expressions="true" disable-url-rewriting="true">
+   <security:http entry-point-ref="samlEntryPoint" use-expressions="true" disable-url-rewriting="true" create-session="never">
       <security:custom-filter ref="requestContextFilter" before="FORM_LOGIN_FILTER"/>
       <security:intercept-url pattern="/**" access="isAuthenticated()" />
       <security:custom-filter before="FIRST" ref="metadataGeneratorFilter"/>
       <security:custom-filter position="PRE_AUTH_FILTER" ref="preAuthFilter" />
       <security:custom-filter position="BASIC_AUTH_FILTER" ref="basicAuthFilter" />
       <security:custom-filter after="BASIC_AUTH_FILTER" ref="samlFilter"/>
+      <security:session-management session-fixation-protection="none" />
+      <security:csrf disabled="true" />
    </security:http>
 
    <bean id="requestContextFilter" class="org.springframework.web.filter.RequestContextFilter"/>

@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017-2018 GAEL Systems
+ * Copyright (C) 2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -349,4 +349,9 @@ public class DeletedProduct implements Serializable
       return hash;
    }
 
+   @Override
+   public String toString()
+   {
+      return uuid + " (" + identifier + ")";
+   }
 }

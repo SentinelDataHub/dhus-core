@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019,2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -41,11 +41,18 @@ public interface IngestibleProduct extends Product, Closeable
 
    public String getIdentifier();
 
+   public Boolean isOnDemand();
+
    public List<MetadataIndex> getMetadataIndexes() throws MetadataExtractionException;
 
    public Date getContentStart() throws MetadataExtractionException;
 
    public Date getContentEnd() throws MetadataExtractionException;
+
+   public void startTimer();
+   public void stopTimer();
+
+   public long getIngestionTimeMillis();
 
    /**
     * May return null.

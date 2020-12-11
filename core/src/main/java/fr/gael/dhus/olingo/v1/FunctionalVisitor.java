@@ -65,6 +65,7 @@ public abstract class FunctionalVisitor implements ExpressionVisitor
    // $filter
 
    @Override
+   @SuppressWarnings("unchecked")
    public Object visitFilterExpression(FilterExpression fe, String filter, Object exp)
    {
       // Exp is a Node<?, Boolean>, returns an ExecutableExpressionTree.
@@ -73,6 +74,7 @@ public abstract class FunctionalVisitor implements ExpressionVisitor
    }
 
    @Override
+   @SuppressWarnings("unchecked")
    public Object visitBinary(BinaryExpression be, BinaryOperator op, Object left, Object right)
    {
       // `left` and `right` are instances of Node<?> (Expression Tree)
@@ -127,6 +129,7 @@ public abstract class FunctionalVisitor implements ExpressionVisitor
    }
 
    @Override
+   @SuppressWarnings("unchecked")
    public Object visitMethod(MethodExpression me, MethodOperator method, List<Object> params)
    {
       if (params.size() == 1)
@@ -217,6 +220,7 @@ public abstract class FunctionalVisitor implements ExpressionVisitor
    }
 
    @Override
+   @SuppressWarnings("unchecked")
    public Object visitUnary(UnaryExpression ue, UnaryOperator operator, Object operand)
    {
       // operand is a Node<?> (Expression Tree)
@@ -249,18 +253,12 @@ public abstract class FunctionalVisitor implements ExpressionVisitor
    // $orderby
 
    @Override
+   @SuppressWarnings("unchecked")
    public Object visitOrderByExpression(OrderByExpression orderby, String exp, List<Object> orders)
    {
       final ExecutableExpressionTree.Node node = (ExecutableExpressionTree.Node) (orders.get(0));
 
-      return new Comparator()
-      {
-         @Override
-         public int compare(Object o1, Object o2)
-         {
-            return (Integer) node.exec(new Duo<>(o1, o2));
-         }
-      };
+      return (Comparator) (Object o1, Object o2) -> (Integer) node.exec(new Duo<>(o1, o2));
    }
 
    /**
@@ -274,6 +272,7 @@ public abstract class FunctionalVisitor implements ExpressionVisitor
     * @return an {@link ExecutableExpressionTree.Node}
     */
    @Override
+   @SuppressWarnings("unchecked")
    public Object visitOrder(OrderExpression oe, Object filter, SortOrder sort_order)
    {
       ExecutableExpressionTree.Node param = ExecutableExpressionTree.Node.class.cast(filter);

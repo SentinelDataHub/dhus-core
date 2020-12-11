@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018 GAEL Systems
+ * Copyright (C) 2018,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -46,6 +46,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.util.Unbox;
 
 import org.dhus.store.datastore.DataStore;
+import org.dhus.store.datastore.config.DataStoreRestriction;
 import org.dhus.store.datastore.config.HfsDataStoreConf;
 import org.dhus.store.datastore.config.NamedDataStoreConf;
 import org.dhus.store.derived.DerivedProductStore;
@@ -156,7 +157,7 @@ public final class CreateKeyStoreEntriesIncomingProducts implements CustomTaskCh
          path = Paths.get(dbPath.substring(5)).getParent().toString();
       }
       HfsDataStoreConf newCfg = new HfsDataStoreConf();
-      newCfg.setReadOnly(Boolean.TRUE);
+      newCfg.setRestriction(DataStoreRestriction.REFERENCES_ONLY);
       newCfg.setName(NEW_DS_NAME_PREFIX + ++numberOfNewDataStores);
       newCfg.setPath(path);
       cfgMgr.getDataStoresConf().add(newCfg);

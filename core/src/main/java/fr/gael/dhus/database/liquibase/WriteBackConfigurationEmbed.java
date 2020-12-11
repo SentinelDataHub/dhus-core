@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017,2018 GAEL Systems
+ * Copyright (C) 2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,10 +19,11 @@
  */
 package fr.gael.dhus.database.liquibase;
 
+import fr.gael.dhus.database.object.config.cron.Cron;
 import fr.gael.dhus.database.object.config.eviction.Eviction;
 import fr.gael.dhus.database.object.config.eviction.EvictionConfiguration;
-import fr.gael.dhus.database.object.config.scanner.ScannerInfo;
-import fr.gael.dhus.database.object.config.scanner.ScannerManager;
+import fr.gael.dhus.database.object.config.scanner.FileScannerConf;
+import fr.gael.dhus.database.object.config.scanner.FtpScannerConf;
 import fr.gael.dhus.database.object.config.synchronizer.ProductSynchronizer;
 import fr.gael.dhus.database.object.config.synchronizer.SynchronizerConfiguration;
 import fr.gael.dhus.database.object.config.synchronizer.SynchronizerManager;
@@ -51,8 +52,11 @@ import liquibase.resource.ResourceAccessor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import org.dhus.scanner.config.ScannerConfigurationManager;
+import org.dhus.scanner.config.ScannerInfo;
 import org.dhus.store.datastore.config.DataStoreConf;
 import org.dhus.store.datastore.config.DataStoreManager;
+import org.dhus.store.datastore.config.DataStoreRestriction;
 import org.dhus.store.datastore.config.HfsDataStoreConf;
 import org.dhus.store.datastore.config.NamedDataStoreConf;
 import org.dhus.store.datastore.config.OpenStackDataStoreConf;
@@ -66,6 +70,9 @@ public class WriteBackConfigurationEmbed implements CustomTaskChange
    private static final Logger LOGGER = LogManager.getLogger();
    private static final String COMPAT_EVICTION_NAME = "_OldDbEviction";
    private ConfigurationManager cfgMgr;
+
+   // Scanners' Cron schedule set to its default value
+   private String scannersCronSchedule = "0 0 22 ? * *";
 
    /**
     * From table CONFIGURATION to dhus.xml.
@@ -90,6 +97,7 @@ public class WriteBackConfigurationEmbed implements CustomTaskChange
 
             // Get each column value (only values that are editable at runtime are written back here)
             String eviction_schedule = resultSet.getString("EVICTION_SCHEDULE");
+            String filescanners_schedule = resultSet.getString("FILESCANNERS_SCHEDULE");
             Boolean mail_onusercreate = resultSet.getObject("MAIL_ONUSERCREATE", Boolean.class);
             Boolean mail_onuserupdate = resultSet.getObject("MAIL_ONUSERUPDATE", Boolean.class);
             Boolean mail_onuserdelete = resultSet.getObject("MAIL_ONUSERDELETE", Boolean.class);
@@ -117,6 +125,10 @@ public class WriteBackConfigurationEmbed implements CustomTaskChange
                   oldEviction.getCron().setSchedule(eviction_schedule);
                }
                cfgMgr.getEvictionManager().getEviction().add(oldEviction);
+            }
+            if (filescanners_schedule != null)
+            {
+               scannersCronSchedule = filescanners_schedule;
             }
             if (mail_onusercreate != null)
             {
@@ -387,7 +399,7 @@ public class WriteBackConfigurationEmbed implements CustomTaskChange
    {
       try
       {
-         ScannerManager scMgr = cfgMgr.getScannerManager();
+         ScannerConfigurationManager scMgr = cfgMgr.getScannerManager();
          List<Duo<Long, Long>> coordinates = new LinkedList<>();
 
          // FileScanners
@@ -402,12 +414,30 @@ public class WriteBackConfigurationEmbed implements CustomTaskChange
                Boolean active = resultSet.getObject("ACTIVE", Boolean.class);
                String password = resultSet.getString("PASSWORD");
                String pattern = resultSet.getString("PATTERN");
-               String status = resultSet.getString("STATUS");
-               String status_message = resultSet.getString("STATUS_MESSAGE");
                String url = resultSet.getString("URL");
                String username = resultSet.getString("USERNAME");
 
-               ScannerInfo scInfo = scMgr.create(url, status, status_message, active, username, password, pattern, false);
+               ScannerInfo scInfo;
+               if (url != null && (url.startsWith("ftp:") || url.startsWith("sftp:")))
+               {
+                  scInfo = new FtpScannerConf();
+                  scInfo.setUsername(username);
+                  scInfo.setPassword(password);
+               }
+               else
+               {
+                  scInfo = new FileScannerConf();
+               }
+
+               Cron c = new Cron();
+               c.setSchedule(scannersCronSchedule);
+               c.setActive(active);
+
+               scInfo.setPattern(pattern);
+               scInfo.setUrl(url);
+               scInfo.setCron(c);
+
+               scInfo = scMgr.create(scInfo, false);
 
                coordinates.add(new Duo<>(id, scInfo.getId()));
             }
@@ -495,7 +525,7 @@ public class WriteBackConfigurationEmbed implements CustomTaskChange
                Boolean read_only = resultSet.getObject("READ_ONLY", Boolean.class);
                if (read_only != null)
                {
-                  dsCfg.setReadOnly(read_only);
+                  dsCfg.setRestriction(read_only?DataStoreRestriction.REFERENCES_ONLY:DataStoreRestriction.NONE);
                }
 
                if (HfsDataStoreConf.class.isAssignableFrom(dsCfg.getClass()))

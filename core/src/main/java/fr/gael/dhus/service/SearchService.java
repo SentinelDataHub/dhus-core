@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013,2014,2015,2016,2017 GAEL Systems
+ * Copyright (C) 2013-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -121,7 +121,8 @@ public class SearchService extends WebService
             (Long) inProduct.getProperty(ProductConstants.DATABASE_ID),
             inProduct.getItemClass(),
             inProduct.getMetadataIndexes(),
-            targetCollectionNames);
+            targetCollectionNames,
+            inProduct.isOnDemand());
       LOGGER.debug("Solr Input Document for product '{}' made in {}ms", inProduct.getUuid(), System.currentTimeMillis() - start);
       indexSolrDocument(document);
    }
@@ -186,7 +187,7 @@ public class SearchService extends WebService
             @Override
             public Product next()
             {
-               return productService.getProduct((Long) it.next().get("id"));
+               return productService.systemGetProduct((String) it.next().getFieldValue("uuid"));
             }
 
             @Override
@@ -232,6 +233,19 @@ public class SearchService extends WebService
    }
 
    /**
+    * Search.
+    * Bypasses authentication checks.
+    *
+    * @see #search(SolrQuery)
+    * @param query a SolrQuery with at least a 'q' parameter set
+    * @return a list of Solr documents matching the given query
+    */
+   public SolrDocumentList systemSearch(SolrQuery query)
+   {
+      return search(query);
+   }
+
+   /**
     * Returns the product associated with the given solr document.
     * @param doc Index entry for a product, are returned by {@link #search(SolrQuery)}.
     * @return A product (database object).
@@ -240,28 +254,6 @@ public class SearchService extends WebService
    {
       Long pid = Long.class.cast(doc.get("id"));
       return productService.systemGetProduct(pid);
-   }
-
-   /**
-    * Returns how many solr documents match the given query.
-    * @param query a solr `q` query.
-    * @return solr document count.
-    * @deprecated use {@link #search(SolrQuery)}{@code .getNumFound()}.
-    */
-   @Deprecated
-   @PreAuthorize("hasRole('ROLE_SEARCH')")
-   public int getResultCount(String query)
-   {
-      try
-      {
-         query = solrDao.updateQuery(query);
-         return (int) solrDao.search(new SolrQuery(query)).getResults().getNumFound();
-      }
-      catch (SolrServerException | IOException ex)
-      {
-         LOGGER.error(ex);
-         throw new DHusSearchException("An exception occured while searching", ex);
-      }
    }
 
    /**
@@ -391,7 +383,7 @@ public class SearchService extends WebService
             public SolrInputDocument next()
             {
                Product product = products.next();
-               product.setIndexes(productService.getIndexes(product.getId()));
+               product.setIndexes(productService.getIndexes(product.getUuid()));
                return toInputDocument(product);
             }
 
@@ -463,7 +455,7 @@ public class SearchService extends WebService
             public SolrInputDocument next()
             {
                Product product = asProduct(toReindex.next());
-               product.setIndexes(productService.getIndexes(product.getId()));
+               product.setIndexes(productService.getIndexes(product.getUuid()));
                return toInputDocument(product);
             }
 
@@ -504,7 +496,7 @@ public class SearchService extends WebService
    }
 
    private SolrInputDocument makeInputDocument(String productUuid, Long productId,
-         String productClass, List<MetadataIndex> metadataIndices, List<String> targetCollectionNames)
+         String productClass, List<MetadataIndex> metadataIndices, List<String> targetCollectionNames, boolean onDemand)
    {
       SolrInputDocument doc = new SolrInputDocument();
 
@@ -555,6 +547,7 @@ public class SearchService extends WebService
       doc.setField("id", productId);
       doc.setField("uuid", productUuid);
       doc.setField("path", DEFAULT_PATH);
+      doc.setField("ondemand", onDemand);
 
       // Collections
       if (targetCollectionNames != null)
@@ -585,7 +578,7 @@ public class SearchService extends WebService
       {
          collections.forEach((collection) -> collectionNames.add(collection.getName()));
       }
-      SolrInputDocument res = makeInputDocument(product.getUuid(), product.getId(), product.getItemClass(), product.getIndexes(), collectionNames);
+      SolrInputDocument res = makeInputDocument(product.getUuid(), product.getId(), product.getItemClass(), product.getIndexes(), collectionNames, product.isOnDemand());
       LOGGER.debug("Solr Input Document for product '{}' made in {}ms", product.getUuid(), System.currentTimeMillis() - start);
       return res;
    }

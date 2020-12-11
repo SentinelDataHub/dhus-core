@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017,2018 GAEL Systems
+ * Copyright (C) 2017-2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,7 +19,15 @@
  */
 package org.dhus.store.datastore;
 
+import fr.gael.dhus.util.MultipleDigestInputStream;
+
+import java.util.ArrayList;
 import java.util.List;
+
+import org.dhus.Product;
+import org.dhus.ProductConstants;
+
+import org.springframework.security.crypto.codec.Hex;
 
 /**
  * Utility class for Store objects.
@@ -75,5 +83,66 @@ public class DataStores
       }
 
       throw new DataStoreException(sb.toString());
+   }
+
+   /**
+    * Removes the '.SAFE' extension (if any).
+    *
+    * @param identifier product identifier (should ends with '.SAFE')
+    * @return identifier without the '.SAFE' extension
+    */
+   public static String unSafe(String identifier)
+   {
+      if (identifier.endsWith(".SAFE"))
+      {
+         return identifier.substring(0, identifier.length()-5);
+      }
+      return identifier;
+   }
+
+   /**
+    * Returns the hash algorithms in hashAlgos that were not yet computed for the given product.
+    *
+    * @param product a non null instance
+    * @param hashAlgos array of hash algorithm names to check
+    * @return an array of hash algorithm names to compute
+    */
+   public static String[] checkHashAlgorithms(Product product, String[] hashAlgos)
+   {
+      if (hashAlgos == null)
+      {
+         return EMPTY_ARRAY;
+      }
+      else if (hashAlgos.length == 0)
+      {
+         return hashAlgos;
+      }
+      ArrayList<String> res = new ArrayList<>(hashAlgos.length);
+      for (String algo: hashAlgos)
+      {
+         String k = ProductConstants.CHECKSUM_PREFIX + "." + algo;
+         if (product.getProperty(k) == null)
+         {
+            res.add(algo);
+         }
+      }
+      return res.toArray(new String[res.size()]);
+   }
+   private static final String[] EMPTY_ARRAY = new String[] {}; // To avoid creating new objects
+
+   /**
+    * Set the `checksum.HASH` properties on the given product, for each hash computed by the
+    * MultipleDigestInputStream parameter.
+    *
+    * @param stream a non null instance that read the product's data completely
+    * @param product a non null product instance to set
+    */
+   public static void extractAndSetChecksum(MultipleDigestInputStream stream, Product product)
+   {
+      stream.getDigests().entrySet().stream().forEach(entry -> {
+         String key = ProductConstants.checksum(entry.getKey());
+         String val = new String(Hex.encode(entry.getValue().digest()));
+         product.setProperty(key, val);
+      });
    }
 }

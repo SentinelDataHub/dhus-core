@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2017 GAEL Systems
+ * Copyright (C) 2017,2019 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -21,6 +21,7 @@ package fr.gael.dhus.database.object;
 
 import java.io.Serializable;
 import java.sql.Timestamp;
+import java.util.Objects;
 import javax.persistence.Column;
 import javax.persistence.Embeddable;
 import javax.persistence.EmbeddedId;
@@ -122,6 +123,12 @@ public class StoreQuota implements Serializable
       this.key.identifier = identifier;
    }
 
+   @Override
+   public String toString()
+   {
+      return "Quota: ("+ key +")";
+   }
+
    /** Multivalued Primary Key. */
    @Embeddable
    public static class Key implements Serializable
@@ -139,5 +146,48 @@ public class StoreQuota implements Serializable
 
       @Column(name = "IDENTIFIER")
       private String identifier;
+
+      @Override
+      public int hashCode()
+      {
+         return quotaName.hashCode();
+      }
+
+      @Override
+      public boolean equals(Object obj)
+      {
+         if (this == obj)
+         {
+            return true;
+         }
+         if (obj == null)
+         {
+            return false;
+         }
+         if (getClass() != obj.getClass())
+         {
+            return false;
+         }
+         final Key other = (Key) obj;
+         if (!Objects.equals(this.storeName, other.storeName))
+         {
+            return false;
+         }
+         if (!Objects.equals(this.quotaName, other.quotaName))
+         {
+            return false;
+         }
+         if (!Objects.equals(this.userUUID, other.userUUID))
+         {
+            return false;
+         }
+         return Objects.equals(this.identifier, other.identifier);
+      }
+
+      @Override
+      public String toString()
+      {
+         return "store: " + storeName + " quota: " + quotaName + " user: " + userUUID;
+      }
    }
 }
