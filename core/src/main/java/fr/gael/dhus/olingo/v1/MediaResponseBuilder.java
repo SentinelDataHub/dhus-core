@@ -103,7 +103,8 @@ public class MediaResponseBuilder
    }
 
    /**
-    * Returns string representation of the HTTP defined RFC 1123 date format.
+    * Returns string representation of the HTTP date format as defined in
+    * https://tools.ietf.org/html/rfc7231#section-7.1.1.1
     *
     * @param date to parse
     * @return the long value of date since 1st January 1970
@@ -111,13 +112,14 @@ public class MediaResponseBuilder
    private static String asHttpDate (long date)
    {
       SimpleDateFormat dateFormat =
-            new SimpleDateFormat ("EEE, dd MMM yyyy HH:mm:ss z", Locale.US);
+            new SimpleDateFormat ("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US);
 
       return dateFormat.format (new Date (date));
    }
 
    /**
-    * Returns long representation of the HTTP defined RFC 1123 date format.
+    * Returns long representation of the HTTP date format as defined in
+    * https://tools.ietf.org/html/rfc7231#section-7.1.1.1
     *
     * @param date to parse
     * @return the long value of date since 1st January 1970
@@ -125,7 +127,7 @@ public class MediaResponseBuilder
    private static long getHttpDate (String date)
    {
       SimpleDateFormat dateFormat =
-            new SimpleDateFormat ("EEE, dd MMM yyyy HH:mm:ss z", Locale.US);
+            new SimpleDateFormat ("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US);
       try
       {
          return dateFormat.parse (date).getTime ();
