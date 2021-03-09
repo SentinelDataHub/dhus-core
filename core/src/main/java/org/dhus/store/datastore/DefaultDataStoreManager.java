@@ -302,6 +302,7 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
       {
          throw new DataStoreException(String.format("Cannot move product %s to destination %s", uuid, destination));
       }
+      productData.closeProduct();
    }
 
    private void copyProduct(DataStore dataStore, String uuid, Destination destination) throws IOException, DataStoreException
@@ -326,6 +327,7 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
       {
          throw new DataStoreException(String.format("Cannot copy product %s to destination %s", uuid, destination));
       }
+      productData.closeProduct();
    }
 
    /** May return null. */

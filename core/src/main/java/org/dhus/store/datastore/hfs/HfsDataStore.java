@@ -109,6 +109,7 @@ public class HfsDataStore extends AbstractDataStore
       onInsertEviction(dataSize);
       // report DataStore size increase
       increaseCurrentSize(dataSize);
+      product.closeProduct();
    }
 
    @Override

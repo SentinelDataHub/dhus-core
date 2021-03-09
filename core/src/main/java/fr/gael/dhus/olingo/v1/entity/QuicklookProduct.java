@@ -130,7 +130,10 @@ public class QuicklookProduct extends Product
       {
          Map<String, Node> nodes = new LinkedHashMap<>();
          DrbNode parent = physical.getImpl(DrbNode.class);
-         if (parent != null) nodes.put (parent.getName (), new Node (parent));
+         if (parent != null)
+         {
+            nodes.put (parent.getName (), new Node (parent));
+         }
          this.nodes = nodes;
       }
       return this.nodes;

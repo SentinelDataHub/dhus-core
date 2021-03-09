@@ -19,6 +19,7 @@
  */
 package org.dhus;
 
+import java.io.IOException;
 import java.util.Set;
 
 import org.dhus.store.HasImpl;
@@ -69,4 +70,9 @@ public interface Product extends HasImpl
     * @return a set of keys in this property list.
     */
    public Set<String> getPropertyNames();
+   
+   public default void closeProduct() throws IOException
+   {
+      return ;
+   }
 }

@@ -612,6 +612,11 @@ public class StoreService implements Store
          // TODO update quicklook/thumbnail as well?
          long time = System.currentTimeMillis() - start;
          LOGGER.info("Product {} successfully repaired in {} milliseconds", uuid, time);
+         ingestibleProduct.closeProduct();
+      }
+      catch (IOException e)
+      {
+         LOGGER.warn("An exception occured during reparing products", e);
       }
       finally
       {

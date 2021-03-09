@@ -93,6 +93,8 @@ public class DownloadableProduct extends AbstractProduct implements Closeable
 
    /** Downloading thread. */
    private volatile Thread downloadThread = null;
+   
+   private Pipe pipe = null;
 
    /** Downloads the given product (the URL returned by {@link Product#getOrigin()}) using the
     * given HTTP client.
@@ -193,6 +195,7 @@ public class DownloadableProduct extends AbstractProduct implements Closeable
          try
          {
             Pipe pipe = Pipe.open();
+            this.pipe = pipe;
             DownloadTask dltask = new DownloadTask(pipe);
             downloadThread = new Thread(dltask, "Product Download");
             downloadThread.start();
@@ -217,6 +220,17 @@ public class DownloadableProduct extends AbstractProduct implements Closeable
       if (downloadThread != null)
       {
          downloadThread.interrupt();
+         closeProduct();
+      }
+   }
+   
+   @Override
+   public void closeProduct() throws IOException
+   {
+      if (pipe != null)
+      {
+         pipe.source().close();
+         pipe.sink().close();
       }
    }
 
@@ -339,11 +353,13 @@ public class DownloadableProduct extends AbstractProduct implements Closeable
             }
             try
             {
+               LOGGER.debug("Try to close source for product {}", filename);
                pipe.source().close(); // Will generate an IOException on the reader side
             }
             catch (IOException ex) {}
             try
             {
+               LOGGER.debug("Try to close pipe for product {}", filename);
                pipe.sink().close();
             }
             catch (IOException ex) {}
