@@ -24,7 +24,7 @@
    <parent>
       <groupId>fr.gael.dhus</groupId>
       <artifactId>dhus-core-suite</artifactId>
-      <version>1.11.0-osf</version>
+      <version>1.11.1-osf</version>
       <relativePath>../../pom.xml</relativePath>
    </parent>
 
