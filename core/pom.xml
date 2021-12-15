@@ -32,7 +32,7 @@
       <solr.version>5.5.3</solr.version>
       <spring.version>5.2.1.RELEASE</spring.version>
       <spring_security.version>5.2.1.RELEASE</spring_security.version>
-      <log4j.version>2.12.1</log4j.version>
+      <log4j.version>2.16.0</log4j.version>
       <tomcat.version>8.0.53</tomcat.version>
       <skipUTs>${skipTests}</skipUTs>
       <testing.argline></testing.argline>
@@ -42,7 +42,7 @@
    <parent>
       <groupId>fr.gael.dhus</groupId>
       <artifactId>dhus-core-suite</artifactId>
-      <version>1.11.1-osf</version>
+      <version>1.11.2-osf</version>
       <relativePath>../pom.xml</relativePath>
    </parent>
 
