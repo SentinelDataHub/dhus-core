@@ -150,7 +150,7 @@
       <dependency>
          <groupId>org.liquibase</groupId>
          <artifactId>liquibase-core</artifactId>
-         <version>3.8.5-FIX-CHECKSUMS</version>
+         <version>4.8.0</version>
          <exclusions>
             <exclusion>
                <groupId>org.yaml</groupId>
