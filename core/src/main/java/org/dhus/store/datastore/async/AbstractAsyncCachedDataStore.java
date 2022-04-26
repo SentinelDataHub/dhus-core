@@ -21,6 +21,7 @@ package org.dhus.store.datastore.async;
 
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -32,14 +33,12 @@ import org.dhus.Product;
 import org.dhus.ProductConstants;
 import org.dhus.api.JobStatus;
 import org.dhus.store.StoreException;
+import org.dhus.store.datastore.DataStore;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.ProductAlreadyExist;
 import org.dhus.store.datastore.ProductNotFoundException;
 import org.dhus.store.datastore.ReadOnlyDataStoreException;
-import org.dhus.store.datastore.config.DataStoreRestriction;
 import org.dhus.store.datastore.config.PatternReplace;
-import org.dhus.store.datastore.hfs.HfsDataStore;
-import org.dhus.store.datastore.hfs.HfsManager;
 import org.dhus.store.ingestion.IngestibleProduct;
 
 import com.codahale.metrics.Gauge;
@@ -48,6 +47,7 @@ import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.MetricSet;
 
+import fr.gael.dhus.database.object.KeyStoreEntry;
 import fr.gael.dhus.database.object.Order;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.service.OrderService;
@@ -66,14 +66,14 @@ public abstract class AbstractAsyncCachedDataStore implements AsyncDataStore, Me
    protected static final ProductService PRODUCT_SERVICE =
          ApplicationContextProvider.getBean(ProductService.class);
 
-   private static final OrderService ORDER_SERVICE =
+   protected static final OrderService ORDER_SERVICE =
          ApplicationContextProvider.getBean(OrderService.class);
-
-   /** Local HFS cache. */
-   private final HfsDataStore cache;
 
    protected static final SecurityService SECURITY_SERVICE =
          ApplicationContextProvider.getBean(SecurityService.class);
+
+   /** DataStore cache. */
+   private final DataStore cache;
 
    /* Data Store identifier. */
    private final String name;
@@ -93,6 +93,9 @@ public abstract class AbstractAsyncCachedDataStore implements AsyncDataStore, Me
    /* Maximum pending requests that this data store can submit to its remote */
    private final int maxRunningRequests;
 
+   /* Current Size*/
+   private final long currentSize;
+
    /** Metric Set. */
    private final HashMap<String, Metric> metricSet;
    private final Meter getRate = new Meter();
@@ -102,12 +105,12 @@ public abstract class AbstractAsyncCachedDataStore implements AsyncDataStore, Me
    private final Meter refusedFetchRate = new Meter();
 
 
-   protected AbstractAsyncCachedDataStore(String name, int priority, String hfsLocation,
-         PatternReplace patternReplaceIn, PatternReplace patternReplaceOut, Integer maxPendingRequests, Integer maxRunningRequests,
-         long maximumSize, long currentSize, boolean autoEviction, String[] hashAlgorithms)
+   protected AbstractAsyncCachedDataStore(String name, int priority, PatternReplace patternReplaceIn,
+         PatternReplace patternReplaceOut, Integer maxPendingRequests, Integer maxRunningRequests,
+         long maximumSize, long currentSize, boolean autoEviction, String[] hashAlgorithms,
+         DataStore cache)
    {
       LOGGER.info("Initializing {}...", name);
-      Objects.requireNonNull(hfsLocation);
       Objects.requireNonNull(name);
 
       this.name = name;
@@ -125,21 +128,16 @@ public abstract class AbstractAsyncCachedDataStore implements AsyncDataStore, Me
       /* setting the HFS cache's name as this GMPDataStore's name allows the
        * cache to update this GMPDataStore's database entry (currentSize) when
        * products are inserted or evicted on a cache level */
-      this.cache = new HfsDataStore(
-            this.name,
-            new HfsManager(hfsLocation, 10, 1024),
-            DataStoreRestriction.NONE,
-            0, // unused
-            maximumSize,
-            currentSize,
-            autoEviction,
-            hashAlgorithms);
+
+      this.currentSize = currentSize;
+
+      this.cache = cache;
 
       metricSet = new HashMap<>();
       metricSet.put(MetricRegistry.name(METRIC_PREFIX, getName(), "gets"), getRate);
       metricSet.put(MetricRegistry.name(METRIC_PREFIX, getName(), "cache.hits"), cacheHit);
       metricSet.put(MetricRegistry.name(METRIC_PREFIX, getName(), "restores"), restoreRate);
-      metricSet.put(MetricRegistry.name(METRIC_PREFIX, getName(), "cache.size"), (Gauge<Long>)cache::getCurrentSize);
+      metricSet.put(MetricRegistry.name(METRIC_PREFIX, getName(), "cache.size"), (Gauge<Long>)this::currentSize);
       metricSet.put(MetricRegistry.name(METRIC_PREFIX, getName(), "queue.size"), (Gauge<Integer>)this::queueSize);
       metricSet.put(MetricRegistry.name(METRIC_PREFIX, getName(), "fetches.accepted"), acceptedFetchRate);
       metricSet.put(MetricRegistry.name(METRIC_PREFIX, getName(), "fetches.refused"), refusedFetchRate);
@@ -193,6 +191,8 @@ public abstract class AbstractAsyncCachedDataStore implements AsyncDataStore, Me
       }
       return ORDER_SERVICE.getOrder(order.getOrderId());
    }
+   
+   public void validateProduct(Product product, String uuid) throws DataStoreException {}
 
    /**
     * Method called by {@link #fetch(AsyncProduct)} after it has applied the Out pattern on the
@@ -282,6 +282,12 @@ public abstract class AbstractAsyncCachedDataStore implements AsyncDataStore, Me
    }
 
    @Override
+   public Iterator<String> getScrollableProductResults()
+   {
+      return cache.getScrollableProductResults();
+   }
+
+   @Override
    public List<String> getProductList()
    {
       return cache.getProductList();
@@ -321,11 +327,21 @@ public abstract class AbstractAsyncCachedDataStore implements AsyncDataStore, Me
             throw ex;
          }
 
+         validateProduct(product, uuid);
+         
          // Set online, checksum and content length in database
          long size = (Long) product.getProperty(ProductConstants.DATA_SIZE);
          PRODUCT_SERVICE.restoreProduct(uuid, (Long) product.getProperty(ProductConstants.DATA_SIZE), ProductConstants.getChecksums(product));
          LOGGER.info("Product {} ({}) ({} bytes) successfully restored", product.getName(), uuid, size);
          restoreRate.mark();
+      }
+      catch (BadlySizedProductException ex)
+      {
+         // particular case of product that shall be removed of cache
+         cache.deleteProduct(uuid);
+         LOGGER.error("Cannot move product {} ({}) to cache", product.getName(), uuid, ex);
+         LOGGER.error("Product {} ({}) could not be restored", product.getName(), uuid);
+         throw ex;
       }
       catch (DataStoreException ex)
       {
@@ -412,6 +428,17 @@ public abstract class AbstractAsyncCachedDataStore implements AsyncDataStore, Me
    }
 
    /**
+    * Does the given product exist in the cache backing this async dataStore?
+    *
+    * @param productUUID a non null product UUID
+    * @return true if the product physically exists in the HFS or OpenStack cache
+    */
+   protected boolean existsInCache(String productUUID)
+   {
+      return cache.hasProduct(productUUID);
+   }
+
+   /**
     * A task to ingest successfully fetched data.
     */
    protected abstract class IngestTask extends TimerTask
@@ -428,44 +455,40 @@ public abstract class AbstractAsyncCachedDataStore implements AsyncDataStore, Me
          return product != null ? product.getUuid() : null;
       }
 
-      /**
-       * Does the given product exist in the cache backing this async dataStore?
-       *
-       * @param productUUID a non null product UUID
-       * @return true if the product physically exists in the HFS cache
-       */
-      protected boolean existsInCache(String productUUID)
-      {
-         return cache.hasProduct(productUUID);
-      }
-
       @Override
       public void run()
       {
-         LOGGER.debug("{} - Starting order management routine...", getName());
-         LOGGER.debug("{} - Checking pending orders", getName());
-         List<Order> pendingOrders = ORDER_SERVICE.getPendingOrdersByDataStore(getName());
-         for (Order pendingOrder: pendingOrders)
+         try
          {
-            try
+            LOGGER.debug("{} - Starting order management routine...", getName());
+            LOGGER.debug("{} - Checking pending orders", getName());
+            List<Order> pendingOrders = ORDER_SERVICE.getPendingOrdersByDataStore(getName());
+            for (Order pendingOrder: pendingOrders)
             {
-               startOrder (pendingOrder);
+               try
+               {
+                  startOrder (pendingOrder);
+               }
+               catch (DataStoreException ex)
+               {
+                  LOGGER.debug("{} - Maximum number of running order reached", getName());
+                  break;
+               }
             }
-            catch (DataStoreException ex)
-            {
-               LOGGER.debug("{} - Maximum number of running order reached", getName());
-               break;
-            }
-         }
 
-         LOGGER.debug("{} - Retrieving completed orders", getName());
-         int ingested;
-         do
-         {
-            ingested = ingestCompletedFetches();
+            LOGGER.debug("{} - Retrieving completed orders", getName());
+            int ingested;
+            do
+            {
+               ingested = ingestCompletedFetches();
+            }
+            while (ingested > 0);
+            LOGGER.debug("{} - Finished order management routine.", getName());
          }
-         while (ingested > 0);
-         LOGGER.debug("{} - Finished order management routine.", getName());
+         catch (RuntimeException ex) // catch runtime to prevent the timer from crashing
+         {
+            LOGGER.error("Failed to retrieve new state of Jobs in {}", getName(), ex);
+         }
       }
 
       /**
@@ -548,6 +571,11 @@ public abstract class AbstractAsyncCachedDataStore implements AsyncDataStore, Me
       return ORDER_SERVICE.countRunningOrdersByDataStore(getName());
    }
 
+   private long currentSize()
+   {
+      return currentSize;
+   }
+
    /**
     * Returns existing order and logs its existence/presence in the queue.
     * Required by operations.
@@ -603,5 +631,11 @@ public abstract class AbstractAsyncCachedDataStore implements AsyncDataStore, Me
    public boolean hasKeyStore()
    {
       return cache.hasKeyStore();
+   }
+
+   @Override
+   public DataStore getCache()
+   {
+      return cache;
    }
 }

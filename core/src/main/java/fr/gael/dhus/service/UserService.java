@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2013-2019 GAEL Systems
+ * Copyright (C) 2013-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,6 +19,34 @@
  */
 package fr.gael.dhus.service;
 
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Pattern;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.dhus.olingo.v2.visitor.SQLVisitorParameter;
+import org.quartz.SchedulerException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.codec.Hex;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
 import fr.gael.dhus.database.dao.AccessRestrictionDao;
 import fr.gael.dhus.database.dao.CountryDao;
 import fr.gael.dhus.database.dao.SearchDao;
@@ -33,11 +61,12 @@ import fr.gael.dhus.database.object.restriction.AccessRestriction;
 import fr.gael.dhus.database.object.restriction.LockedAccessRestriction;
 import fr.gael.dhus.messaging.mail.MailServer;
 import fr.gael.dhus.network.CurrentQuotas;
-import fr.gael.dhus.olingo.v1.visitor.UserSQLVisitor;
 import fr.gael.dhus.service.exception.EmailNotSentException;
+import fr.gael.dhus.service.exception.GDPREnabledException;
 import fr.gael.dhus.service.exception.MalformedEmailException;
 import fr.gael.dhus.service.exception.RequiredFieldMissingException;
 import fr.gael.dhus.service.exception.RootNotModifiableException;
+import fr.gael.dhus.service.exception.SearchNotExistingException;
 import fr.gael.dhus.service.exception.UserBadEncryptionException;
 import fr.gael.dhus.service.exception.UserBadOldPasswordException;
 import fr.gael.dhus.service.exception.UserNotExistingException;
@@ -47,38 +76,8 @@ import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.spring.context.SecurityContextProvider;
 import fr.gael.dhus.system.config.ConfigurationManager;
 
-import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.regex.Pattern;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
-import org.quartz.SchedulerException;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.crypto.codec.Hex;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-
 /**
- * User Service provides connected clients with a set of method to interact with
- * it.
+ * User Service provides connected clients with a set of method to interact with it.
  */
 @Service
 public class UserService extends WebService
@@ -114,7 +113,7 @@ public class UserService extends WebService
 
    @Autowired
    private SecurityContextProvider securityContextProvider;
-
+   
    /**
     * Pattern for username checking
     */
@@ -197,27 +196,29 @@ public class UserService extends WebService
    /**
     * Retrieves corresponding users at the given criteria.
     *
-    * @param visitor visitor contains filter and order of required collection.
+    * @param hqlQuery contains filter and order of required collection
+    * @param hqlParameters contains list of hqlParameters
     * @param skip    number of skipped valid results.
     * @param top     max of valid results.
     * @return a list of {@link User}
     */
    @Transactional(readOnly = true)
-   public List<User> getUsers(UserSQLVisitor visitor, int skip, int top)
+   public List<User> getUsers(String hqlQuery, List<SQLVisitorParameter> hqlParameters, int skip, int top)
    {
-      return userDao.executeHQLQuery(visitor.getHqlQuery(), visitor.getHqlParameters(), skip, top);
+      return userDao.executeHQLQuery(hqlQuery, hqlParameters, skip, top);
    }
 
    /**
     * Counts corresponding users at the given criteria.
     *
-    * @param visitor visitor contains filter of required collection.
+    * @param hqlQuery contains filter of required collection
+    * @param hqlParameters contains list of hqlParameters
     * @return number of corresponding users.
     */
    @Transactional(readOnly = true)
-   public int countUsers(UserSQLVisitor visitor)
+   public int countUsers(String hqlQuery, List<SQLVisitorParameter> hqlParameters)
    {
-      return userDao.countHQLQuery(visitor.getHqlQuery(), visitor.getHqlParameters());
+      return userDao.countHQLQuery(hqlQuery, hqlParameters);
    }
 
    @PreAuthorize ("hasRole('ROLE_STATS')")
@@ -237,8 +238,13 @@ public class UserService extends WebService
    @PreAuthorize ("hasRole('ROLE_USER_MANAGER')")
    @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
    public void createUser (User user) throws RequiredFieldMissingException,
-      RootNotModifiableException, EmailNotSentException
+      RootNotModifiableException, EmailNotSentException, GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot create User.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot create User.");
+      }
       systemCreateUser(user);
    }
 
@@ -253,8 +259,13 @@ public class UserService extends WebService
    @Transactional(readOnly=false)
    @CacheEvict(value = "userByName", key = "#user?.getUsername().toLowerCase()")
    public void systemCreateUser(User user) throws RequiredFieldMissingException,
-      RootNotModifiableException, EmailNotSentException
+      RootNotModifiableException, EmailNotSentException, GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot create User.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot create User.");
+      }
       checkRequiredFields(user);
       checkRoot(user);
       userDao.create(user);
@@ -270,9 +281,24 @@ public class UserService extends WebService
    @CacheEvict(value = "userByName", key = "#user?.getUsername().toLowerCase()")
    public User systemCreateSSOUser(User user)
    {
-      return userDao.createWithoutMail(user);
+      return userDao.create(user);
    }
-
+   
+   /**
+    * Update given user provided by the SSO service.
+    *
+    * @param user to create
+    * @return created user
+    */
+   @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
+   @Caching(evict = {
+      @CacheEvict(value = "user", key = "#user?.getUUID ()"),
+      @CacheEvict(value = "userByName", key = "#user?.username.toLowerCase()")})
+   public void systemUpdateSSOUser(User user)
+   {
+      userDao.update(user);
+   }
+   
    /**
     * Create given User as temporary User, after checking required fields.
     * 
@@ -282,8 +308,13 @@ public class UserService extends WebService
     */
    @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
    public void createTmpUser (User user) throws RequiredFieldMissingException,
-      RootNotModifiableException, EmailNotSentException
+      RootNotModifiableException, EmailNotSentException, GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot create User.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot create User.");
+      }
       checkRequiredFields (user);
       checkRoot (user);
       userDao.createTmpUser (user);
@@ -296,8 +327,13 @@ public class UserService extends WebService
    }
 
    @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
-   public void validateTmpUser (String code)
+   public void validateTmpUser (String code) throws GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot validate User account.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot validate User account.");
+      }
       User u = userDao.getUserFromUserCode (code);
       if (u != null && userDao.isTmpUser (u))
       {
@@ -331,8 +367,13 @@ public class UserService extends WebService
    }
 
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public boolean checkUserCodeForPasswordReset(String code)
+   public boolean checkUserCodeForPasswordReset(String code) throws GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS.");
+      }
       return userDao.getUserFromUserCode (code) != null;
    }
 
@@ -342,8 +383,14 @@ public class UserService extends WebService
       @CacheEvict(value = "userByName", allEntries = true)})
    public void resetPassword(String code, String new_password)
       throws RootNotModifiableException, RequiredFieldMissingException, 
-         EmailNotSentException
+         EmailNotSentException, GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot reset password.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot reset password.");
+      }
+      
       User u = userDao.getUserFromUserCode (code);
       if (u == null)
       {
@@ -370,68 +417,72 @@ public class UserService extends WebService
       @CacheEvict(value = "user", key = "#user?.getUUID ()"),
       @CacheEvict(value = "userByName", key = "#user?.username.toLowerCase()")})
    public void updateUser (User user) throws RootNotModifiableException,
-      RequiredFieldMissingException
+      RequiredFieldMissingException, GDPREnabledException
    {
-      User u = userDao.read (user.getUUID ());
-      boolean updateRoles = user.getRoles ().size () != u.getRoles ().size ();
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn("GDPR enabled. User management not done by DHuS. Cannot update User.");
+         throw new GDPREnabledException("GDPR enabled. User management not done by DHuS. Cannot update User.");
+      }
+      User u = userDao.read(user.getUUID());
+      boolean updateRoles = user.getRoles().size() != u.getRoles().size();
       if (!updateRoles)
       {
          int roleFound = 0;
-         for (Role r : u.getRoles ())
+         for (Role r : u.getRoles())
          {
-            if (user.getRoles ().contains (r))
+            if (user.getRoles().contains(r))
             {
                roleFound++;
             }
          }
-         updateRoles = roleFound != user.getRoles ().size ();
+         updateRoles = roleFound != user.getRoles().size();
       }
-      checkRoot (u);
-      u.setUsername (user.getUsername ());
-      u.setFirstname (user.getFirstname ());
-      u.setLastname (user.getLastname ());
-      u.setAddress (user.getAddress ());
-      u.setCountry (user.getCountry ());
-      u.setEmail (user.getEmail ());
-      u.setPhone (user.getPhone ());
-      u.setRoles (user.getRoles ());
-      u.setUsage (user.getUsage ());
-      u.setSubUsage (user.getSubUsage ());
-      u.setDomain (user.getDomain ());
-      u.setSubDomain (user.getSubDomain ());
+      checkRoot(u);
+      u.setRoles(user.getRoles());
+      u.setUsername(user.getUsername());
+      u.setFirstname(user.getFirstname());
+      u.setLastname(user.getLastname());
+      u.setAddress(user.getAddress());
+      u.setCountry(user.getCountry());
+      u.setEmail(user.getEmail());
+      u.setPhone(user.getPhone());
+      u.setUsage(user.getUsage());
+      u.setSubUsage(user.getSubUsage());
+      u.setDomain(user.getDomain());
+      u.setSubDomain(user.getSubDomain());
+      
       if (user.getPassword() != null)
       {
          // If password is null, it means client forgot to set it up.
          // it should never been set to null.
-         u.setEncryptedPassword(user.getPassword(),
-            user.getPasswordEncryption());
+         u.setEncryptedPassword(user.getPassword(), user.getPasswordEncryption());
       }
 
-      Set<AccessRestriction> restrictions = user.getRestrictions ();
-      Set<AccessRestriction> restrictionsToDelete = u.getRestrictions ();
-      if (u.getRestrictions () != null && user.getRestrictions () != null)
+      Set<AccessRestriction> restrictions = user.getRestrictions();
+      Set<AccessRestriction> restrictionsToDelete = u.getRestrictions();
+      if (u.getRestrictions() != null && user.getRestrictions() != null)
       {
-         for (AccessRestriction oldOne : u.getRestrictions ())
+         for (AccessRestriction oldOne : u.getRestrictions())
          {
-            for (AccessRestriction newOne : user.getRestrictions ())
+            for (AccessRestriction newOne : user.getRestrictions())
             {
-               if (oldOne.getBlockingReason ().equals (
-                  newOne.getBlockingReason ()))
+               if (oldOne.getBlockingReason().equals(newOne.getBlockingReason()))
                {
-                  restrictions.remove (newOne);
-                  restrictions.add (oldOne);
-                  restrictionsToDelete.remove (oldOne);
+                  restrictions.remove(newOne);
+                  restrictions.add(oldOne);
+                  restrictionsToDelete.remove(oldOne);
                }
                continue;
             }
          }
       }
 
-      u.setRestrictions (restrictions);
-      checkRequiredFields (u);
-      userDao.update (u);
+      u.setRestrictions(restrictions);
+      checkRequiredFields(u);
+      userDao.update(u);
 
-      if ((restrictions != null && !restrictions.isEmpty ()) || updateRoles)
+      if ((restrictions != null && !restrictions.isEmpty()) || updateRoles)
       {
          securityContextProvider.forceLogout(u.getUsername());
       }
@@ -440,52 +491,59 @@ public class UserService extends WebService
       {
          for (AccessRestriction restriction : restrictionsToDelete)
          {
-            accessRestrictionDao.delete (restriction);
+            accessRestrictionDao.delete(restriction);
          }
       }
 
       // Fix to mail user when admin updates his account
       // Temp : to move in mail class after
-       LOGGER.debug("User " + u.getUsername () + 
-       " Updated.");
+      LOGGER.debug("User " + u.getUsername() + " Updated.");
+      sendUpdateMail(u);
+   }
+   
+   private void sendUpdateMail(User u)
+   {
+      if(cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. Cannot send emails.");
+         return;
+      }
+      if (cfgManager.getMailConfiguration ().isOnUserUpdate ())
+      {
+         String email = u.getEmail ();
+         // Do not send mail to system admin : never used
+         if (cfgManager.getAdministratorConfiguration ().getName ()
+               .equals (u.getUsername ()) && (email==null))
+            email = "dhus@gael.fr";
 
-       if (cfgManager.getMailConfiguration ().isOnUserUpdate ())
-       {
-          String email = u.getEmail ();
-          // Do not send mail to system admin : never used
-          if (cfgManager.getAdministratorConfiguration ().getName ()
-                .equals (u.getUsername ()) && (email==null))
-             email = "dhus@gael.fr";
+         LOGGER.debug("Sending email to " + email);
+         if (email == null)
+            throw new UnsupportedOperationException (
+               "Missing Email in configuration: " +
+                "Cannot inform modified user \"" + u.getUsername () + ".");
 
-          LOGGER.debug("Sending email to " + email);
-          if (email == null)
-             throw new UnsupportedOperationException (
-                "Missing Email in configuration: " +
-                 "Cannot inform modified user \"" + u.getUsername () + ".");
-
-          String message = new String (
-             "Dear " + getUserWelcome (u) + ",\n\nYour account on " +
-             cfgManager.getNameConfiguration ().getShortName () +
-             " has been updated by an administrator:\n" + u.toString () + "\n" +
-             "For help requests please write to: " +
-             cfgManager.getSupportConfiguration ().getMail () + "\n\n"+
-             "Kind regards,\n" +
-             cfgManager.getSupportConfiguration ().getName () + ".\n" +
-             cfgManager.getServerConfiguration ().getExternalUrl ());
-          String subject = new String ("Account " + u.getUsername () +
-                " updated");
-          try
-          {
-             mailer.send  (email, null, null, subject, message);
-          }
-          catch (Exception e)
-          {
-             throw new EmailNotSentException (
-                "Cannot send email to " + email, e);
-          }
-          LOGGER.debug("email sent.");
-       }
-
+         String message = new String (
+            "Dear " + getUserWelcome (u) + ",\n\nYour account on " +
+            cfgManager.getNameConfiguration ().getShortName () +
+            " has been updated by an administrator:\n" + u.toString () + "\n" +
+            "For help requests please write to: " +
+            cfgManager.getSupportConfiguration ().getMail () + "\n\n"+
+            "Kind regards,\n" +
+            cfgManager.getSupportConfiguration ().getName () + ".\n" +
+            cfgManager.getServerConfiguration ().getExternalUrl ());
+         String subject = new String ("Account " + u.getUsername () +
+               " updated");
+         try
+         {
+            mailer.send  (email, null, null, subject, message);
+         }
+         catch (Exception e)
+         {
+            throw new EmailNotSentException (
+               "Cannot send email to " + email, e);
+         }
+         LOGGER.debug("email sent.");
+      }
    }
 
    /**
@@ -496,8 +554,13 @@ public class UserService extends WebService
     */
    @Transactional(readOnly=false)
    public void systemUpdateUser(User user) throws RootNotModifiableException,
-         RequiredFieldMissingException
+         RequiredFieldMissingException, GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot update User.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot update User.");
+      }
       checkRoot (user);
       userDao.update(user); // FIXME reproduce updateUser()?
    }
@@ -514,8 +577,13 @@ public class UserService extends WebService
       @CacheEvict(value = "user", allEntries = true),
       @CacheEvict(value = "userByName", allEntries = true)})
    public void deleteUser (String uuid) throws RootNotModifiableException,
-      EmailNotSentException
+      EmailNotSentException, GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot delete User.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot delete User.");
+      }
       User u = userDao.read (uuid);
       checkRoot (u);
       securityContextProvider.forceLogout(u.getUsername());
@@ -562,8 +630,13 @@ public class UserService extends WebService
       @CacheEvict(value = "user", key = "#user.getUUID ()"),
       @CacheEvict(value = "userByName", key = "#user.username.toLowerCase()")})
    public void selfUpdateUser (User user) throws RootNotModifiableException,
-      RequiredFieldMissingException, EmailNotSentException
+      RequiredFieldMissingException, EmailNotSentException, GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot update User.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot update User.");
+      }
       User u = userDao.read (user.getUUID ());
       checkRoot (u);
       u.setEmail (user.getEmail ());
@@ -589,8 +662,13 @@ public class UserService extends WebService
    public void selfChangePassword (String uuid, String old_password,
          String new_password) throws RootNotModifiableException,
          RequiredFieldMissingException, EmailNotSentException,
-         UserBadOldPasswordException
+         UserBadOldPasswordException, GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot update User.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot update User.");
+      }
       User u = userDao.read (uuid);
       checkRoot (u);
 
@@ -626,7 +704,7 @@ public class UserService extends WebService
 
    @PreAuthorize ("hasRole('ROLE_SEARCH')")
    @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
-   public void storeUserSearch (String uuid, String search, String footprint,
+   public Search storeUserSearch (String uuid, String search, String footprint,
          HashMap<String, String> advanced, String complete)
    {
       User u = userDao.read (uuid);
@@ -638,16 +716,21 @@ public class UserService extends WebService
       {
          if (s.getComplete ().equals(complete))
          {
-            return;
+            return null;
          }            
       }
-      userDao.storeUserSearch (u, search, footprint, advanced, complete);
+      return userDao.storeUserSearch (u, search, footprint, advanced, complete);
    }
 
    @PreAuthorize ("hasRole('ROLE_SEARCH')")
    @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
    public void removeUserSearch (String u_uuid, String uuid)
    {
+      Search s = searchDao.read(uuid);
+      if (s == null)
+      {
+         throw new SearchNotExistingException ("Search '"+uuid+"' does not exist.");
+      }
       User u = userDao.read (u_uuid);
       if (u == null)
       {
@@ -658,8 +741,13 @@ public class UserService extends WebService
 
    @PreAuthorize ("hasRole('ROLE_SEARCH')")
    @Transactional (readOnly=false, propagation=Propagation.REQUIRED)
-   public void activateUserSearchNotification (String uuid, boolean notify)
+   public void activateUserSearchNotification (String uuid, boolean notify) throws GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot send search results by mail.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot send search results by mail.");
+      }
       userDao.activateUserSearchNotification (uuid, notify);
    }
 
@@ -721,8 +809,13 @@ public class UserService extends WebService
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    public void forgotPassword (User user, String baseuri) 
       throws UserNotExistingException, RootNotModifiableException,
-         EmailNotSentException
+         EmailNotSentException, GDPREnabledException
    {
+      if(cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot reset password.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot reset password.");
+      }
       checkRoot (user);
       User checked = userDao.getByName (user.getUsername ());
       if (checked == null || !checked.getEmail ().toLowerCase ().
@@ -759,6 +852,11 @@ public class UserService extends WebService
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    private void checkRoot (User user) throws RootNotModifiableException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         // no root user with GDPR;
+         return;
+      }
       if (user == null) return;
       if (userDao.isRootUser (user))
       {
@@ -771,11 +869,13 @@ public class UserService extends WebService
       throws RequiredFieldMissingException, UsernameBadCharacterException,
       MalformedEmailException
    {
+      //FIXME: Update condition for GDPR activation
       if (user.getUsername () == null ||
          user.getUsername ().trim ().isEmpty () ||
          user.getPassword () == null ||
-         user.getPassword ().trim ().isEmpty () || user.getEmail () == null ||
-         user.getEmail ().trim ().isEmpty ())
+         user.getPassword ().trim ().isEmpty () || 
+         (!cfgManager.isGDPREnabled() && (user.getEmail () == null ||
+         user.getEmail ().trim ().isEmpty ())))
       {
          throw new RequiredFieldMissingException (
             "At least one required field is empty.");
@@ -797,13 +897,13 @@ public class UserService extends WebService
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
    private String getUserWelcome (User u)
    {
-      String firstname = u.getUsername ();
+      String firstname = u.getUsername();
       String lastname = "";
-      if (u.getFirstname () != null && !u.getFirstname().trim ().isEmpty ())
+      if (u.getFirstname() != null && !u.getFirstname().trim().isEmpty())
       {
-         firstname = u.getFirstname ();
-         if (u.getLastname () != null && !u.getLastname().trim ().isEmpty ())
-            lastname = " " + u.getLastname ();
+         firstname = u.getFirstname();
+         if (u.getLastname() != null && !u.getLastname().trim().isEmpty())
+            lastname = " " + u.getLastname();
       }
       return firstname + lastname;
    }
@@ -816,11 +916,11 @@ public class UserService extends WebService
 
    @PreAuthorize ("isAuthenticated ()")
    @Transactional (readOnly=true, propagation=Propagation.REQUIRED)
-   public User getCurrentUserInformation () throws RootNotModifiableException
+   public User getCurrentUserInformation ()
    {
       User u = securityService.getCurrentUser ();
       if (u == null) return null;
-      return getUserByName(u.getUUID ());
+      return getUserNoCheck(u.getUsername());
    }
 
    /**
@@ -928,12 +1028,19 @@ public class UserService extends WebService
       @CacheEvict(value = "user", key = "#user?.getUUID()"),
       @CacheEvict(value = "userByName", key = "#user?.username.toLowerCase()")
    })
-   public void lockUser(User user, String reason) throws RootNotModifiableException, UserNotExistingException
+   public LockedAccessRestriction lockUser(User user, String reason) throws RootNotModifiableException, UserNotExistingException, GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot lock User.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot lock User.");
+      }
       LockedAccessRestriction accessRestriction = new LockedAccessRestriction();
       accessRestriction.setBlockingReason(reason);
       user.addRestriction(accessRestriction);
       userDao.update(user);
+      sendUpdateMail(user);
+      return accessRestriction;
    }
 
    @PreAuthorize("hasRole('ROLE_USER_MANAGER')")
@@ -943,8 +1050,13 @@ public class UserService extends WebService
       @CacheEvict(value = "user", key = "#user?.getUUID()"),
       @CacheEvict(value = "userByName", key = "#user?.username.toLowerCase()")
    })
-   public boolean unlockUser(User user, String restrictionUUID) throws RootNotModifiableException, UserNotExistingException
+   public boolean unlockUser(User user, String restrictionUUID) throws RootNotModifiableException, UserNotExistingException, GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot unlock User.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. Cannot unlock User.");
+      }
       AccessRestriction toRemove = null;
       for (AccessRestriction accessRestriction: user.getRestrictions())
       {
@@ -961,6 +1073,7 @@ public class UserService extends WebService
       user.getRestrictions().remove(toRemove);
       userDao.update(user);
       accessRestrictionDao.delete(toRemove);
+      sendUpdateMail(user);
       return true;
    }
 
@@ -970,6 +1083,11 @@ public class UserService extends WebService
    @Transactional
    public void systemCreateOrUpdateRootAccount()
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.info ("GDPR enabled. User management not done by DHuS. No need to create 'root' user.");
+         return;
+      }
       // Root account
       AdministratorConfiguration cfg = cfgManager.getAdministratorConfiguration();
       User rootUser = userDao.getByName(cfg.getName());

@@ -19,17 +19,6 @@
  */
 package fr.gael.dhus.service;
 
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
-
-import fr.gael.dhus.database.dao.ProductDao;
-import fr.gael.dhus.database.object.MetadataIndex;
-import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.datastore.exception.DataStoreException;
-import fr.gael.dhus.olingo.v1.visitor.ProductSQLVisitor;
-import fr.gael.dhus.spring.cache.AddProduct;
-import fr.gael.dhus.spring.cache.RemoveProduct;
-
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
@@ -40,18 +29,14 @@ import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.apache.olingo.server.api.ODataApplicationException;
-
 import org.dhus.metrics.Utils;
 import org.dhus.olingo.v2.visitor.SQLVisitorParameter;
 import org.dhus.store.LoggableProduct;
 import org.dhus.store.datastore.ProductNotFoundException;
-
 import org.hibernate.Hibernate;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Restrictions;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -59,6 +44,18 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
+
+import fr.gael.dhus.database.dao.PagedIterator;
+import fr.gael.dhus.database.dao.ProductDao;
+import fr.gael.dhus.database.object.MetadataIndex;
+import fr.gael.dhus.database.object.Product;
+import fr.gael.dhus.datastore.exception.DataStoreException;
+import fr.gael.dhus.olingo.v1.visitor.ProductSQLVisitor;
+import fr.gael.dhus.spring.cache.AddProduct;
+import fr.gael.dhus.spring.cache.RemoveProduct;
 
 /**
  * Product Service provides connected clients with a set of method
@@ -212,6 +209,26 @@ public class ProductService extends WebService
             visitor.getHqlParameters(), collectionUuid, visitor.getSkip(), visitor.getTop());
    }
 
+   /**
+    * Returns an iterator over result products. Results are paginated.
+    *
+    * @param visitor : OData expression visitor
+    * @return Iterator over results
+    * @throws ODataApplicationException
+    */
+   @Transactional(readOnly = true)
+   public PagedIterator<Product> getProducts(org.dhus.olingo.v2.visitor.ProductSQLVisitor visitor)
+         throws ODataApplicationException
+   {
+      String hql = prepareHQLQuery(visitor.getHqlPrefix(), visitor.getHqlFilter(), visitor.getHqlOrder(), null);
+      if (hql == null)
+      {
+         Collections.emptyIterator();
+      }
+
+      return productDao.executeHQLQueryAndIterate(hql, visitor.getHqlParameters(), visitor.getSkip(), visitor.getTop());
+   }
+
    private List<Product> internalGetProducts(String hqlPrefix, String hqlFilter, String hqlOrder,
          List<SQLVisitorParameter> hqlParameters, String collectionUuid, int skip, int top)
    {
@@ -241,7 +258,7 @@ public class ProductService extends WebService
     * @return a list of String UUIDs
     */
    @Transactional(readOnly = true)
-   public List<LoggableProduct> getProductUUIDs(ProductSQLVisitor visitor, String collectionName, int skip, int top)
+   public List<LoggableProduct> getProductUUIDs(ProductSQLVisitor visitor, String collectionName, boolean safe, int skip, int top)
    {
       String collectionUUID = collectionService.getCollectionUUIDByName(collectionName);
       // No collection exist for given collection name, return an empty list
@@ -257,7 +274,23 @@ public class ProductService extends WebService
          return Collections.<LoggableProduct>emptyList();
       }
 
-      String hql = prepareHQLQuery(visitor.getHqlPrefix(), visitor.getHqlFilter(), visitor.getHqlOrder(), collectionUUID);
+     
+      String filter= visitor.getHqlFilter();
+      
+      if (safe)
+      {
+         if (filter == null)
+         {
+            filter = "";
+         }
+         else
+         {
+            filter += " and ";
+         }
+         filter += " ((SELECT COUNT(*) FROM fr.gael.dhus.database.object.KeyStoreEntry WHERE ENTRYKEY = UUID AND TAG='unaltered') > 1 )";
+      }
+      
+      String hql = prepareHQLQuery(visitor.getHqlPrefix(), filter, visitor.getHqlOrder(), collectionUUID);
       if (hql == null)
       {
          return Collections.emptyList();

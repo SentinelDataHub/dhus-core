@@ -37,17 +37,22 @@ import fr.gael.dhus.olingo.v1.map.impl.UserCartMap;
 import fr.gael.dhus.service.ProductCartService;
 import fr.gael.dhus.service.ProductService;
 import fr.gael.dhus.service.UserService;
+import fr.gael.dhus.service.exception.GDPREnabledException;
 import fr.gael.dhus.service.exception.RequiredFieldMissingException;
 import fr.gael.dhus.service.exception.RootNotModifiableException;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.system.config.ConfigurationManager;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.StringTokenizer;
 
+import org.apache.olingo.commons.api.http.HttpStatusCode;
+import org.apache.olingo.odata2.api.commons.HttpStatusCodes;
 import org.apache.olingo.odata2.api.edm.Edm;
 import org.apache.olingo.odata2.api.edm.EdmEntitySet;
 import org.apache.olingo.odata2.api.ep.entry.ODataEntry;
@@ -59,6 +64,7 @@ import org.apache.olingo.odata2.api.uri.PathSegment;
 import org.apache.olingo.odata2.api.uri.UriInfo;
 import org.apache.olingo.odata2.api.uri.UriParser;
 import org.apache.olingo.odata2.api.uri.info.DeleteUriInfo;
+import org.apache.olingo.server.api.ODataApplicationException;
 
 /**
  * User Bean. A user on the DHuS.
@@ -75,6 +81,9 @@ public class User extends AbstractEntity
 
    private static final UserService USER_SERVICE =
          ApplicationContextProvider.getBean (UserService.class);
+   
+   private static ConfigurationManager CONFIG_MANAGER = 
+         ApplicationContextProvider.getBean(ConfigurationManager.class);
 
    protected final fr.gael.dhus.database.object.User user;
 
@@ -226,6 +235,10 @@ public class User extends AbstractEntity
       {
          USER_SERVICE.createUser(user);
       }
+      catch (GDPREnabledException ex)
+      {
+         throw new ExpectedException(ex.getMessage(), HttpStatusCodes.BAD_REQUEST);
+      }
       catch (RootNotModifiableException ex)
       {
          throw new ExpectedException("Root user cannot be updated");
@@ -287,21 +300,25 @@ public class User extends AbstractEntity
    @Override
    public Map<String, Object> toEntityResponse (String root_url)
    {
-      Map<String, Object> res = new HashMap<> ();
-      res.put (UserEntitySet.USERNAME, user.getUsername ());
-      res.put (UserEntitySet.EMAIL, user.getEmail ());
-      res.put (UserEntitySet.FIRSTNAME, user.getFirstname ());
-      res.put (UserEntitySet.LASTNAME, user.getLastname ());
-      res.put (UserEntitySet.COUNTRY, user.getCountry ());
-      res.put (UserEntitySet.PHONE, user.getPhone ());
-      res.put (UserEntitySet.ADDRESS, user.getAddress ());
-      res.put (UserEntitySet.DOMAIN, user.getDomain ());
-      res.put (UserEntitySet.SUBDOMAIN, user.getSubDomain ());
-      res.put (UserEntitySet.USAGE, user.getUsage ());
-      res.put (UserEntitySet.SUBUSAGE, user.getSubUsage ());
-      res.put(UserEntitySet.HASH, user.getPasswordEncryption().getAlgorithmKey());
-      res.put(UserEntitySet.PASSWORD, user.getPassword());
+      Map<String, Object> res = new HashMap<>();
+      res.put(UserEntitySet.USERNAME, user.getUsername());
       res.put(UserEntitySet.CREATED, user.getCreated());
+      
+      if (!CONFIG_MANAGER.isGDPREnabled())
+      {
+         res.put(UserEntitySet.HASH, user.getPasswordEncryption().getAlgorithmKey());
+         res.put(UserEntitySet.PASSWORD, user.getPassword());
+         res.put(UserEntitySet.EMAIL, user.getEmail());
+         res.put(UserEntitySet.FIRSTNAME, user.getFirstname());
+         res.put(UserEntitySet.LASTNAME, user.getLastname());
+         res.put(UserEntitySet.COUNTRY, user.getCountry());
+         res.put(UserEntitySet.PHONE, user.getPhone());
+         res.put(UserEntitySet.ADDRESS, user.getAddress());
+         res.put(UserEntitySet.DOMAIN, user.getDomain());
+         res.put(UserEntitySet.SUBDOMAIN, user.getSubDomain());
+         res.put(UserEntitySet.USAGE, user.getUsage());
+         res.put(UserEntitySet.SUBUSAGE, user.getSubUsage());
+      }
       return res;
    }
 
@@ -342,44 +359,47 @@ public class User extends AbstractEntity
    @Override
    public void updateFromEntry (ODataEntry entry) throws ODataException
    {
-      Map<String, Object> properties = entry.getProperties ();
+      Map<String, Object> properties = entry.getProperties();
 
+      if (CONFIG_MANAGER.isGDPREnabled())
+      {
+         throw new ODataException("GDPR enabled. User management not done by DHuS. Cannot update User.");
+      }
       // update email
-      String email = (String) properties.get (UserEntitySet.EMAIL);
-      if (email != null && !email.isEmpty ())
+      String email = (String) properties.get(UserEntitySet.EMAIL);
+      if (email != null && !email.isEmpty())
       {
          if (UserService.EMAIL_PATTERN.matcher(email).matches())
          {
-            this.user.setEmail (email);
+            this.user.setEmail(email);
          }
          else
          {
             throw new InvalidValueException(UserEntitySet.EMAIL, email);
          }
       }
-
       // update first name
-      String first_name = (String) properties.get (UserEntitySet.FIRSTNAME);
-      if (first_name != null && !first_name.isEmpty ())
+      String first_name = (String) properties.get(UserEntitySet.FIRSTNAME);
+      if (first_name != null && !first_name.isEmpty())
       {
-         this.user.setFirstname (first_name);
+         this.user.setFirstname(first_name);
       }
 
       // update last name
-      String last_name = (String) properties.get (UserEntitySet.LASTNAME);
-      if (last_name != null && !last_name.isEmpty ())
+      String last_name = (String) properties.get(UserEntitySet.LASTNAME);
+      if (last_name != null && !last_name.isEmpty())
       {
-         this.user.setLastname (last_name);
+         this.user.setLastname(last_name);
       }
 
       // update country
-      String country = (String) properties.get (UserEntitySet.COUNTRY);
-      if (country != null && !country.isEmpty ())
+      String country = (String) properties.get(UserEntitySet.COUNTRY);
+      if (country != null && !country.isEmpty())
       {
-         Country iso_country = USER_SERVICE.getCountry (country);
+         Country iso_country = USER_SERVICE.getCountry(country);
          if (iso_country != null)
          {
-            this.user.setCountry (iso_country.getName ());
+            this.user.setCountry(iso_country.getName());
          }
          else
          {
@@ -388,45 +408,45 @@ public class User extends AbstractEntity
       }
 
       // update phone
-      String phone = (String) properties.get (UserEntitySet.PHONE);
-      if (phone != null && !phone.isEmpty ())
+      String phone = (String) properties.get(UserEntitySet.PHONE);
+      if (phone != null && !phone.isEmpty())
       {
-         this.user.setPhone (phone);
+         this.user.setPhone(phone);
       }
 
       // update address
-      String address = (String) properties.get (UserEntitySet.ADDRESS);
-      if (address != null && !address.isEmpty ())
+      String address = (String) properties.get(UserEntitySet.ADDRESS);
+      if (address != null && !address.isEmpty())
       {
-         this.user.setAddress (address);
+         this.user.setAddress(address);
       }
 
       // update domain
-      String domain = (String) properties.get (UserEntitySet.DOMAIN);
-      if (domain != null && !domain.isEmpty ())
+      String domain = (String) properties.get(UserEntitySet.DOMAIN);
+      if (domain != null && !domain.isEmpty())
       {
-         this.user.setDomain (domain);
+         this.user.setDomain(domain);
       }
 
       // update sub-domain
-      String sub_domain = (String) properties.get (UserEntitySet.SUBDOMAIN);
-      if (sub_domain != null && !sub_domain.isEmpty ())
+      String sub_domain = (String) properties.get(UserEntitySet.SUBDOMAIN);
+      if (sub_domain != null && !sub_domain.isEmpty())
       {
-         this.user.setSubDomain (sub_domain);
+         this.user.setSubDomain(sub_domain);
       }
 
       // update usage
-      String usage = (String) properties.get (UserEntitySet.USAGE);
-      if (usage != null && !usage.isEmpty ())
+      String usage = (String) properties.get(UserEntitySet.USAGE);
+      if (usage != null && !usage.isEmpty())
       {
-         this.user.setUsage (usage);
+         this.user.setUsage(usage);
       }
 
       // update sub-usage
-      String sub_usage = (String) properties.get (UserEntitySet.SUBUSAGE);
-      if (sub_usage != null && !sub_usage.isEmpty ())
+      String sub_usage = (String) properties.get(UserEntitySet.SUBUSAGE);
+      if (sub_usage != null && !sub_usage.isEmpty())
       {
-         this.user.setSubUsage (sub_usage);
+         this.user.setSubUsage(sub_usage);
       }
 
       // update password
@@ -457,11 +477,16 @@ public class User extends AbstractEntity
       {
          if (Security.getCurrentUser().equals(this.user))
          {
-            USER_SERVICE.selfUpdateUser (this.user);
-         } else
-         {
-            USER_SERVICE.updateUser (this.user);
+            USER_SERVICE.selfUpdateUser(this.user);
          }
+         else
+         {
+            USER_SERVICE.updateUser(this.user);
+         }
+      }
+      catch (GDPREnabledException ex)
+      {
+         throw new ExpectedException(ex.getMessage(), HttpStatusCodes.BAD_REQUEST);
       }
       catch (RootNotModifiableException e)
       {
@@ -475,6 +500,10 @@ public class User extends AbstractEntity
 
    public static void delete(String username) throws ODataException
    {
+      if (CONFIG_MANAGER.isGDPREnabled())
+      {
+         throw new ODataException("GDPR enabled. User management not done by DHuS. Cannot delete User.");
+      }
       try
       {
          fr.gael.dhus.database.object.User user = USER_SERVICE.getUserByName(username);
@@ -482,6 +511,10 @@ public class User extends AbstractEntity
          {
             USER_SERVICE.deleteUser(user.getUUID());
          }
+      }
+      catch (GDPREnabledException ex)
+      {
+         throw new ExpectedException(ex.getMessage(), HttpStatusCodes.BAD_REQUEST);
       }
       catch (RootNotModifiableException e)
       {

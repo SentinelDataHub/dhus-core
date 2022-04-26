@@ -47,6 +47,7 @@ import org.dhus.store.StoreException;
 import org.dhus.store.StoreService;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.DataStoreProduct;
+import org.dhus.store.datastore.openstack.OpenStackProduct;
 import org.dhus.store.derived.DerivedProductStore;
 import org.dhus.store.derived.DerivedProductStoreService;
 
@@ -58,6 +59,7 @@ public class NodeDataHandler implements DataHandler
          ApplicationContextProvider.getBean(DerivedProductStoreService.class);
 
    private static final Logger LOGGER = LogManager.getLogger(NodeDataHandler.class);
+   private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
 
    @Override
    public EntityCollection getEntityCollectionData() throws ODataApplicationException
@@ -228,10 +230,16 @@ public class NodeDataHandler implements DataHandler
          if (product.hasImpl(DrbNode.class))
          {
             drbNode = product.getImpl(DrbNode.class);
-            if (DrbChildren.shouldODataUseFirstChild(product.getName(), drbNode))
+
+            if (product instanceof OpenStackProduct)
             {
-               // skip product zip node
-               drbNode = drbNode.getFirstChild();
+               OpenStackProduct openStackProduct = (OpenStackProduct) product;
+               String productName = openStackProduct.getRemoteName();
+               return getDrbNode(productName, drbNode);
+            }
+            else
+            {
+               return getDrbNode(product.getName(), drbNode);
             }
          }
       }
@@ -239,6 +247,16 @@ public class NodeDataHandler implements DataHandler
       {
          throw new ODataApplicationException("Product not available", HttpStatusCode.NOT_FOUND.getStatusCode(),
                Locale.ENGLISH);
+      }
+      return drbNode;
+   }
+
+   private DrbNode getDrbNode(String productName, DrbNode drbNode)
+   {
+      if (DrbChildren.shouldODataUseFirstChild(productName, drbNode))
+      {
+         // skip product zip node
+         return drbNode.getFirstChild();
       }
       return drbNode;
    }
@@ -251,9 +269,6 @@ public class NodeDataHandler implements DataHandler
          NodeEntity nodeEntity = (NodeEntity) entity;
          DrbNode drbNode = nodeEntity.getDrbNode();
 
-         // ContentType
-         String contentType = (String) entity.getProperty(ItemModel.PROPERTY_CONTENTTYPE).getValue();
-
          // ContentLength
          long contentLength = (long) entity.getProperty(ItemModel.PROPERTY_CONTENTLENGTH).getValue();
 
@@ -262,7 +277,7 @@ public class NodeDataHandler implements DataHandler
             MediaResponseBuilder.prepareMediaResponse(
                   null,
                   drbNode.getName(),
-                  contentType,
+                  DEFAULT_CONTENT_TYPE,
                   0,
                   contentLength,
                   request,

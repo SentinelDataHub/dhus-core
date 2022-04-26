@@ -20,6 +20,7 @@
 package org.dhus.store.metadatastore;
 
 import fr.gael.dhus.database.object.Collection;
+import fr.gael.dhus.database.object.MetadataIndex;
 import fr.gael.dhus.database.object.Product;
 import fr.gael.dhus.olingo.v1.ODataExpressionParser;
 import fr.gael.dhus.olingo.v1.visitor.ProductSQLVisitor;
@@ -109,7 +110,7 @@ public class RelationalMetadataStore implements MetadataStore
 
       // TODO add a condition here when offline product
       // synchronization becomes possible
-      product.setOnline(true);
+      product.setOnline(inProduct.isOnline());
 
       Product finalProduct = productService.addProduct(product);
 
@@ -138,10 +139,12 @@ public class RelationalMetadataStore implements MetadataStore
    {
       LOGGER.debug("Repairing database entry for product {}", inProduct.getUuid());
 
+		List<MetadataIndex> mdi = inProduct.getMetadataIndexes();
+
       Product product = productService.repairProduct(
             inProduct.getUuid(),
             inProduct.getItemClass(),
-            inProduct.getMetadataIndexes(),
+            mdi,
             inProduct.getFootprint());
 
       List<String> collectionNames = collectionService.getCollections(product)
@@ -184,13 +187,13 @@ public class RelationalMetadataStore implements MetadataStore
       productService.deleteByUuid(uuid, storeAsDeleted, cause);
    }
 
-   public List<LoggableProduct> getProductUUIDs(String filter, String orderBy, String collectionName, int skip, int top)
+   public List<LoggableProduct> getProductUUIDs(String filter, String orderBy, String collectionName, boolean safe, int skip, int top)
          throws StoreException
    {
-      return internalGetProductUUIDs(filter, orderBy, collectionName, skip, top);
+      return internalGetProductUUIDs(filter, orderBy, collectionName, safe, skip, top);
    }
 
-   public List<LoggableProduct> getOnlineProductUUIDs(String filter, String orderBy, String collectionName, int skip, int top)
+   public List<LoggableProduct> getOnlineProductUUIDs(String filter, String orderBy, String collectionName, boolean safe, int skip, int top)
          throws StoreException
    {
       String newFilter;
@@ -202,11 +205,11 @@ public class RelationalMetadataStore implements MetadataStore
       {
          newFilter = filter + " and Online eq true";
       }
-      return internalGetProductUUIDs(newFilter, orderBy, collectionName, skip, top);
+      return internalGetProductUUIDs(newFilter, orderBy, collectionName, safe, skip, top);
    }
 
    public List<LoggableProduct> getProductUUIDsWithin(String filter, String orderBy,
-         String collectionName, List<String> dataStoreProductUUIDs) throws StoreException
+         String collectionName, boolean safe, List<String> dataStoreProductUUIDs) throws StoreException
    {
       if (dataStoreProductUUIDs.isEmpty())
       {
@@ -231,16 +234,16 @@ public class RelationalMetadataStore implements MetadataStore
       // add list to the filter
       filter += "(" + quotedUuidsWithCommas + ")";
 
-      return internalGetProductUUIDs(filter, orderBy, collectionName, 0, Integer.MAX_VALUE);
+      return internalGetProductUUIDs(filter, orderBy, collectionName, safe, 0, Integer.MAX_VALUE);
    }
 
-   private List<LoggableProduct> internalGetProductUUIDs(String filter, String orderBy, String collectionName, int skip, int top)
+   private List<LoggableProduct> internalGetProductUUIDs(String filter, String orderBy, String collectionName, boolean safe, int skip, int top)
          throws StoreException
    {
       try
       {
          ODataExpressionParser productExpressionParser = ODataExpressionParser.getProductExpressionParser();
-
+         
          FilterExpression filterExpression = null;
          if (filter != null)
          {
@@ -254,7 +257,7 @@ public class RelationalMetadataStore implements MetadataStore
          }
 
          ProductSQLVisitor visitor = new ProductSQLVisitor(filterExpression, orderByExpression);
-         return productService.getProductUUIDs(visitor, collectionName, skip, top);
+         return productService.getProductUUIDs(visitor, collectionName, safe, skip, top);
       }
       catch (ODataApplicationException | ODataMessageException e)
       {

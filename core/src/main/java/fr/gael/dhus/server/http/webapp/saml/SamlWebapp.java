@@ -19,8 +19,10 @@
  */
 package fr.gael.dhus.server.http.webapp.saml;
 
+import fr.gael.dhus.DHuS;
 import fr.gael.dhus.server.http.webapp.WebApp;
 import fr.gael.dhus.server.http.webapp.WebApplication;
+import fr.gael.dhus.system.config.ConfigurationManager;
 
 import java.io.File;
 import java.io.IOException;
@@ -30,7 +32,7 @@ import java.net.URL;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -39,6 +41,9 @@ public class SamlWebapp extends WebApplication
 {
    private static final Logger LOGGER = LogManager.getLogger(SamlWebapp.class);
 
+   @Autowired
+   private ConfigurationManager cfgManager;
+   
    @Override
    public void configure(String dest_folder) throws IOException
    {
@@ -62,6 +67,13 @@ public class SamlWebapp extends WebApplication
       if (idPName == null || idPName.isEmpty())
       {
          LOGGER.warn("SamlWebapp can not be started as the 'dhus.saml.idp.name' is missing.");
+
+         // if GDPR is enabled, stop DHuS start as SSO is required.
+         if (cfgManager.isGDPREnabled())
+         {
+             LOGGER.error ("GDPR enabled without valid SSO configuration. DHuS cannot start.");
+             DHuS.stop(2);
+         }
          return false;
       }
 
@@ -76,10 +88,22 @@ public class SamlWebapp extends WebApplication
       catch (MalformedURLException e)
       {
          LOGGER.warn("SamlWebapp can not be started as the 'dhus.saml.idp.url' is not well formed.");
+         // if GDPR is enabled, stop DHuS start as SSO is required.
+         if (cfgManager.isGDPREnabled())
+         {
+             LOGGER.error ("GDPR enabled without valid SSO configuration. DHuS cannot start.");
+             DHuS.stop(2);
+         }
          return false;
       }
       if ((idpF == null || !idpF.exists()) && idpU == null)
       {
+         // if GDPR is enabled, stop DHuS start as SSO is required.
+         if (cfgManager.isGDPREnabled())
+         {
+             LOGGER.error ("GDPR enabled without valid SSO configuration. DHuS cannot start.");
+             DHuS.stop(2);
+         }
          LOGGER.warn("SamlWebapp can not be started as the metadata place is not defined (dhus.saml.idp.file/url).");
          return false;
       }
@@ -88,6 +112,12 @@ public class SamlWebapp extends WebApplication
       if (spId == null || spId.isEmpty())
       {
          LOGGER.warn("SamlWebapp can not be started as the 'dhus.saml.sp.id' is missing.");
+         // if GDPR is enabled, stop DHuS start as SSO is required.
+         if (cfgManager.isGDPREnabled())
+         {
+             LOGGER.error ("GDPR enabled without valid SSO configuration. DHuS cannot start.");
+             DHuS.stop(2);
+         }
          return false;
       }
 
@@ -96,6 +126,12 @@ public class SamlWebapp extends WebApplication
       if (ksF == null || !ksF.exists())
       {
          LOGGER.warn("SamlWebapp can not be started as the 'dhus.saml.keystore.file' is missing.");
+         // if GDPR is enabled, stop DHuS start as SSO is required.
+         if (cfgManager.isGDPREnabled())
+         {
+             LOGGER.error ("GDPR enabled without valid SSO configuration. DHuS cannot start.");
+             DHuS.stop(2);
+         }
          return false;
       }
 
@@ -103,6 +139,12 @@ public class SamlWebapp extends WebApplication
       if (keystorePass == null || keystorePass.isEmpty())
       {
          LOGGER.warn("SamlWebapp can not be started as the 'dhus.saml.keystore.storePass' is missing.");
+         // if GDPR is enabled, stop DHuS start as SSO is required.
+         if (cfgManager.isGDPREnabled())
+         {
+             LOGGER.error ("GDPR enabled without valid SSO configuration. DHuS cannot start.");
+             DHuS.stop(2);
+         }
          return false;
       }
 
@@ -110,6 +152,12 @@ public class SamlWebapp extends WebApplication
       if (keystoreDef == null || keystoreDef.isEmpty())
       {
          LOGGER.warn("SamlWebapp can not be started as the 'dhus.saml.keystore.defaultKey' is missing.");
+         // if GDPR is enabled, stop DHuS start as SSO is required.
+         if (cfgManager.isGDPREnabled())
+         {
+             LOGGER.error ("GDPR enabled without valid SSO configuration. DHuS cannot start.");
+             DHuS.stop(2);
+         }
          return false;
       }
 
@@ -117,6 +165,12 @@ public class SamlWebapp extends WebApplication
       if (keystoreDefPass == null || keystoreDefPass.isEmpty())
       {
          LOGGER.warn("SamlWebapp can not be started as the 'dhus.saml.keystore.defaultPassword' is missing.");
+         // if GDPR is enabled, stop DHuS start as SSO is required.
+         if (cfgManager.isGDPREnabled())
+         {
+             LOGGER.error ("GDPR enabled without valid SSO configuration. DHuS cannot start.");
+             DHuS.stop(2);
+         }
          return false;
       }
 

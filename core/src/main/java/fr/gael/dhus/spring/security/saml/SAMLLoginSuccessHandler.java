@@ -19,17 +19,21 @@
  */
 package fr.gael.dhus.spring.security.saml;
 
-import fr.gael.dhus.spring.security.handler.LoginSuccessHandler;
-
 import java.io.IOException;
+
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
+import org.springframework.security.web.savedrequest.SavedRequest;
 import org.springframework.stereotype.Component;
+
+import fr.gael.dhus.spring.security.filter.GDPRAuthFilter;
+import fr.gael.dhus.spring.security.handler.LoginSuccessHandler;
 
 @Component(value = "samlLoginSuccessHandler")
 public class SAMLLoginSuccessHandler extends SavedRequestAwareAuthenticationSuccessHandler
@@ -37,6 +41,9 @@ public class SAMLLoginSuccessHandler extends SavedRequestAwareAuthenticationSucc
    @Autowired
    private LoginSuccessHandler loginSuccessHandler;
 
+   @Autowired 
+   private SAMLSavedRequestCache requestCache;
+   
    @Override
    public void onAuthenticationSuccess(HttpServletRequest request,
          HttpServletResponse response, Authentication authentication)
@@ -44,6 +51,28 @@ public class SAMLLoginSuccessHandler extends SavedRequestAwareAuthenticationSucc
    {
       // Call same loginSuccessHandler as default case to set same cookies
       loginSuccessHandler.onAuthenticationSuccess(request, response, authentication);
-      super.onAuthenticationSuccess(request, response, authentication);
+
+      HttpSession session = request.getSession(false);
+      
+      if (session == null)
+      {
+         super.onAuthenticationSuccess(request, response, authentication);
+         return;
+      }
+      
+      SavedRequest savedRequest = requestCache.load(session.getId());
+      requestCache.remove(session.getId());
+
+      if (savedRequest == null) 
+      {
+         super.onAuthenticationSuccess(request, response, authentication);
+         return;
+      }
+
+      clearAuthenticationAttributes(request);
+
+      // Use the DefaultSavedRequest URL
+      String targetUrl = savedRequest.getRedirectUrl();
+      getRedirectStrategy().sendRedirect(request, response, targetUrl);
    }
 }

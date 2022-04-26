@@ -28,6 +28,8 @@ import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.spring.context.SecurityContextProvider;
 import fr.gael.dhus.spring.security.CookieKey;
 import fr.gael.dhus.spring.security.authentication.ProxyWebAuthenticationDetails;
+import fr.gael.dhus.spring.security.saml.SAMLUtil;
+import fr.gael.dhus.system.config.ConfigurationManager;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -65,6 +67,8 @@ public class AccessValve extends ValveBase
    private static final SecurityContextProvider SEC_CTX_PROVIDER =
          ApplicationContextProvider.getBean(SecurityContextProvider.class);
 
+   private static final ConfigurationManager cfg =
+         ApplicationContextProvider.getBean(ConfigurationManager.class);
    /**
     * Filter pattern is passed as Tomcat parameter.
     * It allows to focus on a specific path: i.e "^.*(/odata/v1/).*$"(odata only)
@@ -156,6 +160,14 @@ public class AccessValve extends ValveBase
             // Log of the pending request command.
             if (isUseLogger()) LOGGER.info ("Access " + ai);
 
+            // in case of GDPR + external_path (e.g. /dhus) + keycloak redirect
+            // this flag set to true will avoid creating a new session
+            // if a new session is created, then we lose the initial request url
+            // see JIRA [CEISM-245] [SD-4005] Wrong redirect URL to KeyCloak
+            if(cfg.isGDPREnabled())
+            {
+               request.setRequestedSessionSSL(true);
+            }
             getNext().invoke(request, response);
          }
          catch (Throwable e)
@@ -231,12 +243,19 @@ public class AccessValve extends ValveBase
          ai.setUsername(ctx.getAuthentication().getName());
       }
       else
-      {
-         String[] basicAuth = extractAndDecodeHeader(
-            request.getHeader("Authorization"));
+      {   
+         String[] basicAuth = extractAndDecodeHeader(request.getHeader("Authorization"));
          if (basicAuth!=null)
-            ai.setUsername(basicAuth[0]);
-      }
+         {
+            if (cfg.isGDPREnabled())
+            {
+               ai.setUsername(SAMLUtil.hash(basicAuth[0]));
+            }
+            else
+            {
+               ai.setUsername(basicAuth[0]);
+            }
+         }}
 
       if (request.getQueryString()!=null)
       {

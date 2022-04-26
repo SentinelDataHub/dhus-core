@@ -71,7 +71,10 @@ public class MetricDataHandler implements DatabaseDataHandler
    @Override
    public EntityCollection getEntityCollectionData() throws ODataApplicationException
    {
-      ODataSecurityManager.checkPermission(Role.STATISTICS);
+      if(!ODataSecurityManager.hasPermission(Role.FEDERATION_USER))
+      {
+         ODataSecurityManager.checkPermission(Role.STATISTICS);
+      }
 
       EntityCollection entityCollection = new EntityCollection();
       List<Entity> entities = entityCollection.getEntities();
@@ -85,7 +88,10 @@ public class MetricDataHandler implements DatabaseDataHandler
    @Override
    public Entity getEntityData(List<UriParameter> keyParameters) throws ODataApplicationException
    {
-      ODataSecurityManager.checkPermission(Role.STATISTICS);
+      if(!ODataSecurityManager.hasPermission(Role.FEDERATION_USER))
+      {
+         ODataSecurityManager.checkPermission(Role.STATISTICS);
+      }
 
       // Fetch, Parse and Check Key Parameters
       Map<String, String> keyPredicates = Util.uriParametersToMap(keyParameters);
@@ -126,6 +132,10 @@ public class MetricDataHandler implements DatabaseDataHandler
          TopOption topOption, SkipOption skipOption, CountOption countOption)
          throws ODataApplicationException
    {
+      if(!ODataSecurityManager.hasPermission(Role.FEDERATION_USER))
+      {
+         ODataSecurityManager.checkPermission(Role.STATISTICS);
+      }
       MetricSQLVisitor sqlVisitor = new MetricSQLVisitor(filterOption, orderByOption, topOption, skipOption);
 
       EntityCollection entityCollection = new EntityCollection();

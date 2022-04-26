@@ -19,12 +19,6 @@
  */
 package org.dhus.store.datastore;
 
-import fr.gael.dhus.database.object.KeyStoreEntry;
-import fr.gael.dhus.datastore.Destination;
-import fr.gael.dhus.service.KeyStoreService;
-import fr.gael.dhus.spring.context.ApplicationContextProvider;
-import fr.gael.dhus.system.config.ConfigurationManager;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -34,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,10 +38,8 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 
 import org.apache.commons.io.IOUtils;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.dhus.Product;
 import org.dhus.ProductConstants;
 import org.dhus.store.StoreException;
@@ -57,6 +50,12 @@ import org.dhus.store.derived.DerivedProductStore;
 import org.dhus.store.derived.DerivedProductStoreService;
 import org.dhus.store.ingestion.IngestibleProduct;
 import org.springframework.beans.factory.annotation.Autowired;
+
+import fr.gael.dhus.database.object.KeyStoreEntry;
+import fr.gael.dhus.datastore.Destination;
+import fr.gael.dhus.service.KeyStoreService;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.system.config.ConfigurationManager;
 
 /**
  * This class implements the default DataStore container that is constructed according to aggregated DataStores.
@@ -85,7 +84,7 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
    public Product get(String uuid) throws DataStoreException
    {
       LOGGER.debug("Finding product {} in data stores...", uuid);
-      List<DataStore> datastoreList = listForUuid(uuid, true);
+      List<DataStore> datastoreList = listForUuid(uuid, true, true);
       for (DataStore datastore : datastoreList)
       {
          try
@@ -188,24 +187,39 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
    @Override
    public void deleteProduct(String uuid) throws DataStoreException
    {
-      deleteProduct(uuid, Destination.NONE);
+      deleteProduct(uuid, Destination.NONE, false);
    }
 
    @Override
-   public void deleteProduct(String uuid, Destination destination) throws DataStoreException
+   public void deleteProduct(String uuid, Destination destination, boolean safeMode) throws DataStoreException
    {
-      // attempt to move product to destination
-      makeBackupProduct(uuid, destination);
-
-      LOGGER.info("Deleting product {} from all DataStores", uuid);
-
-      // get list of products
-      List<DataStore> datastoreList = listForUuid(uuid, false);
-
+      LOGGER.info("Deleting product {} from all DataStores - safe : {}", uuid, safeMode);
+      
       List<Throwable> throwables = new ArrayList<>();
       boolean deleted = false;
       int count = 0;
-      for (DataStore datastore: datastoreList)
+      List<DataStore> datastoreList;
+
+      if (safeMode)
+      {
+         // get list of datastores in safeMode
+         SortedSet<DataStore> dataStores = getDataStoresInSafeMode(uuid);
+         datastoreList = dataStores.stream().collect(Collectors.toList());
+         // attempt to move product to destination
+         if (dataStores.size() == 0)
+         {
+            throw new ProductNotFoundException();
+         }
+         makeBackupProduct(uuid, destination, null, dataStores);
+      }
+      else
+      {
+         // get list of dataStores
+         datastoreList = listForUuid(uuid, false, false);
+         // attempt to move product to destination
+         makeBackupProduct(uuid, destination, null, null);
+      }
+      for (DataStore datastore : datastoreList)
       {
          try
          {
@@ -234,7 +248,14 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
       DataStores.throwErrors(throwables, "deleteProduct", uuid);
    }
 
-   private void makeBackupProduct(String uuid, Destination destination)
+   /**
+    * 
+    * @param uuid UUID of product to backup
+    * @param destination backup destination
+    * @param dataStoreName target dataStore from where the product will be removed
+    * @param allowedDatastores allowed datastores to be used to backup the product
+    */
+   private void makeBackupProduct(String uuid, Destination destination, String dataStoreName, Set<DataStore> allowedDatastores)
    {
       if (destination.equals(Destination.NONE))
       {
@@ -249,36 +270,79 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
 
       LOGGER.info("Moving product {} data to destination {}", uuid, destination);
       Exception exception = new ProductNotFoundException();
-      // we assume the optimal way to make a backup product during a deletion
-      // is to use an HFSDataStore that isn't read-only
-      for (DataStore dataStore: datastores)
+      
+      if (dataStoreName != null)
       {
-         if (dataStore instanceof HfsDataStore && dataStore.hasProduct(uuid))
+         LOGGER.info("Try to backup product {} from datastore {}", uuid, dataStoreName);
+         DataStore datastore = getDataStoreByName(dataStoreName);
+         exception = processHfsDataStore(uuid, destination, exception, datastore);
+         if (exception == null)
          {
-            HfsDataStore hfsStore = (HfsDataStore) dataStore;
-            if (hfsStore.getRestriction() == DataStoreRestriction.NONE)
+            return;
+         }
+         exception = processOtherDataStore(uuid, destination, exception, datastore);
+         if (exception == null)
+         {
+            return;
+         }
+      }
+      else
+      {
+         // we assume the optimal way to make a backup product during a deletion
+         // is to use an HFSDataStore that isn't read-only
+         LOGGER.info("Try to backup product {} from {} datastores", uuid, ((allowedDatastores == null || allowedDatastores.size() == 0) ? "ALL" : "some"));         
+         for (DataStore dataStore : ((allowedDatastores == null || allowedDatastores.size() == 0) ? datastores : allowedDatastores))
+         {
+            exception = processHfsDataStore(uuid, destination, exception, dataStore);
+            if (exception == null)
             {
-               try
-               {
-                  moveProduct((HfsDataStore) dataStore, uuid, destination);
-                  return;
-               }
-               catch (DataStoreException | IOException e)
-               {
-                  exception = e;
-               }
+               return;
+            }
+         }
+         // no suitable HFSDataStore was found, use any datastore that has the product
+         for (DataStore dataStore : datastores)
+         {
+            exception = processOtherDataStore(uuid, destination, exception, dataStore);
+            if (exception == null)
+            {
+               return;
             }
          }
       }
-      // no suitable HFSDataStore was found, use any datastore that has the product
-      for (DataStore dataStore: datastores)
+      LOGGER.warn("Cannot retrieve data of product {}: {}", uuid, exception.getMessage());
+   }
+
+   private Exception processOtherDataStore(String uuid, Destination destination, Exception exception,
+         DataStore dataStore)
+   {
+      if (dataStore.hasProduct(uuid))
       {
-         if (dataStore.hasProduct(uuid))
+         try
+         {
+            copyProduct(dataStore, uuid, destination);
+            LOGGER.info("The product uuid {} copied to destination {}", uuid, destination.name());
+            return null;
+         }
+         catch (DataStoreException | IOException e)
+         {
+            exception = e;
+         }
+      }
+      return exception;
+   }
+
+   private Exception processHfsDataStore(String uuid, Destination destination, Exception exception, DataStore dataStore)
+   {
+      if (dataStore instanceof HfsDataStore && dataStore.hasProduct(uuid))
+      {
+         HfsDataStore hfsStore = (HfsDataStore) dataStore;
+         if (hfsStore.getRestriction() == DataStoreRestriction.NONE)
          {
             try
             {
-               copyProduct(dataStore, uuid, destination);
-               return;
+               moveProduct((HfsDataStore) dataStore, uuid, destination);
+               LOGGER.info("The product uuid {} moved to {}", uuid, destination.name());
+               return null;
             }
             catch (DataStoreException | IOException e)
             {
@@ -286,7 +350,7 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
             }
          }
       }
-      LOGGER.warn("Cannot retrieve data of product {}: {}", uuid, exception.getMessage());
+      return exception;
    }
 
    private void moveProduct(HfsDataStore dataStore, String uuid, Destination destination) throws DataStoreException, IOException
@@ -373,7 +437,7 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
    public boolean hasProduct(String uuid)
    {
       // get list of products
-      List<DataStore> datastoreList = listForUuid(uuid, false);
+      List<DataStore> datastoreList = listForUuid(uuid, false, false);
       // at least one datastore has the product if not empty
       return !datastoreList.isEmpty();
    }
@@ -695,7 +759,7 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
          throw new UnsafeDeletionException();
       }
 
-      makeBackupProduct(uuid, destination);
+      makeBackupProduct(uuid, destination, dataStoreName, null);
 
       // delete the product
       dataStore.deleteProduct(uuid);
@@ -713,11 +777,29 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
       return false;
    }
 
+   private SortedSet<DataStore> getDataStoresInSafeMode(String uuid)
+   {
+      List<DataStore> datastoreList = listForUuid(uuid, false, false);
+      // The product will be kept in the lowest priority DataStore
+      SortedSet<DataStore> dataStores = new ConcurrentSkipListSet<>(datastores.comparator().reversed());
+      dataStores.addAll(datastoreList);
+
+      for (DataStore dataStore : dataStores)
+      {
+         if (dataStore.hasProduct(uuid))
+         {
+            dataStores.remove(dataStore);
+            return dataStores;
+         }
+      }
+      return dataStores;
+   }
+
    @Override
    public Map<String, String> getResourceLocations(String uuid) throws DataStoreException
    {
       // get list
-      List<DataStore> datastoreList = listForUuid(uuid, false);
+      List<DataStore> datastoreList = listForUuid(uuid, true, false);
 
       Map<String, String> locations = new HashMap<>();
       for (DataStore datastore: datastoreList)
@@ -754,7 +836,29 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
       return false;
    }
 
-   private List<DataStore> listForUuid(String uuid, boolean includeAsync)
+   @Override
+   public DataStore getDataStoreByName(String name)
+   {
+      for (DataStore datastore : list())
+      {
+         if (datastore instanceof AsyncDataStore)
+         {
+            DataStore cache = ((AsyncDataStore) datastore).getCache();
+            if (cache.getName().equals(name))
+            {
+               return cache;
+            }
+         }
+
+         if (datastore.getName().equals(name))
+         {
+            return datastore;
+         }
+      }
+      return null;
+   }
+
+   private List<DataStore> listForUuid(String uuid, boolean includeAsync, boolean order)
    {
       Set<String> datastoreNames = keyStoreService.listUnalteredForUuid(uuid).stream()
             .map(KeyStoreEntry::getKeyStore)
@@ -777,8 +881,13 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
                }
                // case of async data stores if included
                if (includeAsync
+                     && AsyncDataStore.class.isAssignableFrom(datastore.getClass()) && order == true) 
+                     {
+                       return true;
+                     }               
+               else if (includeAsync
                      && AsyncDataStore.class.isAssignableFrom(datastore.getClass())
-                     && AsyncDataStore.class.cast(datastore).hasAsyncProduct(uuid))
+                     && (AsyncDataStore.class.cast(datastore).hasProduct(uuid))) 
                {
                   LOGGER.debug("Found async product in {}", datastore.getName());
                   // do NOT put async products in registry
@@ -821,5 +930,11 @@ public class DefaultDataStoreManager implements DataStoreManager, DerivedProduct
                return false;
             })
             .collect(Collectors.toList());
+   }
+
+   @Override
+   public Iterator<String> getScrollableProductResults()
+   {
+      return null;
    }
 }

@@ -42,9 +42,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import org.dhus.api.JobStatus;
+import org.dhus.store.datastore.DataStore;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.async.AbstractAsyncCachedDataStore;
-import org.dhus.store.datastore.config.GmpDataStoreConf;
 import org.dhus.store.datastore.config.PatternReplace;
 import org.dhus.store.datastore.hfs.HfsProduct;
 
@@ -79,7 +79,6 @@ public final class GmpDataStore extends AbstractAsyncCachedDataStore
     * @param priority            DataStores are ordered, this DataStore MUST have the highest priority because it is a yes-store
     * @param isManager           true to enable the ingest job in this instance of the DHuS (only one instance per cluster)
     * @param gmpRepoLocation     path to the repository configured in GMP
-    * @param hfsLocation         path to the local HFS cache
     * @param patternReplaceIn    pattern to extract the product identifier from the id column of the queue table of GMP
     * @param patternReplaceOut   pattern to transform the identifier to be used in the queue table of GMP
     * @param maxPendingRequests  maximum number of pending orders at the same time
@@ -93,17 +92,18 @@ public final class GmpDataStore extends AbstractAsyncCachedDataStore
     * @param currentSize         overall size of the local HFS cache DataStore (disk usage)
     * @param autoEviction        true to activate auto-eviction based on disk usage on the local HFS cache DataStore
     * @param hashAlgorithms      to compute on restore
+    * @param cache               local cache, can be HFS or OpenStack
     *
     * @throws DataStoreException could not create a GMP DataStore
     */
-   public GmpDataStore(String name, int priority, boolean isManager, String gmpRepoLocation, String hfsLocation,
+   public GmpDataStore(String name, int priority, boolean isManager, String gmpRepoLocation,
          PatternReplace patternReplaceIn, PatternReplace patternReplaceOut, Integer maxPendingRequests, Integer maxRunningRequests,
          String mySqlURL, String mySqlUser, String mySqlPass, String agentId, String targetId, long maximumSize,
-         long currentSize, boolean autoEviction, String[] hashAlgorithms)
+         long currentSize, boolean autoEviction, String[] hashAlgorithms, DataStore cache)
          throws DataStoreException
    {
-      super(name, priority, hfsLocation, patternReplaceIn, patternReplaceOut, maxPendingRequests, maxRunningRequests,
-            maximumSize, currentSize, autoEviction, hashAlgorithms);
+      super(name, priority, patternReplaceIn, patternReplaceOut, maxPendingRequests, maxRunningRequests,
+            maximumSize, currentSize, autoEviction, hashAlgorithms, cache);
 
       Objects.requireNonNull(gmpRepoLocation);
       Objects.requireNonNull(mySqlURL);
@@ -116,8 +116,8 @@ public final class GmpDataStore extends AbstractAsyncCachedDataStore
       this.targetId = targetId;
       this.agentId = agentId;
 
-      LOGGER.info("New GMP DataStore, name={} url={} repo={} hfs={} max_queued_requests={}",
-            getName(), mySqlURL, gmpRepoLocation, hfsLocation, maxRunningRequests);
+      LOGGER.info("New GMP DataStore, name={} url={} repo={} max_queued_requests={}",
+            getName(), mySqlURL, gmpRepoLocation, maxRunningRequests);
 
       // If this instance is cluster manager, it is tasked with managing the GMP
       LOGGER.info("This DHuS instance {} the GMP manager", isManager? "is": "isn't");
@@ -144,7 +144,7 @@ public final class GmpDataStore extends AbstractAsyncCachedDataStore
       if (isManager)
       {
          this.timer = new Timer("GMP Ingest Job", true);
-         this.timer.schedule(new IngestJob(), 0, 300_000);
+         this.timer.schedule(new IngestJob(), 60_000, 300_000);
       }
       else
       {
@@ -164,55 +164,6 @@ public final class GmpDataStore extends AbstractAsyncCachedDataStore
          catch (RuntimeException suppressed) {}
       }
       this.dataSource.close();
-   }
-
-   /**
-    * Factory method, creates a new GmpDatastore from given configuration.
-    *
-    * @param configuration for this DataStore
-    * @param hashAlgorithms to compute on restore
-    * @return a new instance of GMP DataStore (never null)
-    * @throws DataStoreException could not create a GMP DataStore
-    */
-   public static GmpDataStore make(GmpDataStoreConf configuration, String[] hashAlgorithms) throws DataStoreException
-   {
-      // patternReplaceIn default value
-      if (configuration.getPatternReplaceIn() == null)
-      {
-         PatternReplace patternReplaceIn = new PatternReplace();
-         patternReplaceIn.setPattern("\\.SAFE$");
-         patternReplaceIn.setReplacement("");
-         configuration.setPatternReplaceIn(patternReplaceIn);
-      }
-
-      // patternReplaceOut default value
-      if (configuration.getPatternReplaceOut() == null)
-      {
-         PatternReplace patternReplaceOut = new PatternReplace();
-         patternReplaceOut.setPattern("$");
-         patternReplaceOut.setReplacement(".SAFE");
-         configuration.setPatternReplaceOut(patternReplaceOut);
-      }
-
-      return new GmpDataStore(
-            configuration.getName(),
-            configuration.getPriority(),
-            configuration.isIsMaster(),
-            configuration.getRepoLocation(),
-            configuration.getHfsLocation(),
-            configuration.getPatternReplaceIn(),
-            configuration.getPatternReplaceOut(),
-            configuration.getMaxPendingRequests(),
-            configuration.getMaxRunningRequests(),
-            configuration.getMysqlConnectionInfo().getValue(),
-            configuration.getMysqlConnectionInfo().getUser(),
-            configuration.getMysqlConnectionInfo().getPassword(),
-            configuration.getConfiguration().getAgentid(),
-            configuration.getConfiguration().getTargetid(),
-            configuration.getMaximumSize(),
-            configuration.getCurrentSize(), // datastore coming from xml configuration
-            configuration.isAutoEviction(),
-            hashAlgorithms);
    }
 
    @Override

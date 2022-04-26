@@ -69,7 +69,7 @@ public class OpenStackDataStore extends AbstractDataStore
    private final String container;
    private final String region;
 
-   private volatile DrbSwiftObject ostack = null;
+   private OpenStackObject ostack;
 
    /**
     * Build an open-stack storage API for DHuS data store. Currently only swift is supported.
@@ -100,60 +100,8 @@ public class OpenStackDataStore extends AbstractDataStore
       this.container = container;
       this.region = region;
       this.hashAlgorithms = hashAlgorithms;
-   }
 
-   /**
-    * Retrieve the OpenStack storage object from the construction parameters.
-    *
-    * @return the object to manipulate OpenStack
-    */
-   private DrbSwiftObject getOpenStackObject()
-   {
-      // Double-checked locking using a local variable for better performances
-      DrbSwiftObject res = this.ostack;
-      if (res == null)
-      {
-         synchronized (this)
-         {
-            res = this.ostack;
-            if (res == null)
-            {
-               res = createOpenStackObject();
-               if (res != null)
-               {
-                  this.ostack = res;
-               }
-            }
-         }
-      }
-      return res;
-   }
-
-   /**
-    * Always create a new DrbSwiftObject, use {@link #getOpenStackObject()} instead (lazy loading).
-    * @return a new instance or null of the configuration is invalid (error logged)
-    */
-   private DrbSwiftObject createOpenStackObject()
-   {
-      // Keystone v3 API
-      if (url.contains("/v3"))
-      {
-         String[] splitIdentity = this.identity.split(":");
-         if (splitIdentity.length != 3)
-         {
-            LOGGER.error("Invalid identity format, must be: <domain>:<project>:<username>");
-            return null;
-         }
-         else
-         {
-            String domain   = splitIdentity[0];
-            String project  = splitIdentity[1];
-            String username = splitIdentity[2];
-            return new DrbSwiftObject(this.url, this.provider, username, project, this.credential, domain);
-         }
-      }
-      // Keystone v3 API
-      return new DrbSwiftObject(this.url, this.provider, this.identity, this.credential);
+      ostack = new OpenStackObject(provider, identity, credential, url);
    }
 
    /**
@@ -216,7 +164,7 @@ public class OpenStackDataStore extends AbstractDataStore
 
          try (InputStream source = src)
          {
-            getOpenStackObject().putObject(source, product.getName(), container, region, product_size, user_data);
+            ostack.getOpenStackObject().putObject(source, product.getName(), container, region, product_size, user_data);
          }
 
          if (MultipleDigestInputStream.class.isAssignableFrom(src.getClass()))
@@ -253,7 +201,7 @@ public class OpenStackDataStore extends AbstractDataStore
                String.format("Invalid resource location for product: %s (%s)", uuid, tag), e);
       }
 
-      return new OpenStackProduct(getOpenStackObject(), location);
+      return new OpenStackProduct(ostack.getOpenStackObject(), location);
    }
 
    @Override
@@ -264,7 +212,7 @@ public class OpenStackDataStore extends AbstractDataStore
          throw new ProductAlreadyExist();
       }
 
-      DrbSwiftObject open_stack = getOpenStackObject();
+      DrbSwiftObject open_stack = ostack.getOpenStackObject();
       String object_name = product.getName();
 
       boolean duplicate = open_stack.exists(object_name, container, region);
@@ -308,7 +256,7 @@ public class OpenStackDataStore extends AbstractDataStore
    protected final void internalDeleteProduct(String resourceLocation)
          throws ProductNotFoundException, ReadOnlyDataStoreException
    {
-      DrbSwiftObject open_stack = getOpenStackObject();
+      DrbSwiftObject open_stack = ostack.getOpenStackObject();
 
       OpenStackLocation object_location = new OpenStackLocation(resourceLocation);
       String object_name = object_location.getObjectName();
@@ -318,7 +266,7 @@ public class OpenStackDataStore extends AbstractDataStore
          BlobMetadata blobMetadata = open_stack.getMetadata(container, region, object_name);
          long dataSize = blobMetadata.getSize();
 
-         getOpenStackObject().deleteObject(object_name, this.container, this.region);
+         ostack.getOpenStackObject().deleteObject(object_name, this.container, this.region);
 
          // report DataStore size decrease
          decreaseCurrentSize(dataSize);
@@ -334,7 +282,7 @@ public class OpenStackDataStore extends AbstractDataStore
          if (location.getRegion ().equals (this.getRegion ()) && 
                   location.getContainer ().equals (this.getContainer ()))
          {
-            return getOpenStackObject().exists(location.getObjectName(), container, region);
+            return ostack.getOpenStackObject().exists(location.getObjectName(), container, region);
          }
          return false;
       }

@@ -234,7 +234,7 @@ public class CollectionDaoIT extends AbstractHibernateDaoIT<Collection, String>
       cid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1";
       collection = dao.read (cid);
       Assert.assertTrue (dao.contains (cid, pid));
-      dao.removeProduct (cid, pid, user);
+      dao.removeProduct (cid, pid);
       Assert.assertFalse (dao.contains (cid, pid));
    }
 
@@ -255,7 +255,7 @@ public class CollectionDaoIT extends AbstractHibernateDaoIT<Collection, String>
       {
          Assert.assertTrue (dao.contains (cid, pid));
       }
-      dao.removeProducts (cid, pids, user);
+      dao.removeProducts (cid, pids);
       for (Long pid : pids)
       {
          Assert.assertFalse (dao.contains (cid, pid));

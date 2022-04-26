@@ -54,6 +54,16 @@ public class BasicAuthHttpClientProducer implements HttpAsyncClientProducer
       this.timeout = timeout;
    }
 
+   public String getUsername()
+   {
+     return username;
+   }
+
+   public String getPassword()
+   {
+     return password;
+   }
+
    @Override
    public CloseableHttpAsyncClient generateClient()
    {

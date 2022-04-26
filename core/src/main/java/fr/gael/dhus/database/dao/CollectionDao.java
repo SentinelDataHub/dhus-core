@@ -104,9 +104,8 @@ public class CollectionDao extends HibernateDao<Collection, String>
     *
     * @param cid the collection id where remove product.
     * @param pid the product id to remove.
-    * @param user unused parameter.
     */
-   public void removeProduct (final String cid, final Long pid, User user)
+   public void removeProduct (final String cid, final Long pid)
    {
       Collection collection = read(cid);
       if (collection == null)
@@ -133,12 +132,11 @@ public class CollectionDao extends HibernateDao<Collection, String>
     * database.
     * @param cid the collection id where remove product.
     * @param pids the product id to remove.
-    * @param user unused parameter.
     */
-   public void removeProducts (final String cid, final Long[] pids, User user)
+   public void removeProducts (final String cid, final Long[] pids)
    {
       for (Long pid : pids)
-         removeProduct (cid, pid, user);
+         removeProduct (cid, pid);
    }
 
    // Not filtered by user, only called by ProductDao.delete, which must delete

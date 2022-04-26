@@ -22,8 +22,11 @@ package org.dhus.olingo.v2.data;
 import fr.gael.dhus.database.object.Collection;
 import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.config.scanner.ScannerConfiguration.Collections;
+import fr.gael.dhus.database.object.config.synchronizer.ProductSynchronizer;
+import fr.gael.dhus.database.object.config.synchronizer.SynchronizerConfiguration;
 import fr.gael.dhus.datastore.scanner.Scanner;
 import fr.gael.dhus.service.CollectionService;
+import fr.gael.dhus.service.ISynchronizerService;
 import fr.gael.dhus.service.exception.CollectionNameExistingException;
 import fr.gael.dhus.service.exception.RequiredFieldMissingException;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
@@ -46,7 +49,9 @@ import org.apache.olingo.server.api.uri.UriParameter;
 
 import org.dhus.olingo.v2.ODataSecurityManager;
 import org.dhus.olingo.v2.datamodel.CollectionModel;
+import org.dhus.olingo.v2.datamodel.ProductSynchronizerModel;
 import org.dhus.olingo.v2.datamodel.ScannerModel;
+import org.dhus.olingo.v2.datamodel.SynchronizerModel;
 import org.dhus.scanner.service.ScannerServiceImpl;
 
 public class CollectionDataHandler implements DataHandler
@@ -55,6 +60,8 @@ public class CollectionDataHandler implements DataHandler
          ApplicationContextProvider.getBean(CollectionService.class);
    private static final ScannerServiceImpl SCANNER_SERVICE =
          ApplicationContextProvider.getBean(ScannerServiceImpl.class);
+   private static final ISynchronizerService SYNC_SERVICE =
+         ApplicationContextProvider.getBean(ISynchronizerService.class);
 
    private Collection getCollectionFromParameters(List<UriParameter> keyParameters)
    {
@@ -127,6 +134,19 @@ public class CollectionDataHandler implements DataHandler
          {
             collections.getCollection().forEach(collectionName
                   -> entities.getEntities().add(toOlingoEntity(COLLECTION_SVC.getCollectionByName(collectionName))));
+         }
+         return entities;
+      }
+      if (ProductSynchronizerModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString()
+            .equals(sourceEntity.getType()))
+      {
+         ProductSynchronizer sync = (ProductSynchronizer)SYNC_SERVICE.getSynchronizerConfById((Long) sourceEntity.getProperty(SynchronizerModel.PROPERTY_ID).getValue(),
+               SynchronizerConfiguration.class);
+         EntityCollection entities = new EntityCollection();
+         String collectionName = sync.getTargetCollection();
+         if (collectionName != null)
+         {
+            entities.getEntities().add(toOlingoEntity(COLLECTION_SVC.getCollectionByName(collectionName)));
          }
          return entities;
       }

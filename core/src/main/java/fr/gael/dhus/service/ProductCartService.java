@@ -34,6 +34,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.olingo.server.api.ODataApplicationException;
+import org.dhus.olingo.v2.visitor.ProductSQLVisitor;
 import org.hibernate.Hibernate;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -287,7 +289,7 @@ public class ProductCartService extends WebService
    }
 
    /**
-    * /User('x')/Products on OData.
+    * /User('x')/Products on OData V2.
     *
     * @param visitor Expression visitor having visited the Filter and Order expressions
     * @param uuid UUID of the user
@@ -317,6 +319,39 @@ public class ProductCartService extends WebService
       }
 
       return productDao.executeHQLQuery(sb.toString(), visitor.getHqlParameters(), skip, top);
+   }
+
+   /**
+    * /User('x')/Products on OData V4.
+    *
+    * @param visitor Expression visitor having visited the Filter and Order expressions
+    * @param uuid UUID of the user
+    * @return a non null list of products ordered and filtered
+    * @throws ODataApplicationException
+    */
+   @PreAuthorize("hasRole('ROLE_DOWNLOAD')")
+   @Transactional(readOnly = true)
+   public Iterator<Product> getCartProducts(ProductSQLVisitor visitor, String uuid)
+         throws ODataApplicationException
+   {
+      StringBuilder sb = new StringBuilder();
+      sb.append("select products from ProductCart as cart inner join cart.products as products ");
+
+      sb.append("where ");
+      String filter = visitor.getHqlFilter();
+      if (filter != null && !filter.isEmpty())
+      {
+         sb.append(filter).append(" and ");
+      }
+      sb.append("cart.user.uuid='").append(uuid).append('\'');
+
+      String order = visitor.getHqlOrder();
+      if (order != null && !order.isEmpty())
+      {
+         sb.append(" order by ").append(order);
+      }
+
+      return productDao.executeHQLQueryAndIterate(sb.toString(), visitor.getHqlParameters(), visitor.getSkip(), visitor.getTop());
    }
 
    /**

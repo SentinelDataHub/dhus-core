@@ -121,6 +121,14 @@ public abstract class SQLVisitor implements Serializable, ExpressionVisitor<Obje
    }
 
    @Override
+   public Object visitBinaryOperator(BinaryOperatorKind operator, Object left, List<Object> right)
+         throws ExpressionVisitException, ODataApplicationException
+   {
+      throw new ODataApplicationException("Unsupported operator: " + operator.name(),
+            HttpStatusCode.NOT_IMPLEMENTED.getStatusCode(), Locale.ENGLISH);
+   }
+
+   @Override
    public Object visitBinaryOperator(BinaryOperatorKind operator, Object left, Object right)
          throws ExpressionVisitException, ODataApplicationException
    {
@@ -138,7 +146,8 @@ public abstract class SQLVisitor implements Serializable, ExpressionVisitor<Obje
                sb.append(" IS NOT NULL ");
                break;
             default:
-               throw new UnsupportedOperationException("Unsupported operator for null values: " + operator.name());
+               throw new ODataApplicationException("Unsupported operator for null values: " + operator.name(),
+                     HttpStatusCode.NOT_IMPLEMENTED.getStatusCode(), Locale.ENGLISH);
          }
       }
       else
@@ -174,7 +183,8 @@ public abstract class SQLVisitor implements Serializable, ExpressionVisitor<Obje
                break;
             default:
                // Other operators are not supported for SQL Statements
-               throw new UnsupportedOperationException("Unsupported operator: " + operator.name());
+               throw new ODataApplicationException("Unsupported operator: " + operator.name(),
+                     HttpStatusCode.NOT_IMPLEMENTED.getStatusCode(), Locale.ENGLISH);
          }
          // return the binary statement
          sb.append(right).append(')');
@@ -378,7 +388,8 @@ public abstract class SQLVisitor implements Serializable, ExpressionVisitor<Obje
          }
 
          default:
-            throw new UnsupportedOperationException("Unsupported method: " + methodCall.toString());
+            throw new ODataApplicationException("Unsupported method: " + methodCall.name(),
+                  HttpStatusCode.NOT_IMPLEMENTED.getStatusCode(), Locale.ENGLISH);
       }
 
       return result;

@@ -304,7 +304,7 @@ public class SearchService extends WebService
          while (it.hasNext())
          {
             SolrDocument doc = it.next();
-            Long pid = (Long) doc.get("id");
+            String pid = (String) doc.get("uuid");
             Product product = productService.systemGetProduct(pid);
             if (product == null)
             {

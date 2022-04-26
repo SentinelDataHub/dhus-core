@@ -19,18 +19,6 @@
  */
 package fr.gael.dhus.service;
 
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
-
-import fr.gael.dhus.database.object.DeletedProduct;
-import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.database.object.config.eviction.Eviction;
-import fr.gael.dhus.database.object.config.eviction.EvictionManager;
-import fr.gael.dhus.database.object.config.eviction.EvictionStatusEnum;
-import fr.gael.dhus.datastore.Destination;
-import fr.gael.dhus.service.eviction.EvictionScheduler;
-import fr.gael.dhus.system.config.ConfigurationManager;
-
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -43,12 +31,26 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.dhus.store.StoreException;
 import org.dhus.store.StoreService;
+import org.dhus.store.datastore.DataStoreManager;
 import org.quartz.SchedulerException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
+
+import fr.gael.dhus.database.object.DeletedProduct;
+import fr.gael.dhus.database.object.Product;
+import fr.gael.dhus.database.object.config.eviction.Eviction;
+import fr.gael.dhus.database.object.config.eviction.EvictionBaseDate;
+import fr.gael.dhus.database.object.config.eviction.EvictionManager;
+import fr.gael.dhus.database.object.config.eviction.EvictionStatusEnum;
+import fr.gael.dhus.datastore.Destination;
+import fr.gael.dhus.service.eviction.EvictionScheduler;
+import fr.gael.dhus.system.config.ConfigurationManager;
 
 @Service
 public class EvictionService extends WebService
@@ -63,6 +65,9 @@ public class EvictionService extends WebService
    /** DataStore Service called to delete data. */
    @Autowired
    private StoreService storeService;
+   
+   @Autowired
+   private DataStoreManager dataStoreManager;
 
    /* Monitoring. */
    @Autowired
@@ -134,6 +139,10 @@ public class EvictionService extends WebService
       return true;
    }
 
+   /**
+    * Called by OData v2 action
+    * Using defined targetDataStore and safeMode, ignoring default defined in specified Eviction.
+    */
    public void doEvict(String evictionName, String targetDataStore, Boolean safeMode)
    {
       if (queueEvict(evictionName))
@@ -143,18 +152,25 @@ public class EvictionService extends WebService
       }
    }
 
+   /**
+    * Called by Eviction Job
+    * Using default targetDataStore and safeMode defined in specified Eviction.
+    */
    public void doEvict(String evictionName)
    {
       if (queueEvict(evictionName))
       {
+         Eviction eviction = getEviction(evictionName);
          // queue eviction in the executor
-         executor.execute(() -> performTimedEviction(evictionName, null, Long.MAX_VALUE, false));
+         executor.execute(() -> performTimedEviction(evictionName, eviction.getTargetDataStore(), Long.MAX_VALUE, eviction.isSafeMode()));
       }
    }
 
    /**
     * Run customizable automatic eviction.
-    *
+    * Using defined dataStoreName as targetDatastore and forcing safeMode to false.
+    * Ignoring default values defined in specified Eviction.
+    * 
     * @param evictionName  name of the eviction that is in the configuration of the DataStore
     * @param dataStoreName name of the DataStore
     * @param dataSize      size to evict (in bytes) from the DataStore
@@ -198,6 +214,15 @@ public class EvictionService extends WebService
          LOGGER.warn("Eviction '{}' has been deleted, skipping", eviction);
          return 0L;
       }
+      if (dataStoreName != null && dataStoreManager.getDataStoreByName(dataStoreName) == null)
+      {
+         LOGGER.error("DataStore '{}' is unknown. Cannot perform an eviction on it.", dataStoreName);
+
+         // mark eviction as STOPPED
+         eviction.setStatus(EvictionStatusEnum.STOPPED);
+         evictionManager.save();
+         return 0L;
+      }
 
       String metric = MetricRegistry.name("eviction",
             evictionName,
@@ -226,20 +251,23 @@ public class EvictionService extends WebService
             // If a trashPath is present in the conf (dhus.xml), evicted products will be saved in the
             // trash folder before being removed
             String trashPath = cfgManager.getTrashPath();
-            final Destination destination =
-                  (trashPath != null && !"".equals(trashPath)) ? Destination.TRASH : Destination.NONE;
+            final Destination destination = (trashPath != null && !"".equals(trashPath)) ? Destination.TRASH : Destination.NONE;
 
             // mark eviction as STARTED
             eviction.setStatus(EvictionStatusEnum.STARTED);
             evictionManager.save();
 
-            // eviction triggered by datastore's autoeviction
+            String filter = eviction.getBaseDate() == EvictionBaseDate.CREATION_DATE ? 
+                buildFilterBasedOnCreationDate(eviction.getFilter(), getKeepPeriod(eviction.computeKeepPeriod())) :
+                buildFilter(eviction.getFilter(), getKeepPeriod(eviction.computeKeepPeriod()));
+            
+            // eviction targetting a specific datastore
             if (dataStoreName != null) // && dataSize > 0 ?
             {
                evictAtLeast = storeService.evictAtLeast(
                      dataSize,
                      dataStoreName,
-                     buildFilter(eviction.getFilter(), getKeepPeriod(eviction.computeKeepPeriod())),
+                     filter,
                      eviction.getOrderBy(),
                      eviction.getTargetCollection(),
                      eviction.getMaxEvictedProducts(),
@@ -252,13 +280,14 @@ public class EvictionService extends WebService
             else
             {
                storeService.evictProducts(
-                     buildFilter(eviction.getFilter(), getKeepPeriod(eviction.computeKeepPeriod())),
+                     filter,
                      eviction.getOrderBy(),
                      eviction.getTargetCollection(),
                      eviction.getMaxEvictedProducts(),
                      eviction.isSoftEviction(),
                      destination,
-                     DeletedProduct.AUTO_EVICTION);
+                     DeletedProduct.AUTO_EVICTION,
+                     safeMode);
             }
          }
       }
@@ -269,7 +298,10 @@ public class EvictionService extends WebService
       finally
       {
          // mark eviction as STOPPED
-         eviction.setStatus(EvictionStatusEnum.STOPPED);
+         if (eviction.getStatus().equals(EvictionStatusEnum.STARTED))
+         {
+            eviction.setStatus(EvictionStatusEnum.STOPPED);
+         }
          evictionManager.save();
       }
       return evictAtLeast;
@@ -298,6 +330,33 @@ public class EvictionService extends WebService
       if (filter != null && !filter.trim().isEmpty())
       {
          newFilter += " and (" + filter + ")";
+      }
+      return newFilter;
+   }
+   
+   /**
+    * Add the minimal keeping period for the evicted products to the OData filter.
+    *
+    * @param filter          optional additional filter
+    * @param maxCreationDate threshold date to filter products
+    * @return an OData filter
+    */
+   private String buildFilterBasedOnCreationDate(String filter, Date maxCreationDate)
+   {
+      if (filter == null && maxCreationDate == null)
+      {
+         return null;
+      }
+      if (maxCreationDate == null)
+      {
+         return filter;
+      }
+
+      String maxDate = DATE_FORMATTER.format(maxCreationDate);
+      String newFilter = "CreationDate lt datetime'" + maxDate + "'";
+      if (filter != null && !filter.trim().isEmpty())
+      {
+         newFilter += " and " + filter;
       }
       return newFilter;
    }

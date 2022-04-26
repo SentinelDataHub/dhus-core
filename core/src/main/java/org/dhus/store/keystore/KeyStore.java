@@ -90,6 +90,13 @@ public interface KeyStore
    /**
     * Returns a non-null list of KeyStore Entries referencing unaltered products.
     *
+    * @return an Iterator of KeyStoreEntriy
+    */
+   public Iterator<KeyStoreEntry> getUnalteredScrollableProductEntries();
+
+   /**
+    * Returns a non-null list of KeyStore Entries referencing unaltered products.
+    *
     * @return list of KeyStoreEntriy
     */
    public List<KeyStoreEntry> getUnalteredProductEntries();

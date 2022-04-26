@@ -43,7 +43,7 @@ public class RelationalMetadataStoreFilterIT extends AbstractTransactionalTestNG
    @Test
    public void testFilter() throws StoreException
    {
-      List<LoggableProduct> productUUIDs = relationalMDS.getProductUUIDs("Name eq 'prod0'", null, null, 0, 3);
+      List<LoggableProduct> productUUIDs = relationalMDS.getProductUUIDs("Name eq 'prod0'", null, null, false, 0, 3);
       Assert.assertEquals(productUUIDs.size(), 1);
       Assert.assertEquals(productUUIDs.get(0).getUuid(), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0");
    }
@@ -51,7 +51,7 @@ public class RelationalMetadataStoreFilterIT extends AbstractTransactionalTestNG
    @Test
    public void testOrderBy() throws StoreException
    {
-      List<LoggableProduct> productUUIDs = relationalMDS.getProductUUIDs(null, "Name desc", null, 0, 3);
+      List<LoggableProduct> productUUIDs = relationalMDS.getProductUUIDs(null, "Name desc", null, false, 0, 3);
       Assert.assertEquals(productUUIDs.size(), 3);
       Assert.assertEquals(productUUIDs.get(0).getUuid(), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa7");
       Assert.assertEquals(productUUIDs.get(2).getUuid(), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa5");

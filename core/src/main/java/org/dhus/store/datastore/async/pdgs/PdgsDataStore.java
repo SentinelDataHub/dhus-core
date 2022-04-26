@@ -19,9 +19,6 @@
  */
 package org.dhus.store.datastore.async.pdgs;
 
-import fr.gael.dhus.database.object.Order;
-import fr.gael.dhus.util.http.Timeouts;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,22 +29,31 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Timer;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
+import org.dhus.Product;
+import org.dhus.ProductConstants;
 import org.dhus.api.JobStatus;
+import org.dhus.store.datastore.DataStore;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.StreamableProduct;
 import org.dhus.store.datastore.async.AbstractAsyncCachedDataStore;
 import org.dhus.store.datastore.async.AsyncDataStoreException;
+import org.dhus.store.datastore.async.BadlySizedProductException;
 import org.dhus.store.datastore.async.pdgs.PDGSJob.JSONParseException;
 import org.dhus.store.datastore.config.PatternReplace;
+
+import fr.gael.dhus.database.object.Order;
+import fr.gael.dhus.util.http.Timeouts;
 
 /**
  * A store backed by a PDGS.
@@ -68,6 +74,8 @@ public class PdgsDataStore extends AbstractAsyncCachedDataStore
    private static final String STATUS_DONE = "done";
    private static final String STATUS_FAILED = "failed";
 
+   private static final String CONTENT_LENGTH = "Content-Length";
+   
    private static final String PRODUCTS = "products";
    private static final String JOBS = "jobs";
    private static final String JOB = "job";
@@ -89,13 +97,12 @@ public class PdgsDataStore extends AbstractAsyncCachedDataStore
     * @param name                    of this DataStore
     * @param priority                DataStores are ordered
     * @param isManager               true to enable the ingest job in this instance of the DHuS (only one instance per cluster)
-    * @param hfsLocation             path to the local HFS cache
     * @param patternReplaceIn        transform PDGS identifiers to DHuS identifiers
     * @param patternReplaceOut       transform DHuS identifiers to PDGS identifiers
     * @param maxPendingRequests      maximum number of pending orders at the same time
     * @param maxRunningRequests      maximum number of running orders at the same time
-    * @param maximumSize             maximum size in bytes of the local HFS cache DataStore
-    * @param currentSize             overall size of the local HFS cache DataStore (disk usage)
+    * @param maximumSize             maximum size in bytes of the local cache DataStore
+    * @param currentSize             overall size of the local cache DataStore (disk usage)
     * @param autoEviction            true to activate auto-eviction based on disk usage on the local HFS cache DataStore
     * @param urlService              URL to connect to the PDGS Service
     * @param login                   user to log to PDGS Service
@@ -103,17 +110,19 @@ public class PdgsDataStore extends AbstractAsyncCachedDataStore
     * @param interval                interval
     * @param maxConcurrentsDownloads maximum number of product download occurring in parallel
     * @param hashAlgorithms          to compute on restore
+    * @param cache                   local cache, can be HFS or OpenStack
+    *
     * @throws URISyntaxException could not create PDGSDataStore
     * @throws IOException        could not create PDGS repo location directory
     */
-public PdgsDataStore(String name, int priority, boolean isManager, String hfsLocation,
+public PdgsDataStore(String name, int priority, boolean isManager,
       PatternReplace patternReplaceIn, PatternReplace patternReplaceOut, Integer maxPendingRequests, Integer maxRunningRequests,
       long maximumSize, long currentSize, boolean autoEviction, String urlService, String login, String password,
-      long interval, int maxConcurrentsDownloads, String[] hashAlgorithms)
+      long interval, int maxConcurrentsDownloads, String[] hashAlgorithms, DataStore cache)
             throws URISyntaxException, IOException
 {
-   super(name, priority, hfsLocation, patternReplaceIn, patternReplaceOut, maxPendingRequests, maxRunningRequests,
-         maximumSize, currentSize, autoEviction, hashAlgorithms);
+   super(name, priority, patternReplaceIn, patternReplaceOut, maxPendingRequests, maxRunningRequests,
+         maximumSize, currentSize, autoEviction, hashAlgorithms, cache);
 
       Objects.requireNonNull(urlService);
 
@@ -125,7 +134,7 @@ public PdgsDataStore(String name, int priority, boolean isManager, String hfsLoc
       this.login = login;
       this.password = password;
 
-      LOGGER.info("New PDGS DataStore, name={} url={} hfsLocation={}", getName(), urlService, hfsLocation);
+      LOGGER.info("New PDGS DataStore, name={} url={} cache={}", getName(), urlService, cache.getName());
 
       LOGGER.info("This DHuS instance {} the PDGS manager", isManager ? "is" : "isn't");
 
@@ -133,7 +142,7 @@ public PdgsDataStore(String name, int priority, boolean isManager, String hfsLoc
       if (isManager)
       {
          timer = new Timer("Run PDGS Job", true);
-         timer.schedule(new RunJob(), 0, interval);
+         timer.schedule(new RunJob(), 60_000, interval);
       }
       else
       {
@@ -343,13 +352,26 @@ public PdgsDataStore(String name, int priority, boolean isManager, String hfsLoc
       HttpURLConnection connection;
       InputStream inputStream;
       String downloadUrl = pdgsJob.getProductUrl();
-
+      long headerLength = -1;
+      LOGGER.debug("Downloading '{}' / {} from '{}'",pdgsJob.getProductName(), uuid, downloadUrl);
       // normal case
       if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://"))
       {
          connection = openConnection(new URL(downloadUrl), HTTP_METHOD_GET, null);
-         connection.setReadTimeout(Timeouts.CONNECTION_TIMEOUT);
-         connection.setConnectTimeout(Timeouts.CONNECTION_TIMEOUT);
+         Map<String, List<String>> requestHeaders = connection.getRequestProperties();
+         LOGGER.debug("Download for product {} - request headers : {}", uuid, requestHeaders.keySet().stream()
+               .map(key -> key + "=" + requestHeaders.get(key)).collect(Collectors.joining(", ", "{", "}")));
+         Map<String, List<String>> responseHeaders = connection.getHeaderFields();
+         LOGGER.debug("Download for product {} - response headers : {}", uuid, responseHeaders.keySet().stream()
+               .map(key -> key + "=" + responseHeaders.get(key)).collect(Collectors.joining(", ", "{", "}")));
+         if (responseHeaders.containsKey(CONTENT_LENGTH))
+         {
+            List<String> header = responseHeaders.get(CONTENT_LENGTH);
+            if (header.size() > 0)
+            {
+               headerLength = Long.parseLong(header.get(0));
+            }
+         }
          inputStream = connection.getInputStream();
       }
       // special case for special lta brokers
@@ -367,6 +389,12 @@ public PdgsDataStore(String name, int priority, boolean isManager, String hfsLoc
       // make simple stream product
       StreamableProduct product = new StreamableProduct(inputStream);
 
+      if (headerLength != -1)
+      {
+         // save Content-Length to check downloaded product
+         product.setProperty(CONTENT_LENGTH, headerLength);
+      }
+      
       // don't forget to call that very convenient setter for product name
       product.setName(fileName);
 
@@ -380,8 +408,15 @@ public PdgsDataStore(String name, int priority, boolean isManager, String hfsLoc
             // refresh database order
             refreshOrder(uuid, getName(), pdgsJob.getJobId(), JobStatus.COMPLETED, pdgsJob.getEstimatedTime(), pdgsJob.getStatusMessage());
          }
+         catch (BadlySizedProductException ex)
+         {
+            LOGGER.debug("Error while moving product '{}' / {} : {}", product.getName(), uuid, ex.getMessage(), ex);
+            // refresh database order
+            refreshOrder(uuid, getName(), pdgsJob.getJobId(), JobStatus.FAILED, pdgsJob.getEstimatedTime(), "Product retrieval has failed");
+         }
          catch (DataStoreException ex)
          {
+            LOGGER.debug("Error while moving product '{}' / {} : {}", product.getName(), uuid, ex.getMessage(), ex);
             // refresh database order
             refreshOrder(uuid, getName(), pdgsJob.getJobId(), JobStatus.FAILED, pdgsJob.getEstimatedTime(), pdgsJob.getStatusMessage());
          }
@@ -393,6 +428,18 @@ public PdgsDataStore(String name, int priority, boolean isManager, String hfsLoc
       });
 
       LOGGER.info("Product download {} successfully queued", product.getName());
+   }
+   
+   @Override
+   public void validateProduct(Product product, String uuid) throws DataStoreException 
+   {
+      Long contentLength = (Long) product.getProperty(CONTENT_LENGTH);
+      Long size = (Long) product.getProperty(ProductConstants.DATA_SIZE);
+      if (contentLength != null && !contentLength.equals(size))
+      {
+         LOGGER.error("Received binary for product {} ({}) has not the right size. Expected {} bytes, recived {} bytes", product.getName(), uuid, contentLength, size);
+         throw new BadlySizedProductException("Received binary for product "+product.getName()+" ("+uuid+") has not the right size. Expected "+contentLength+" bytes, recived "+size+" bytes");
+      }
    }
 
    private void silentlyClose(HttpURLConnection connection, InputStream inputStream)
@@ -520,7 +567,8 @@ public PdgsDataStore(String name, int priority, boolean isManager, String hfsLoc
             LOGGER.error("Could not refresh Order for product {} ({} in Job)", localIdentifier, remoteIdentifier);
             return false;
          }
-
+         LOGGER.debug("Restoring product '{}' / {} - {} : {} ",pdgsJob.getProductName(),productUUID,pdgsJob.getStatusCode(),pdgsJob.getStatusMessage());
+         
          // start product download of completed jobs
          if (STATUS_COMPLETED.equals(pdgsJob.getStatusCode()))
          {

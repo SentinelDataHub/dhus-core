@@ -29,6 +29,7 @@ import org.springframework.stereotype.Component;
 import fr.gael.dhus.database.dao.UserDao;
 import fr.gael.dhus.database.dao.interfaces.DaoListener;
 import fr.gael.dhus.database.object.User;
+import fr.gael.dhus.system.config.ConfigurationManager;
 
 /**
  * Gather all the DHuS initialization required by the web services.
@@ -38,7 +39,10 @@ import fr.gael.dhus.database.object.User;
 public class DhusInitializer implements InitializingBean
 {
    private static final Logger LOGGER = LogManager.getLogger(DhusInitializer.class);
-   
+
+   @Autowired
+   private ConfigurationManager cfgManager;
+
    @Autowired
    private UserDao userDao;
    
@@ -49,8 +53,11 @@ public class DhusInitializer implements InitializingBean
    @Override
    public void afterPropertiesSet () throws Exception
    {
-      LOGGER.debug("Adding USER listeners.");
-      userDao.addListener (listener);
+      if(!cfgManager.isGDPREnabled())
+      {
+         LOGGER.debug("Adding USER listeners.");
+         userDao.addListener (listener);
+      }
    }
 
 }

@@ -146,13 +146,13 @@ public class OlingoManager
          int top) throws ExceptionVisitExpression, ODataApplicationException
    {
       UserSQLVisitor expV = new UserSQLVisitor(filter_expr, order_expr);
-      return userService.getUsers(expV, skip, top);
+      return userService.getUsers(expV.getHqlQuery(), expV.getHqlParameters(), skip, top);
    }
 
    public int getUsersNumber(FilterExpression filter_expr)
          throws ExceptionVisitExpression, ODataApplicationException
    {
       UserSQLVisitor expV = new UserSQLVisitor(filter_expr, null);
-      return userService.countUsers(expV);
+      return userService.countUsers(expV.getHqlQuery(), expV.getHqlParameters());
    }
 }

@@ -19,13 +19,15 @@
  */
 package fr.gael.dhus.database.dao;
 
-import fr.gael.dhus.database.dao.interfaces.Pageable;
-
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+import fr.gael.dhus.database.dao.interfaces.HibernateDao;
+import fr.gael.dhus.database.dao.interfaces.Pageable;
+
+import org.dhus.olingo.v2.visitor.SQLVisitorParameter;
 /**
  * This class implements an iterator over Pageable items. All the database dao
  * implements Pageable to retrieve the list of their entities. This class helps
@@ -67,17 +69,20 @@ import java.util.NoSuchElementException;
  * @see {@link java.lang.Iterable}, {@link java.lang.Iterator}, 
  *    {@link Pageable}
  */
-final class PagedIterator<E> implements Iterator<E>, Iterable<E>
+final public class PagedIterator<E> implements Iterator<E>, Iterable<E>
 {
-   private static final int DEFAULT_PAGE_SIZE = 30;
+   public static final int DEFAULT_PAGE_SIZE = 30;
 
    private final Pageable<E> pageable;
    private final String query;
+   private final List<SQLVisitorParameter> parameters;
    private List<E> result;
    private E currentElement;
    private int index;
+   private int globalIndex;
    private int skip;
    private final int pageSize;
+   private final int count;
 
    PagedIterator (Pageable<E> pageable, String query)
    {
@@ -91,17 +96,43 @@ final class PagedIterator<E> implements Iterator<E>, Iterable<E>
 
    PagedIterator (Pageable<E> pageable, String query, int skip, int page_size)
    {
+      this (pageable, query, skip, page_size, -1);
+   }
+
+   PagedIterator (Pageable<E> pageable, String query, int skip, int page_size, int count)
+   {
+      this (pageable, query, null, skip, page_size, count);
+   }
+
+   PagedIterator (Pageable<E> pageable, String query, List<SQLVisitorParameter> parameters, int skip, int page_size, int count)
+   {
       if (pageable == null || query == null || query.trim ().isEmpty ()
-            || skip < 0 || page_size < 1)
+            || skip < 0 || page_size < 1 || count < -1)
       {
          throw new IllegalArgumentException ();
       }
 
       this.pageable = pageable;
       this.query = query;
+      this.parameters = parameters;
       this.pageSize = page_size;
       this.index = 0;
+      this.globalIndex = 0;
       this.skip = skip;
+      this.count = count;
+   }
+
+   /**
+    * @return total query count when possible, otherwise -1
+    *         skip and top are not taken into account
+    */
+   public Integer getCount()
+   {
+      if(pageable instanceof HibernateDao<?, ?>)
+      {
+         return ((HibernateDao<?, ?>)pageable).count();
+      }
+      return -1;
    }
 
    /**
@@ -112,7 +143,7 @@ final class PagedIterator<E> implements Iterator<E>, Iterable<E>
     */
    private boolean loadNextPage ()
    {
-      result = pageable.getPage (query, skip, pageSize);
+      result = pageable.getPage (query, parameters, skip, pageSize);
       index = 0;
 
       if (result == null || result.isEmpty ())
@@ -125,6 +156,10 @@ final class PagedIterator<E> implements Iterator<E>, Iterable<E>
    @Override
    public boolean hasNext ()
    {
+      if(count > 0 && globalIndex >= count)
+      {
+         return false;
+      }
       if (result == null || result.isEmpty () || index == result.size ())
       {
          return loadNextPage ();
@@ -140,6 +175,7 @@ final class PagedIterator<E> implements Iterator<E>, Iterable<E>
          currentElement = result.get (index);
          index++;
          skip++;
+         globalIndex++;
          return currentElement;
       }
       throw new NoSuchElementException ();
@@ -168,6 +204,7 @@ final class PagedIterator<E> implements Iterator<E>, Iterable<E>
       pageable.delete (currentElement);
       currentElement = null;
       skip--;
+      globalIndex--;
    }
 
    /**

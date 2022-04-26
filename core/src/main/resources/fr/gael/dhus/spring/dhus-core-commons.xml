@@ -46,6 +46,7 @@
    <context:component-scan base-package="fr.gael.dhus.spring.context" />
 
    <context:component-scan base-package="org.dhus.scanner" />
+   <context:component-scan base-package="org.dhus.store.datastore" />
 
    <bean id="exporter" class="org.springframework.jmx.export.MBeanExporter" lazy-init="false">
       <property name="beans">

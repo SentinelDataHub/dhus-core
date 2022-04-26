@@ -23,10 +23,12 @@ import fr.gael.dhus.database.dao.UserDao;
 import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.service.exception.EmailNotSentException;
+import fr.gael.dhus.service.exception.GDPREnabledException;
 import fr.gael.dhus.service.exception.MalformedEmailException;
 import fr.gael.dhus.service.exception.RequiredFieldMissingException;
 import fr.gael.dhus.service.exception.RootNotModifiableException;
 import fr.gael.dhus.service.exception.UsernameBadCharacterException;
+import fr.gael.dhus.service.exception.GDPREnabledException;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.util.TestContextLoader;
 import org.springframework.cache.Cache;
@@ -83,7 +85,7 @@ public class CacheUserServiceIT extends AbstractTransactionalTestNGSpringContext
 
    @Test
    public void testUserCache () throws RootNotModifiableException,
-         RequiredFieldMissingException
+         RequiredFieldMissingException, GDPREnabledException
    {
       String cache_name = "user";
       String cache2_name = "userByName";
@@ -142,7 +144,7 @@ public class CacheUserServiceIT extends AbstractTransactionalTestNGSpringContext
 
    @Test
    public void MalformedUserCreateTest() throws EmailNotSentException,
-      RequiredFieldMissingException, RootNotModifiableException
+      RequiredFieldMissingException, RootNotModifiableException, GDPREnabledException
    {
       // Case of well formed...
       User u = new User();
@@ -196,7 +198,7 @@ public class CacheUserServiceIT extends AbstractTransactionalTestNGSpringContext
    
    @Test (dependsOnMethods="MalformedUserCreateTest")
    public void MalformedUserUpdateTest() throws EmailNotSentException,
-      RequiredFieldMissingException, RootNotModifiableException
+      RequiredFieldMissingException, RootNotModifiableException, GDPREnabledException
    {
       UserDao udao = ApplicationContextProvider.getBean (UserDao.class);
       // Normal update
@@ -231,7 +233,7 @@ public class CacheUserServiceIT extends AbstractTransactionalTestNGSpringContext
    
    @Test
    public void ExtendedMalformedUserTest() throws EmailNotSentException,
-      RequiredFieldMissingException, RootNotModifiableException
+      RequiredFieldMissingException, RootNotModifiableException, GDPREnabledException
    {
       UserDao udao = ApplicationContextProvider.getBean (UserDao.class);
       // Normal update

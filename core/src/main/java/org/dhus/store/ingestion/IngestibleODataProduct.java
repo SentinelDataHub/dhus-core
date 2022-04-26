@@ -49,6 +49,7 @@ public class IngestibleODataProduct implements IngestibleProduct
    private final Date ingestionDate;
    private final Date creationDate;
    private final Boolean onDemand;
+   private final Boolean online;
 
    // public metadata
    private final String itemClass;
@@ -72,7 +73,7 @@ public class IngestibleODataProduct implements IngestibleProduct
 
    private IngestibleODataProduct(String uuid, String origin, Date ingestionDate, Date creationDate,
          String itemClass, String identifier, Date contentStart, Date contentEnd, String footprint,
-         List<MetadataIndex> metadataIndexes, Product physicalProduct, Product quicklook, Product thumbnail, Boolean onDemand)
+         List<MetadataIndex> metadataIndexes, Product physicalProduct, Product quicklook, Product thumbnail, Boolean onDemand, Boolean online)
    {
       this.uuid = uuid;
       this.origin = origin;
@@ -90,6 +91,7 @@ public class IngestibleODataProduct implements IngestibleProduct
       this.product = physicalProduct;
       this.quicklook = quicklook;
       this.thumbnail = thumbnail;
+      this.online = online;
 
       this.properties = new HashMap<>();
 
@@ -119,6 +121,12 @@ public class IngestibleODataProduct implements IngestibleProduct
       {
          onDemand = false;
       }
+      
+      Boolean online = (Boolean)odataProductProperties.get("Online");
+      if (online == null)
+      {
+         online = false;
+      }
 
       // extract ContentDate complex property
       @SuppressWarnings("unchecked")
@@ -133,7 +141,7 @@ public class IngestibleODataProduct implements IngestibleProduct
       if (physicalProduct != null)
       {
          return new IngestibleODataProduct(uuid, origin, ingestionDate, creationDate, itemClass, identifier,
-               contentStart, contentEnd, footprint, metadataIndexList, physicalProduct, quicklook, thumbnail, onDemand);
+               contentStart, contentEnd, footprint, metadataIndexList, physicalProduct, quicklook, thumbnail, onDemand, online);
       }
       throw new MissingProductsException("Cannot instantiate without product, quicklook and thumbnail reference or downloadable");
    }
@@ -311,5 +319,11 @@ public class IngestibleODataProduct implements IngestibleProduct
    public long getIngestionTimeMillis()
    {
       return timerStopMillis - timerStartMillis;
+   }
+
+   @Override
+   public Boolean isOnline()
+   {
+      return online;
    }
 }

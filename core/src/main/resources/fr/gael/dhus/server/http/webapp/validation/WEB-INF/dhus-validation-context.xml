@@ -46,7 +46,6 @@
 
    <security:http entry-point-ref="validationAuthEntryPoint" use-expressions="true" disable-url-rewriting="true" create-session="never">
       <security:custom-filter position="PRE_AUTH_FILTER" ref="preAuthFilter" />
-      <security:custom-filter position="BASIC_AUTH_FILTER" ref="basicAuthFilter" />
       <security:intercept-url pattern="/*" access="permitAll"/>
       <security:session-management session-fixation-protection="none" />
       <security:csrf disabled="true" />

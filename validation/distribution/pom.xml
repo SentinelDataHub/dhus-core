@@ -24,7 +24,7 @@
    <parent>
       <groupId>fr.gael.dhus</groupId>
       <artifactId>dhus-core-suite</artifactId>
-      <version>1.11.2-osf</version>
+      <version>2.0.8-osf</version>
       <relativePath>../../pom.xml</relativePath>
    </parent>
 
@@ -125,27 +125,39 @@
 
    <repositories>
       <repository>
-         <id>external dependencies</id>
-<!-- repository https://copernicus.serco.eu/repository/nexus/content/repositories/releases
-     used to proxy gael's resources requires credentials
-     Using alternative source repository. -->
-         <url>https://repository.gael-systems.com/repository/public</url>
+        <id>osf-releases</id>
+        <name>Releases Repository</name>
+        <url>
+          https://copernicus.serco.eu/repository/nexus/content/repositories/releases/
+        </url>
+      </repository>
+      <repository>
+         <id>osf-public</id>
+         <name>OSF Public Repository</name>
+         <url>
+            https://copernicus.serco.eu/repository/nexus/content/groups/public
+         </url>
+         <layout>default</layout>
       </repository>
    </repositories>
 
    <distributionManagement>
       <repository>
          <uniqueVersion>true</uniqueVersion>
-         <id>osf-delivery</id>
+         <id>osf-releases</id>
          <name>OSF Releases Repository</name>
          <url>
-            https://copernicus.serco.eu/repository/nexus/content/repositories/OSF_releases
+            https://copernicus.serco.eu/repository/nexus/content/repositories/releases/
+
          </url>
          <layout>default</layout>
       </repository>
+      <site>
+         <id>gael-site</id>
+         <url>${site.baseUrl}/</url>
+      </site>
    </distributionManagement>
-	
-	<profiles> 
+   <profiles> 
       <profile>
          <id>native-libraries-so</id>
          <activation>

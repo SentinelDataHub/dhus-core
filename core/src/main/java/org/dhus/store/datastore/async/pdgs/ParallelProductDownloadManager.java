@@ -68,6 +68,7 @@ public class ParallelProductDownloadManager
       Future<?> f = this.threadPool.submit(task);
       ProductDownload downloadProduct = new ProductDownload(streamableProduct, f);
       runningDownloads.add(downloadProduct);
+      LOGGER.debug("Adding download '{}'",streamableProduct.getName());
       return f;
    }
 
@@ -100,10 +101,12 @@ public class ParallelProductDownloadManager
     */
    public void checkProductDownloads()
    {
+      LOGGER.debug("--- Checking running downloads - "+runningDownloads);
       Iterator<ProductDownload> it = runningDownloads.iterator();
       while (it.hasNext())
       {
          ProductDownload task = it.next();
+         LOGGER.debug("Checking download '{}'",task.getStreamableProduct().getName());
          if (task.isDone())
          {
             try
@@ -122,6 +125,7 @@ public class ParallelProductDownloadManager
          }
       }
       LOGGER.debug("ParallelProductDownloadManager: {} downloads running", runningDownloads.size());
+      LOGGER.debug("--- Running downloads left : "+runningDownloads);
    }
 
    /** Creates only daemon threads. */
@@ -131,6 +135,7 @@ public class ParallelProductDownloadManager
       public Thread newThread(Runnable r)
       {
          Thread thread = new Thread(r, "download-product");
+         thread.setName("download-product-"+thread.getId());
          thread.setDaemon(true);
          return thread;
       }
@@ -177,6 +182,12 @@ public class ParallelProductDownloadManager
       public StreamableProduct getStreamableProduct()
       {
          return streamableProduct;
+      }
+      
+      @Override
+      public String toString()
+      {
+         return "("+streamableProduct.getName()+" - "+(downloadTask.isDone()?"done":"running")+")";
       }
    }
 }

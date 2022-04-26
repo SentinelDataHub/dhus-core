@@ -76,6 +76,9 @@ public class SynchronizerEntitySet extends AbstractEntitySet<Synchronizer>
    public static final String SOURCE_COLLECTION = "SourceCollection";
    public static final String GEO_FILTER = "GeoFilter";
    public static final String SKIP_ON_ERROR = "SkipOnError";
+   public static final String SYNC_OFFLINE_PRODUCTS = "SyncOfflineProducts";
+   public static final String RETRIES_SKIPPED_PRODUCTS = "RetriesForSkippedProducts";
+   public static final String TIMEOUT_SKIPPED_PRODUCTS = "TimeoutSkippedProducts";
 
    // Association (Navigation link)
    public static final FullQualifiedName ASSO_SYNC_COLLECTION =
@@ -171,6 +174,10 @@ public class SynchronizerEntitySet extends AbstractEntitySet<Synchronizer>
       properties.add(new SimpleProperty().setName(SKIP_ON_ERROR)
             .setType(EdmSimpleTypeKind.Boolean)
             .setFacets(new Facets().setNullable(false).setDefaultValue("true")));
+      
+      properties.add(new SimpleProperty().setName(SYNC_OFFLINE_PRODUCTS)
+            .setType(EdmSimpleTypeKind.Boolean)
+            .setFacets(new Facets().setNullable(false).setDefaultValue("false")));
 
       properties.add (new SimpleProperty ().setName (STATUS)
             .setType (EdmSimpleTypeKind.String)
@@ -182,6 +189,22 @@ public class SynchronizerEntitySet extends AbstractEntitySet<Synchronizer>
 
       properties.add (new SimpleProperty ().setName (STATUS_MESSAGE)
             .setType (EdmSimpleTypeKind.String));
+      
+      properties.add(new SimpleProperty().setName(RETRIES_SKIPPED_PRODUCTS)
+            .setType(EdmSimpleTypeKind.Int32)
+            .setFacets (
+                  new Facets ()
+                        .setNullable (false)
+                        .setDefaultValue ("3")
+            ));
+      
+      properties.add(new SimpleProperty().setName(TIMEOUT_SKIPPED_PRODUCTS)
+            .setType(EdmSimpleTypeKind.Int32)
+            .setFacets (
+                  new Facets ()
+                        .setNullable (false)
+                        .setDefaultValue ("60000")
+            ));
 
       // Navigation Properties
       List<NavigationProperty> navigationProperties = Collections.singletonList (

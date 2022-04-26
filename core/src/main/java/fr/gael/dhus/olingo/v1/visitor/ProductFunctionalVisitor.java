@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018,2019 GAEL Systems
+ * Copyright (C) 2018-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -109,6 +109,12 @@ public class ProductFunctionalVisitor extends FunctionalVisitor
          case NodeEntitySet.CHILDREN_NUMBER:
          {
             throw new IllegalArgumentException("Property \"" + uri_literal + "\" is not filterable");
+         }
+
+         case ProductEntitySet.ON_DEMAND:
+         {
+            res = (prod) -> prod.isOnDemand();
+            break;
          }
 
          // Unsupported or invalid properties

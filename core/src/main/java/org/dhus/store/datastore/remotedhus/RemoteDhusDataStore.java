@@ -22,6 +22,7 @@ package org.dhus.store.datastore.remotedhus;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -357,5 +358,11 @@ public class RemoteDhusDataStore implements DataStore, DerivedProductStore
             }
          }
       }
+   }
+
+   @Override
+   public Iterator<String> getScrollableProductResults()
+   {
+      return null;
    }
 }

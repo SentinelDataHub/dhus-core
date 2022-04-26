@@ -114,4 +114,14 @@
       <persistence strategy="none" />
    </cache>
 
+   <cache name="saml_saved_requests"
+          eternal="false"
+          maxEntriesLocalHeap="30000"
+          timeToIdleSeconds="0"
+          timeToLiveSeconds="3600"
+          memoryStoreEvictionPolicy="LFU">
+      <cacheEventListenerFactory class="fr.gael.dhus.util.LoggingCacheListenerFactory" />
+      <persistence strategy="none" />
+   </cache>
+
 </ehcache>

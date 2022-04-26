@@ -19,6 +19,7 @@
  */
 package org.dhus.store.datastore;
 
+import java.util.Iterator;
 import java.util.List;
 
 import org.dhus.Product;
@@ -121,6 +122,13 @@ public interface DataStore extends Store, AutoCloseable
     * @throws DataStoreException reference not found or modifying references is restricted
     */
    public default void deleteProductReference(String uuid) throws DataStoreException {} // Default No-Op implementation
+
+   /**
+    * Returns an iterator of products known to this DataStore.
+    *
+    * @return return a non-null iterator of products
+    */
+   public Iterator<String> getScrollableProductResults();
 
    /**
     * Returns a list of products known to this DataStore.

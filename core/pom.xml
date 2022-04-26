@@ -32,8 +32,8 @@
       <solr.version>5.5.3</solr.version>
       <spring.version>5.2.1.RELEASE</spring.version>
       <spring_security.version>5.2.1.RELEASE</spring_security.version>
-      <log4j.version>2.16.0</log4j.version>
-      <tomcat.version>8.0.53</tomcat.version>
+      <log4j.version>2.17.1</log4j.version>
+      <tomcat.version>8.5.42</tomcat.version>
       <skipUTs>${skipTests}</skipUTs>
       <testing.argline></testing.argline>
       <argLine></argLine>
@@ -42,7 +42,7 @@
    <parent>
       <groupId>fr.gael.dhus</groupId>
       <artifactId>dhus-core-suite</artifactId>
-      <version>1.11.2-osf</version>
+      <version>2.0.8-osf</version>
       <relativePath>../pom.xml</relativePath>
    </parent>
 
@@ -86,7 +86,7 @@
             </exclusion>
          </exclusions>
       </dependency>
-
+      
       <!-- Commons -->
       <dependency>
          <groupId>commons-io</groupId>
@@ -167,7 +167,7 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drb</artifactId>
-         <version>2.5.10</version>
+         <version>2.5.13</version>
          <exclusions>
             <exclusion>
                <groupId>log4j</groupId>
@@ -182,7 +182,7 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-cortex</artifactId>
-         <version>1.0.5</version>
+         <version>1.0.8</version>
          <exclusions>
             <exclusion>
                <groupId>fr.gael.drb</groupId>
@@ -220,9 +220,9 @@
                <groupId>javax.media</groupId>
                <artifactId>jai_imageio</artifactId><!-- contains bugged jp2k support provided by JJ2000 -->
             </exclusion>
-            <exclusion>
-            	<groupId>fr.gael.drb</groupId>
-            	<artifactId>drb</artifactId>
+			<exclusion>
+               <groupId>fr.gael.drb</groupId>
+               <artifactId>drb</artifactId>
             </exclusion>
          </exclusions>
       </dependency>
@@ -231,7 +231,7 @@
       <dependency>
          <groupId>fr.gael.streams</groupId>
          <artifactId>streams</artifactId>
-         <version>1.0.11</version>
+         <version>1.0.14</version>
       </dependency>
 
       <!-- DRB Implementations -->
@@ -248,7 +248,7 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-impl-tar</artifactId>
-         <version>1.0.13</version>
+         <version>1.0.17</version>
          <exclusions>
             <exclusion>
                <groupId>fr.gael.drb</groupId>
@@ -268,23 +268,23 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-impl-tiff</artifactId>
-         <version>1.2.4</version>
+         <version>1.2.7</version>
          <exclusions>
             <!-- replaced by GPL compatible com.github.jai-imageio:jai-imageio-core -->
-            <exclusion>
+			<exclusion>
                <groupId>javax.media</groupId>
                <artifactId>jai_imageio</artifactId><!-- contains bugged jp2k support provided by JJ2000 -->
             </exclusion>
             <exclusion>
-            	<groupId>fr.gael.drb</groupId>
-            	<artifactId>drb</artifactId>
+               <groupId>fr.gael.drb</groupId>
+               <artifactId>drb</artifactId>
             </exclusion>
          </exclusions>
       </dependency>
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-impl-zip</artifactId>
-         <version>1.1.26</version>
+         <version>1.1.28</version>
          <exclusions>
             <exclusion>
                <groupId>fr.gael.drb</groupId>
@@ -300,7 +300,7 @@
       <dependency>
          <groupId>fr.gael.drb</groupId>
          <artifactId>drbx-impl-swift</artifactId>
-         <version>1.0.22</version>
+         <version>1.0.25</version>
          <exclusions>
             <exclusion>
                <groupId>fr.gael.drb</groupId>
@@ -599,7 +599,19 @@
       <dependency>
          <groupId>org.springframework.security.extensions</groupId>
          <artifactId>spring-security-saml2-core</artifactId>
-         <version>1.0.2.RELEASE</version>
+         <version>1.0.10.RELEASE</version>
+      </dependency>
+
+      <!-- Keycloak adapter, imported for internal checks in KeycloakLogoutAll handler (saml webapp) -->
+      <dependency>
+         <groupId>org.keycloak</groupId>
+         <artifactId>keycloak-adapter-core</artifactId>
+         <version>12.0.4</version>
+      </dependency>
+      <dependency>
+         <groupId>org.keycloak</groupId>
+         <artifactId>keycloak-core</artifactId>
+         <version>12.0.4</version>
       </dependency>
 
       <!-- Jackson + databind required by Spring 5 -->
@@ -837,6 +849,11 @@
             </exclusion>
          </exclusions>
       </dependency>
+		<dependency>
+         <groupId>com.google.guava</groupId>
+         <artifactId>guava</artifactId>
+			<version>18.0</version>
+		</dependency>
    </dependencies>
 
    <profiles>
@@ -1101,6 +1118,13 @@
    </build>
 
    <repositories>
+      <repository><!--  to get opensaml 2.6.6 (dependency of spring saml) -->
+          <id>Shibbolet</id>
+          <name>Shibbolet</name>
+          <url>https://build.shibboleth.net/nexus/content/repositories/releases/</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+      </repository>
       <repository>
          <id>osgeo</id><!-- repository providing the geotools dependency -->
          <name>Open Source Geospatial Foundation Repository</name>
@@ -1116,5 +1140,4 @@
           <snapshots><enabled>false</enabled></snapshots>
       </repository>
    </repositories>
-
 </project>

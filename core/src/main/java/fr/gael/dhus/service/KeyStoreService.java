@@ -169,6 +169,19 @@ public class KeyStoreService
    }
 
    /**
+    * Returns a non-null iterator of unaltered products KeyStoreEntries known to
+    * given KeyStore.
+    *
+    * @param keyStoreName name of KeyStore to query
+    * @return iterator of KeyStoreEntry
+    */
+   @Transactional(readOnly = true)
+   public Iterator<KeyStoreEntry> getUnalteredScrollableProductEntries(String keyStoreName)
+   {
+      return keyStoreEntryDao.getUnalteredScrollableProductEntries(keyStoreName, null, null);
+   }
+
+   /**
     * Returns a non-null list of unaltered products KeyStoreEntries known to given KeyStore.
     *
     * @param keyStoreName name of KeyStore to query

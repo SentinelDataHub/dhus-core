@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018,2019 GAEL Systems
+ * Copyright (C) 2018-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,60 +19,70 @@
  */
 package org.dhus.olingo.v2.web;
 
-import fr.gael.odata.engine.data.DataHandler;
-import fr.gael.odata.engine.model.EdmProvider;
-import fr.gael.odata.engine.servlet.AbstractODataServlet;
-
 import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.olingo.commons.api.edm.FullQualifiedName;
-
 import org.dhus.api.olingo.v2.EntityProducer;
 import org.dhus.api.olingo.v2.TypeInfo;
-
 import org.dhus.olingo.v2.data.AttributeDataHandler;
 import org.dhus.olingo.v2.data.ClassDataHandler;
 import org.dhus.olingo.v2.data.CollectionDataHandler;
 import org.dhus.olingo.v2.data.DataStoreDataHandler;
+import org.dhus.olingo.v2.data.DeletedProductDataHandler;
 import org.dhus.olingo.v2.data.EvictionDataHandler;
 import org.dhus.olingo.v2.data.MetricDataHandler;
 import org.dhus.olingo.v2.data.NodeDataHandler;
 import org.dhus.olingo.v2.data.OrderDataHandler;
 import org.dhus.olingo.v2.data.ProductDataHandler;
 import org.dhus.olingo.v2.data.ScannerDataHandler;
+import org.dhus.olingo.v2.data.SearchesDataHandler;
 import org.dhus.olingo.v2.data.SmartSynchronizerDataHandler;
 import org.dhus.olingo.v2.data.SourceDataHandler;
 import org.dhus.olingo.v2.data.SynchronizerDataHandler;
 import org.dhus.olingo.v2.data.TransformationDataHandler;
 import org.dhus.olingo.v2.data.TransformerDataHandler;
-import org.dhus.olingo.v2.datamodel.JobModel;
-import org.dhus.olingo.v2.datamodel.ParamPdgsDataStoreModel;
+import org.dhus.olingo.v2.data.UserDataHandler;
 import org.dhus.olingo.v2.datamodel.AsyncDataStoreModel;
 import org.dhus.olingo.v2.datamodel.AttributeModel;
 import org.dhus.olingo.v2.datamodel.ClassModel;
 import org.dhus.olingo.v2.datamodel.CollectionModel;
 import org.dhus.olingo.v2.datamodel.DataStoreModel;
+import org.dhus.olingo.v2.datamodel.DeletedProductModel;
 import org.dhus.olingo.v2.datamodel.EvictionModel;
 import org.dhus.olingo.v2.datamodel.FileScannerModel;
 import org.dhus.olingo.v2.datamodel.FtpScannerModel;
 import org.dhus.olingo.v2.datamodel.GmpDataStoreModel;
 import org.dhus.olingo.v2.datamodel.HfsDataStoreModel;
+import org.dhus.olingo.v2.datamodel.HttpAsyncDataStoreModel;
 import org.dhus.olingo.v2.datamodel.ItemModel;
+import org.dhus.olingo.v2.datamodel.JobModel;
+import org.dhus.olingo.v2.datamodel.LtaDataStoreModel;
 import org.dhus.olingo.v2.datamodel.MetricModel;
 import org.dhus.olingo.v2.datamodel.NodeModel;
+import org.dhus.olingo.v2.datamodel.OndaDataStoreModel;
 import org.dhus.olingo.v2.datamodel.OpenstackDataStoreModel;
 import org.dhus.olingo.v2.datamodel.OrderModel;
+import org.dhus.olingo.v2.datamodel.ParamPdgsDataStoreModel;
 import org.dhus.olingo.v2.datamodel.PdgsDataStoreModel;
 import org.dhus.olingo.v2.datamodel.ProductModel;
+import org.dhus.olingo.v2.datamodel.ProductSynchronizerModel;
 import org.dhus.olingo.v2.datamodel.RemoteDhusDataStoreModel;
 import org.dhus.olingo.v2.datamodel.ScannerModel;
+import org.dhus.olingo.v2.datamodel.SearchModel;
 import org.dhus.olingo.v2.datamodel.SmartSynchronizerModel;
 import org.dhus.olingo.v2.datamodel.SourceModel;
 import org.dhus.olingo.v2.datamodel.SynchronizerModel;
 import org.dhus.olingo.v2.datamodel.TransformationModel;
 import org.dhus.olingo.v2.datamodel.TransformerModel;
+import org.dhus.olingo.v2.datamodel.UserModel;
+import org.dhus.olingo.v2.datamodel.action.AddSearchAction;
 import org.dhus.olingo.v2.datamodel.action.CancelEvictionAction;
+import org.dhus.olingo.v2.datamodel.action.ClearSearchesAction;
+import org.dhus.olingo.v2.datamodel.action.DeleteDeletedProductsAction;
+import org.dhus.olingo.v2.datamodel.action.DeleteProductsAction;
+import org.dhus.olingo.v2.datamodel.action.DeleteSearchAction;
+import org.dhus.olingo.v2.datamodel.action.LockUserAction;
 import org.dhus.olingo.v2.datamodel.action.OrderProductAction;
 import org.dhus.olingo.v2.datamodel.action.QueueEvictionAction;
 import org.dhus.olingo.v2.datamodel.action.RepairProductAction;
@@ -82,30 +92,44 @@ import org.dhus.olingo.v2.datamodel.action.StartScannerAction;
 import org.dhus.olingo.v2.datamodel.action.StopEvictionAction;
 import org.dhus.olingo.v2.datamodel.action.StopScannerAction;
 import org.dhus.olingo.v2.datamodel.action.TransformProductAction;
+import org.dhus.olingo.v2.datamodel.action.UnlockUserAction;
+import org.dhus.olingo.v2.datamodel.action.EnableSearchAction;
+import org.dhus.olingo.v2.datamodel.complex.AdvancedPropertyComplexType;
 import org.dhus.olingo.v2.datamodel.complex.ChecksumComplexType;
 import org.dhus.olingo.v2.datamodel.complex.CronComplexType;
 import org.dhus.olingo.v2.datamodel.complex.DescriptiveParameterComplexType;
 import org.dhus.olingo.v2.datamodel.complex.GMPConfigurationComplexType;
 import org.dhus.olingo.v2.datamodel.complex.MySQLConnectionInfoComplexType;
+import org.dhus.olingo.v2.datamodel.complex.ObjectStorageComplexType;
+import org.dhus.olingo.v2.datamodel.complex.OndaScannerComplexType;
 import org.dhus.olingo.v2.datamodel.complex.PatternReplaceComplexType;
 import org.dhus.olingo.v2.datamodel.complex.ResourceLocationComplexType;
+import org.dhus.olingo.v2.datamodel.complex.RestrictionComplexType;
 import org.dhus.olingo.v2.datamodel.complex.ScannerStatusComplexType;
 import org.dhus.olingo.v2.datamodel.complex.SynchronizerSourceComplexType;
 import org.dhus.olingo.v2.datamodel.complex.TimeRangeComplexType;
 import org.dhus.olingo.v2.datamodel.complex.TransformationParametersComplexType;
-import org.dhus.olingo.v2.datamodel.enumeration.MetricTypeEnum;
 import org.dhus.olingo.v2.datamodel.enumeration.JobStatusEnum;
+import org.dhus.olingo.v2.datamodel.enumeration.MetricTypeEnum;
+import org.dhus.olingo.v2.datamodel.enumeration.SystemRoleEnum;
 import org.dhus.olingo.v2.datamodel.function.EvictionDateFunction;
 import org.dhus.olingo.v2.datamodel.function.ResourceLocationFunction;
 import org.dhus.olingo.v2.entity.TypeStore;
-
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.system.config.ConfigurationManager;
+import fr.gael.odata.engine.data.DataHandler;
+import fr.gael.odata.engine.model.EdmProvider;
+import fr.gael.odata.engine.servlet.AbstractODataServlet;
+
 
 public class DHuSODataServlet extends AbstractODataServlet
 {
+   private static final ConfigurationManager CONFIG_MANAGER = ApplicationContextProvider.getBean(ConfigurationManager.class);
+   
    public static final String NAMESPACE = "OData.DHuS";
    public static final String CONTAINER_NAME = "Container";
 
@@ -150,11 +174,15 @@ public class DHuSODataServlet extends AbstractODataServlet
       dataHandlers.put(GmpDataStoreModel.FULL_QUALIFIED_NAME, dataStoreDataHandler);
       dataHandlers.put(RemoteDhusDataStoreModel.FULL_QUALIFIED_NAME, dataStoreDataHandler);
       dataHandlers.put(PdgsDataStoreModel.FULL_QUALIFIED_NAME, dataStoreDataHandler);
+      dataHandlers.put(LtaDataStoreModel.FULL_QUALIFIED_NAME, dataStoreDataHandler);
+      dataHandlers.put(OndaDataStoreModel.FULL_QUALIFIED_NAME, dataStoreDataHandler);
 
       // operative
       dataHandlers.put(EvictionModel.FULL_QUALIFIED_NAME, new EvictionDataHandler());
       dataHandlers.put(SourceModel.FULL_QUALIFIED_NAME, new SourceDataHandler());
-      dataHandlers.put(SynchronizerModel.ABSTRACT_FULL_QUALIFIED_NAME, new SynchronizerDataHandler(typeStore));
+      SynchronizerDataHandler synchronizerDataHandler = new SynchronizerDataHandler(typeStore);
+      dataHandlers.put(SynchronizerModel.ABSTRACT_FULL_QUALIFIED_NAME, synchronizerDataHandler);
+      dataHandlers.put(ProductSynchronizerModel.FULL_QUALIFIED_NAME, synchronizerDataHandler);
       dataHandlers.put(SmartSynchronizerModel.FULL_QUALIFIED_NAME, new SmartSynchronizerDataHandler(typeStore));
       dataHandlers.put(TransformerModel.FULL_QUALIFIED_NAME, new TransformerDataHandler(typeStore));
       dataHandlers.put(TransformationModel.FULL_QUALIFIED_NAME, new TransformationDataHandler(typeStore));
@@ -171,6 +199,11 @@ public class DHuSODataServlet extends AbstractODataServlet
       dataHandlers.put(AttributeModel.FULL_QUALIFIED_NAME, new AttributeDataHandler());
       dataHandlers.put(ClassModel.FULL_QUALIFIED_NAME, new ClassDataHandler());
       dataHandlers.put(OrderModel.FULL_QUALIFIED_NAME, new OrderDataHandler());
+      dataHandlers.put(DeletedProductModel.FULL_QUALIFIED_NAME, new DeletedProductDataHandler());
+
+      // user
+      dataHandlers.put(SearchModel.FULL_QUALIFIED_NAME, new SearchesDataHandler());
+      dataHandlers.put(UserModel.FULL_QUALIFIED_NAME, new UserDataHandler());
 
       // metrics
       if (MetricDataHandler.isEnabled())
@@ -184,8 +217,7 @@ public class DHuSODataServlet extends AbstractODataServlet
    private static EdmProvider buildEdmProvider()
    {
       EdmProvider.Builder builder = new EdmProvider.Builder(NAMESPACE, CONTAINER_NAME);
-      builder.addModels(
-                  // storage
+      builder.addModels(// storage
                   new DataStoreModel(),
                   new HfsDataStoreModel(),
                   new OpenstackDataStoreModel(),
@@ -194,11 +226,15 @@ public class DHuSODataServlet extends AbstractODataServlet
                   new PdgsDataStoreModel(),
                   new AsyncDataStoreModel(),
                   new ParamPdgsDataStoreModel(),
+                  new HttpAsyncDataStoreModel(),
+                  new LtaDataStoreModel(),
+                  new OndaDataStoreModel(),
 
                   // operative
                   new EvictionModel(),
                   new SourceModel(),
                   new SynchronizerModel(),
+                  new ProductSynchronizerModel(),
                   new SmartSynchronizerModel(),
 
                   // transformation
@@ -218,7 +254,12 @@ public class DHuSODataServlet extends AbstractODataServlet
                   new AttributeModel(),
                   new ClassModel(),
                   new OrderModel(),
-                  new JobModel())
+                  new JobModel(),
+                  new DeletedProductModel(),
+
+                  // user
+                  new SearchModel(),
+                  new UserModel())
 
             .addComplexTypes(
                   new MySQLConnectionInfoComplexType(),
@@ -240,10 +281,18 @@ public class DHuSODataServlet extends AbstractODataServlet
                   new DescriptiveParameterComplexType(),
                   new TransformationParametersComplexType(),
 
+                  // user
+                  new AdvancedPropertyComplexType(),
+                  new RestrictionComplexType(),
+
                   // other
                   new TimeRangeComplexType(),
                   new ChecksumComplexType(),
-                  new PatternReplaceComplexType())
+                  new PatternReplaceComplexType(),
+                  
+                  // ondaDataStore
+                  new ObjectStorageComplexType(),
+                  new OndaScannerComplexType())
 
             .addActions(
                   // eviction
@@ -262,15 +311,29 @@ public class DHuSODataServlet extends AbstractODataServlet
                   // products
                   new OrderProductAction(),
                   new RepairProductAction(),
-                  new RepairProductsAction())
+                  new RepairProductsAction(),
+                  new DeleteProductsAction(),
+                  new DeleteDeletedProductsAction(),
+
+                  // users
+                  new AddSearchAction(),
+                  new EnableSearchAction(),
+                  new DeleteSearchAction(),
+                  new ClearSearchesAction())
 
             .addFunctions(
                   new ResourceLocationFunction(),
                   new EvictionDateFunction())
 
             .addEnums(
-                  new JobStatusEnum())
-            .build();
+                  new JobStatusEnum(),
+                  new SystemRoleEnum());
+
+      if (!CONFIG_MANAGER.isGDPREnabled())
+      {
+         builder.addActions(new LockUserAction(), new UnlockUserAction());
+      }
+      builder.build();
 
       if (MetricDataHandler.isEnabled())
       {

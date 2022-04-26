@@ -19,13 +19,6 @@
  */
 package org.dhus.store;
 
-import fr.gael.dhus.database.object.DeletedProduct;
-import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.datastore.Destination;
-import fr.gael.dhus.datastore.scanner.Scanner;
-import fr.gael.dhus.datastore.scanner.ScannerStatus;
-import fr.gael.dhus.service.TransformationService;
-
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
@@ -38,7 +31,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.dhus.ProductConstants;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.DataStoreManager;
@@ -50,8 +42,14 @@ import org.dhus.store.derived.DerivedProductStoreService;
 import org.dhus.store.ingestion.IngestibleProduct;
 import org.dhus.store.ingestion.IngestibleRawProduct;
 import org.dhus.store.metadatastore.MetadataStoreService;
-
 import org.springframework.beans.factory.annotation.Autowired;
+
+import fr.gael.dhus.database.object.DeletedProduct;
+import fr.gael.dhus.database.object.Product;
+import fr.gael.dhus.datastore.Destination;
+import fr.gael.dhus.datastore.scanner.Scanner;
+import fr.gael.dhus.datastore.scanner.ScannerStatus;
+import fr.gael.dhus.service.TransformationService;
 
 public class StoreService implements Store
 {
@@ -64,6 +62,8 @@ public class StoreService implements Store
    private final AtomicBoolean evictionMustStop = new AtomicBoolean(false);
 
    private final Set<String> runningRepairsUuids = Collections.<String>synchronizedSet(new HashSet<>());
+
+   private static final String DEFAULT_ORDER_BY = "CreationDate asc";
 
    @Autowired
    private DataStoreManager dataStoreService;
@@ -117,7 +117,7 @@ public class StoreService implements Store
       // physical product
       try
       {
-         softDeleteProduct(destination, uuid);
+         softDeleteProduct(destination, uuid, false);
       }
       catch (ProductNotFoundException suppressed) {}
       catch (DataStoreException e)
@@ -163,15 +163,15 @@ public class StoreService implements Store
    }
 
    private List<LoggableProduct> listProductUUIDs(String filter, String orderBy, String collectionName,
-         boolean online, int skip, int top) throws StoreException
+         boolean online, boolean safe, int skip, int top) throws StoreException
    {
       if (online)
       {
-         return metadataStoreService.getOnlineProductUUIDs(filter, orderBy, collectionName, skip, top);
+         return metadataStoreService.getOnlineProductUUIDs(filter, orderBy, collectionName, safe, skip, top);
       }
       else
       {
-         return metadataStoreService.getProductUUIDs(filter, orderBy, collectionName, skip, top);
+         return metadataStoreService.getProductUUIDs(filter, orderBy, collectionName, safe, skip, top);
       }
    }
 
@@ -186,7 +186,7 @@ public class StoreService implements Store
     */
    public void evictAtLeast(long sizeToEvict, String dataStoreName) throws DataStoreException, StoreException
    {
-      internalEvictAtLeast(sizeToEvict, dataStoreName, null, null, null, Integer.MAX_VALUE, true, Destination.TRASH, DeletedProduct.AUTO_EVICTION, false);
+      internalEvictAtLeast(sizeToEvict, dataStoreName, null, DEFAULT_ORDER_BY, null, Integer.MAX_VALUE, true, Destination.TRASH, DeletedProduct.AUTO_EVICTION, false);
    }
 
    /**
@@ -229,7 +229,7 @@ public class StoreService implements Store
 
       // retrieve datastore product iterator
       DataStoreProductIterator productIterator =
-            new DataStoreProductIterator(filter, orderBy, collectionName, dataStoreName);
+            new DataStoreProductIterator(filter, orderBy, collectionName, dataStoreName, safeMode);
 
       // eviction stops if enough space is freed
       // or many enough products have been deleted
@@ -305,7 +305,7 @@ public class StoreService implements Store
     */
    // TODO merge with internalEvictAtLeast?
    public void evictProducts(String filter, String orderBy, String collectionName,
-         int maxDeletedProducts, boolean softDeletion, Destination destination, String cause)
+         int maxDeletedProducts, boolean softDeletion, Destination destination, String cause, boolean safeMode)
          throws StoreException
    {
       // to ensure a previous stop will not prevent this start
@@ -317,7 +317,7 @@ public class StoreService implements Store
       long start = System.currentTimeMillis();
 
       // get product iterator and start deletion loop
-      ProductIterator productIterator = new ProductIterator(filter, orderBy, collectionName, softDeletion);
+      ProductIterator productIterator = new ProductIterator(filter, orderBy, collectionName, softDeletion, safeMode);
       while (productsDeleted < maxDeletedProducts && productIterator.hasNext())
       {
          if (evictionMustStop.get())
@@ -333,7 +333,7 @@ public class StoreService implements Store
             long deleteStart = System.currentTimeMillis();
             if (softDeletion)
             {
-               softDeleteProduct(destination, logProd.getUuid());
+               softDeleteProduct(destination, logProd.getUuid(), safeMode);
                LOGGER.info("Product {} ({}) ({} bytes) has been successfully soft evicted from all datastore",
                      logProd.getIdentifier(), logProd.getUuid(), logProd.getSize());
             }
@@ -380,10 +380,10 @@ public class StoreService implements Store
       LOGGER.info("Successfully deleted {} products in {}ms", productsDeleted, System.currentTimeMillis() - start);
    }
 
-   private void softDeleteProduct(Destination destination, String uuid) throws DataStoreException
+   private void softDeleteProduct(Destination destination, String uuid, boolean safeMode) throws DataStoreException
    {
       // only delete physical product
-      dataStoreService.deleteProduct(uuid, destination);
+      dataStoreService.deleteProduct(uuid, destination, safeMode);
 
       if (!dataStoreService.hasProduct(uuid))
       {
@@ -642,7 +642,7 @@ public class StoreService implements Store
       long start = System.currentTimeMillis();
 
       int repairedProducts = 0;
-      ProductIterator productIterator = new ProductIterator(filter, orderBy, null, true, skip);
+      ProductIterator productIterator = new ProductIterator(filter, orderBy, null, true, false, skip);
       while (repairedProducts < maxRepairedProducts && productIterator.hasNext())
       {
          LoggableProduct product = productIterator.next();
@@ -672,28 +672,31 @@ public class StoreService implements Store
       private final String orderBy;
       private final String collectionName;
       private final boolean online;
-
+      private final boolean safe;
+      
       private int skip = 0;
       private Iterator<LoggableProduct> productPage = Collections.emptyIterator();
 
-      public ProductIterator(String filter, String orderBy, String collectionName, boolean online, int skip) throws StoreException
+      public ProductIterator(String filter, String orderBy, String collectionName, boolean online, boolean safe, int skip) throws StoreException
       {
          this.filter = filter;
          this.orderBy = orderBy;
          this.collectionName = collectionName;
          this.online = online;
          this.skip = skip;
+         this.safe = safe;
 
          // fetch next page so that filter can be validated
          fetchNextPage();
       }
 
-      public ProductIterator(String filter, String orderBy, String collectionName, boolean online) throws StoreException
+      public ProductIterator(String filter, String orderBy, String collectionName, boolean online, boolean safe) throws StoreException
       {
          this.filter = filter;
          this.orderBy = orderBy;
          this.collectionName = collectionName;
          this.online = online;
+         this.safe = safe;
 
          // fetch next page so that filter can be validated
          fetchNextPage();
@@ -724,7 +727,7 @@ public class StoreService implements Store
       private void fetchNextPage() throws StoreException
       {
          List<LoggableProduct> products = listProductUUIDs(
-               filter, orderBy, collectionName, online, skip, FILTERED_DELETION_PAGE_SIZE);
+               filter, orderBy, collectionName, online, safe, skip, FILTERED_DELETION_PAGE_SIZE);
 
          skip += FILTERED_DELETION_PAGE_SIZE;
 
@@ -759,18 +762,19 @@ public class StoreService implements Store
       private final String orderBy;
       private final String collectionName;
       private final String dataStoreName;
+      private final Boolean safe;
 
       private int skip = 0;
       private Iterator<LoggableProduct> productPage = Collections.emptyIterator();
 
       private DataStoreProductIterator(String filter, String orderBy, String collectionName,
-            String dataStoreName) throws StoreException
+            String dataStoreName, boolean safe) throws StoreException
       {
          this.filter = filter;
          this.orderBy = orderBy;
          this.collectionName = collectionName;
          this.dataStoreName = dataStoreName;
-
+         this.safe = safe;
          // fetch next page so that filter can be validated
          fetchNextPage();
       }
@@ -821,7 +825,7 @@ public class StoreService implements Store
             else
             {
                productUUIDsWithin = metadataStoreService
-                     .getProductUUIDsWithin(filter, orderBy, collectionName, dataStoreProductUUIDs);
+                     .getProductUUIDsWithin(filter, orderBy, collectionName, safe, dataStoreProductUUIDs);
             }
          } while (productUUIDsWithin.isEmpty());
 

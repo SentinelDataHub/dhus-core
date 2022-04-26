@@ -35,6 +35,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
 
+import java.nio.charset.StandardCharsets;
+import org.apache.commons.net.util.Base64;
+import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -583,6 +586,12 @@ public class ODataClient
       HttpGet get = new HttpGet(absolute_uri);
       // `Accept` for GET, `Content-Type` for POST and PUT.
       get.addHeader("Accept", content_type.type ());
+
+      // Force basic auth in request
+      String auth = username + ":" + password;
+      byte[] encodedAuth = Base64.encodeBase64(auth.getBytes(StandardCharsets.ISO_8859_1));
+      String authHeader = "Basic " + new String(encodedAuth);
+      get.setHeader(HttpHeaders.AUTHORIZATION, authHeader);
 
       InterruptibleHttpClient.MemoryIWC mem_iwc = new InterruptibleHttpClient.MemoryIWC();
 

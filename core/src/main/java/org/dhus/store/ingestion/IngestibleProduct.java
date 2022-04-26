@@ -79,5 +79,7 @@ public interface IngestibleProduct extends Product, Closeable
    public Product getThumbnail();
 
    public boolean removeSource();
+   
+   public Boolean isOnline();
 }
 

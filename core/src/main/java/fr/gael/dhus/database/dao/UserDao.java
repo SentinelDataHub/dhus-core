@@ -29,7 +29,6 @@ import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.Search;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.database.object.restriction.AccessRestriction;
-import fr.gael.dhus.database.object.restriction.LockedAccessRestriction;
 import fr.gael.dhus.database.object.restriction.TmpUserLockedAccessRestriction;
 import fr.gael.dhus.service.exception.UserAlreadyExistingException;
 import fr.gael.dhus.system.config.ConfigurationManager;
@@ -215,35 +214,27 @@ public class UserDao extends HibernateDao<User, String>
       return user;
    }
 
-   public void lockUser (User user, String reason)
+   public void unlockUser(User user, Class<? extends AccessRestriction> car)
    {
-      LockedAccessRestriction ar = new LockedAccessRestriction ();
-      ar.setBlockingReason (reason);
+      if (user.getRestrictions() == null)
+         return;
 
-      user.addRestriction (ar);
-      update (user);
-   }
-
-   public void unlockUser (User user, Class<? extends AccessRestriction> car)
-   {
-      if (user.getRestrictions () == null) return;
-
-      Iterator<AccessRestriction> iter = user.getRestrictions ().iterator ();
-      HashSet<AccessRestriction> toDelete = new HashSet<AccessRestriction> ();
-      while (iter.hasNext ())
+      Iterator<AccessRestriction> iter = user.getRestrictions().iterator();
+      HashSet<AccessRestriction> toDelete = new HashSet<AccessRestriction>();
+      while (iter.hasNext())
       {
-         AccessRestriction lar = iter.next ();
-         if (lar.getClass ().equals (car))
+         AccessRestriction lar = iter.next();
+         if (lar.getClass().equals(car))
          {
-            iter.remove ();
-            toDelete.add (lar);
+            iter.remove();
+            toDelete.add(lar);
          }
       }
-      update (user);
+      update(user);
 
       for (AccessRestriction restriction : toDelete)
       {
-         accessRestrictionDao.delete (restriction);
+         accessRestrictionDao.delete(restriction);
       }
    }
 
@@ -253,61 +244,29 @@ public class UserDao extends HibernateDao<User, String>
     * @param temporary user.
     * @return the updated user.
     */
-   public void createTmpUser (User user)
+   public void createTmpUser(User user)
    {
-      TmpUserLockedAccessRestriction tuar =
-         new TmpUserLockedAccessRestriction ();
-      user.addRestriction (tuar);
-      create (user);
+      TmpUserLockedAccessRestriction tuar = new TmpUserLockedAccessRestriction();
+      user.addRestriction(tuar);
+      create(user);
    }
 
    @Override
-   public User create (User u)
+   public User create(User u)
    {
-      User user = getByName (u.getUsername ());
+      User user = getByName(u.getUsername());
       if (user != null)
       {
-         throw new UserAlreadyExistingException (
-            "An user is already registered with name '" + u.getUsername () +
-               "'.");
+         throw new UserAlreadyExistingException(
+               "An user is already registered with name '" + u.getUsername() + "'.");
       }
       // Default new user come with at least search access role.
-      if (u.getRoles ().isEmpty ())
+      if (u.getRoles().isEmpty())
       {
-         u.addRole (Role.SEARCH);
-         u.addRole (Role.DOWNLOAD);
+         u.addRole(Role.SEARCH);
+         u.addRole(Role.DOWNLOAD);
       }
-      return super.create (u);
-   }
-
-   /**
-    * Create a row in database for the given user, do not fail if user has no email.
-    *
-    * @param user a User to store (non null)
-    * @return stored user
-    */
-   public User createWithoutMail(User user)
-   {
-      User test_exists = getByName(user.getUsername());
-      if (test_exists != null)
-      {
-         throw new UserAlreadyExistingException("An user is already registered with name '"
-               + user.getUsername() + "'.");
-      }
-      // Default new user come with at least search access role.
-      if (user.getRoles().isEmpty())
-      {
-         user.addRole(Role.SEARCH);
-         user.addRole(Role.DOWNLOAD);
-      }
-
-      long start = System.currentTimeMillis();
-      String id = (String) getHibernateTemplate().save(user);
-      user = getHibernateTemplate().<User>get(User.class, id);
-      long end = System.currentTimeMillis();
-      LOGGER.info("Create/save {} ({}) spent {}ms", entityClass.getSimpleName(), id, (end - start));
-
-      return user;
+      return super.create(u);
    }
 
    public void registerTmpUser (User u)
@@ -405,7 +364,7 @@ public class UserDao extends HibernateDao<User, String>
       getHibernateTemplate ().update (user);
    }
 
-   public void storeUserSearch (User user, String request, String footprint,
+   public Search storeUserSearch (User user, String request, String footprint,
          HashMap<String, String> advanced, String complete)
    {
       Preference pref = user.getPreferences ();
@@ -418,6 +377,7 @@ public class UserDao extends HibernateDao<User, String>
       search = searchDao.create (search);
       pref.getSearches ().add (search);
       updateUserPreference (user);
+      return search;
    }
 
    public void removeUserSearch (User user, String uuid)
@@ -436,8 +396,8 @@ public class UserDao extends HibernateDao<User, String>
             }
          }
          updateUserPreference (user);
+         searchDao.delete (search);
       }
-      searchDao.delete (search);
    }
 
    public void activateUserSearchNotification (String uuid, boolean notify)

@@ -30,6 +30,8 @@ import fr.gael.dhus.service.UserService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.util.functional.IteratorAdapter;
 
+import fr.gael.dhus.system.config.ConfigurationManager;
+
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
@@ -54,7 +56,8 @@ public class UserMap extends AbstractDelegatingMap<String, User>
       .getBean (OlingoManager.class);
    private final UserService userService = ApplicationContextProvider
       .getBean (UserService.class);
-
+   private ConfigurationManager CONFIG_MANAGER = 
+         ApplicationContextProvider.getBean(ConfigurationManager.class);
     private final FilterExpression filter;
     private final OrderByExpression orderBy;
     private final int skip;
@@ -86,7 +89,7 @@ public class UserMap extends AbstractDelegatingMap<String, User>
    {
       try
       {
-         if (!hasRole)
+         if (!hasRole || CONFIG_MANAGER.isGDPREnabled())
          {
             fr.gael.dhus.database.object.User u = Security.getCurrentUser();
             fr.gael.dhus.database.object.User user = userService.getUserNoCheck(u.getUsername());
@@ -106,7 +109,7 @@ public class UserMap extends AbstractDelegatingMap<String, User>
    @Override
    protected int serviceCount ()
    {
-      if (!hasRole)
+      if (!hasRole || CONFIG_MANAGER.isGDPREnabled())
       {
          return 1;
       }

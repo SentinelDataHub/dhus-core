@@ -19,6 +19,7 @@
  */
 package fr.gael.dhus.service.eviction;
 
+import fr.gael.dhus.DHuS;
 import fr.gael.dhus.service.EvictionService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 
@@ -36,8 +37,14 @@ public class EvictionJob implements Job
    @Override
    public void execute(JobExecutionContext context) throws JobExecutionException
    {
-      LOGGER.info("Scheduled eviction job started");
       String evictionName = context.getJobDetail().getKey().getName();
+      LOGGER.info("SCHEDULER : Eviction job '{}'.",evictionName);
+      if (!DHuS.isStarted ())
+      {
+         LOGGER.warn("SCHEDULER : Not run while system not fully initialized.");
+         return;
+      }
       ApplicationContextProvider.getBean(EvictionService.class).doEvict(evictionName);
+      LOGGER.info("SCHEDULER : Eviction job '{}' queued - ",evictionName);
    }
 }

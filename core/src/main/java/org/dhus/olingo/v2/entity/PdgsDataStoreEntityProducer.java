@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2019 GAEL Systems
+ * Copyright (C) 2019-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -20,55 +20,19 @@
 package org.dhus.olingo.v2.entity;
 
 import org.apache.olingo.commons.api.data.Entity;
-import org.apache.olingo.commons.api.data.Property;
-import org.apache.olingo.commons.api.data.ValueType;
 import org.dhus.api.olingo.v2.TypeInfo;
 import org.dhus.olingo.v2.datamodel.PdgsDataStoreModel;
-
-import org.dhus.store.datastore.config.PdgsDataStoreConf;
 import org.dhus.store.datastore.config.NamedDataStoreConf;
+import org.dhus.store.datastore.config.PdgsDataStoreConf;
 
-/**
- * Transforms PdgsDataStoreConf configuration objects to OData entities.
- */
 @TypeInfo(type = PdgsDataStoreConf.class, baseType = NamedDataStoreConf.class)
-public class PdgsDataStoreEntityProducer extends AsyncDataStoreEntityProducer<PdgsDataStoreConf>
+public class PdgsDataStoreEntityProducer extends HttpAsyncDataStoreEntityProducer<PdgsDataStoreConf>
 {
    @Override
    public Entity transform(PdgsDataStoreConf pdgsDataStore)
    {
       Entity dataStoreEntity = super.transform(pdgsDataStore);
-
       dataStoreEntity.setType(PdgsDataStoreModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString());
-
-      dataStoreEntity
-            .addProperty(new Property(
-                  null,
-                  PdgsDataStoreModel.PROPERTY_SERVICE_URL,
-                  ValueType.PRIMITIVE,
-                  pdgsDataStore.getServiceUrl()))
-            .addProperty(new Property(
-                  null,
-                  PdgsDataStoreModel.PROPERTY_LOGIN,
-                  ValueType.PRIMITIVE,
-                  pdgsDataStore.getLogin()))
-            .addProperty(new Property(
-                  null,
-                  PdgsDataStoreModel.PROPERTY_PASSWORD,
-                  ValueType.PRIMITIVE,
-                  "******"))
-            .addProperty(new Property(
-                  null,
-                  PdgsDataStoreModel.PROPERTY_MAX_CONCURRENTS_DOWNLOADS,
-                  ValueType.PRIMITIVE,
-                  pdgsDataStore.getMaxConcurrentsDownloads()))
-            .addProperty(new Property(
-                  null,
-                  PdgsDataStoreModel.PROPERTY_INTERVAL,
-                  ValueType.PRIMITIVE,
-                  pdgsDataStore.getInterval()));
-
       return dataStoreEntity;
    }
-
 }

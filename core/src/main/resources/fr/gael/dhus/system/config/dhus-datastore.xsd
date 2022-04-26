@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!--
    Data Hub Service (DHuS) - For Space data distribution.
-   Copyright (C) 2016-2019 GAEL Systems
+   Copyright (C) 2016-2020 GAEL Systems
 
    This file is part of DHuS software sources.
 
@@ -25,7 +25,10 @@
            jxb:version="2.1"
            jxb:extensionBindingPrefixes="inheritance"
            xmlns:dhusDataStore="org.dhus.store.datastore.config"
+           xmlns:dhusCron="fr.gael.dhus.database.object.config.cron"
            targetNamespace="org.dhus.store.datastore.config">
+
+	<xs:import namespace="fr.gael.dhus.database.object.config.cron" schemaLocation="dhus-cron.xsd" />
 
    <xs:annotation>
       <xs:appinfo>
@@ -75,8 +78,8 @@
       <xs:complexContent>
          <xs:extension base="dhusDataStore:namedDataStoreConf">
             <xs:sequence>
-               <xs:element name="isMaster" type="xs:boolean" default="false"/>
-               <xs:element name="hfsLocation" type="xs:string" minOccurs="1" maxOccurs="1" />
+               <xs:element name="dataStore" type="dhusDataStore:dataStoreConf" minOccurs="1" maxOccurs="1" />
+               <xs:element name="isMaster" type="xs:boolean" default="false" minOccurs="0" maxOccurs="1"/>
                <xs:element name="patternReplaceIn" type="dhusDataStore:patternReplace" minOccurs="0" maxOccurs="1" />
                <xs:element name="patternReplaceOut" type="dhusDataStore:patternReplace" minOccurs="0" maxOccurs="1" />
                <xs:element name="maxPendingRequests" type="xs:int" minOccurs="0" maxOccurs="1" />
@@ -159,14 +162,14 @@
       </xs:complexContent>
    </xs:complexType>
 
-   <xs:complexType name="pdgsDataStoreConf">
+   <xs:complexType name="httpAsyncDataStoreConf" abstract="true">
       <xs:complexContent>
          <xs:extension base="dhusDataStore:asyncDataStoreConf">
             <xs:sequence>
                <xs:element name="serviceUrl" type="xs:string" minOccurs="1" maxOccurs="1" />
                <xs:element name="login" type="xs:string" minOccurs="0" maxOccurs="1" />
                <xs:element name="password" type="xs:string" minOccurs="0" maxOccurs="1" />
-               <xs:element name="interval" default="600000">
+               <xs:element name="interval" default="600000" minOccurs="0" maxOccurs="1" >
                   <xs:simpleType>
                      <xs:restriction base="xs:long">
                         <xs:minExclusive value="0" />
@@ -177,6 +180,49 @@
             </xs:sequence>
          </xs:extension>
       </xs:complexContent>
+   </xs:complexType>
+
+	<xs:complexType name="optionalHttpAsyncDataStoreConf" abstract="true">
+      <xs:complexContent>
+         <xs:extension base="dhusDataStore:httpAsyncDataStoreConf">
+            <xs:sequence>
+               <xs:element name="order" type="xs:boolean" default="false"/>
+            </xs:sequence>
+          </xs:extension>
+       </xs:complexContent>
+   </xs:complexType>
+
+   <xs:complexType name="pdgsDataStoreConf">
+      <xs:complexContent>
+         <xs:extension base="dhusDataStore:httpAsyncDataStoreConf"></xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
+
+   <xs:complexType name="ltaDataStoreConf">
+      <xs:complexContent>
+         <xs:extension base="dhusDataStore:optionalHttpAsyncDataStoreConf"></xs:extension>
+      </xs:complexContent>
+   </xs:complexType>
+
+	<xs:complexType name="ondaDataStoreConf">
+		<xs:complexContent>
+			<xs:extension base="dhusDataStore:optionalHttpAsyncDataStoreConf">
+				<xs:sequence>
+					<xs:element name="objectStorageCredential" type="dhusDataStore:objectStorageCredentialConf" minOccurs="0" maxOccurs="1" />
+					<xs:element name="ondaScanner" minOccurs="0" maxOccurs="1" type="dhusDataStore:ondaScannerConf" />
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+
+   <xs:complexType name="objectStorageCredentialConf">
+      <xs:sequence>
+         <xs:element name="provider" type="xs:string" minOccurs="1" maxOccurs="1" />
+         <xs:element name="identity" type="xs:string" minOccurs="1" maxOccurs="1" />
+         <xs:element name="credential" type="xs:string" minOccurs="1" maxOccurs="1" />
+         <xs:element name="url" type="xs:string" minOccurs="1" maxOccurs="1" />
+         <xs:element name="region" type="xs:string" minOccurs="1" maxOccurs="1" />
+      </xs:sequence>
    </xs:complexType>
 
    <xs:complexType name="paramPdgsDataStoreConf">
@@ -215,4 +261,15 @@
          </xs:extension>
       </xs:complexContent>
    </xs:complexType>
+
+	<xs:complexType name="ondaScannerConf">
+		<xs:sequence>
+            <xs:element name="opensearchUrl" type="xs:string" minOccurs="1" maxOccurs="1" />
+			<xs:element name="lastCreationDate" type="xs:dateTime" minOccurs="0" maxOccurs="1" />
+			<xs:element name="pageSize" type="xs:int" minOccurs="1" maxOccurs="1" default="25" />
+			<xs:element name="filter" type="xs:string" minOccurs="0" maxOccurs="1" />
+			<xs:element name="cron" minOccurs="1" maxOccurs="1" type="dhusCron:cron" />
+		</xs:sequence>
+	</xs:complexType>
+
 </xs:schema>

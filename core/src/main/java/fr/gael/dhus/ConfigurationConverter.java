@@ -71,6 +71,7 @@ import org.xml.sax.SAXParseException;
  */
 public class ConfigurationConverter
 {
+   public static final String HFS_CACHE_NAME = "HfsCache";
    /**
     * Converts XML config file from previous releases.
     *
@@ -107,6 +108,7 @@ public class ConfigurationConverter
       convertOldAsyncDataStoreMaxQueuedRequest(loadedConfig, doc);
       convertAsyncQuotas(loadedConfig, doc);
       convertDataStoreReadOnly(loadedConfig, doc);
+      convertOldAsyncDataStoreCacheToHFS(loadedConfig, doc);
 
       if (backup != null)
       {
@@ -538,6 +540,86 @@ public class ConfigurationConverter
 
          }
       });
+   }
+
+   /**
+    * Converts old property of AsyncDataStores "hfsLocation" into new HfsDataStore
+    *
+    * @param conf configuration to update
+    * @param doc  source document containing the deprecated configuration
+    */
+   public static void convertOldAsyncDataStoreCacheToHFS(Configuration conf, Document doc)
+   {
+      Objects.requireNonNull(conf);
+      Objects.requireNonNull(doc);
+
+      NodeList nodes = doc.getElementsByTagNameNS("*", "dataStore");
+      List<DataStoreConf> dataStoreConfList = conf.getDataStores().getDataStore();
+
+      for (int i = 0; i < nodes.getLength(); i++)
+      {
+         Node node = nodes.item(i);
+         if (node != null && Element.class.isAssignableFrom(node.getClass()))
+         {
+            Element element = Element.class.cast(node);
+            String name = element.getAttribute("name");
+
+            for (DataStoreConf dataStoreConf : dataStoreConfList)
+            {
+               if (dataStoreConf instanceof AsyncDataStoreConf)
+               {
+                  AsyncDataStoreConf async = (AsyncDataStoreConf) dataStoreConf;
+
+                  if (name.equals(async.getName()))
+                  {
+                     Element hfsElement = firstElementByName(element.getChildNodes(), "hfsLocation");
+                     if (hfsElement == null)
+                     {
+                        continue;
+                     }
+                     
+                     long maximumSize = 0;
+                     long currentSize = 0;                     
+
+                     String hfsLocation = hfsElement.getTextContent();
+                     String elementMaxSize = element.getAttribute("maximumSize");
+                     if (!elementMaxSize.isEmpty())
+                     {
+                        maximumSize = Long.parseLong(elementMaxSize);
+                     }
+                     String elementCurrentSize = element.getAttribute("currentSize");
+                     if (!elementCurrentSize.isEmpty())
+                     {
+                        currentSize = Long.parseLong(elementCurrentSize);
+                     }
+                     boolean autoEviction = Boolean.valueOf(element.getAttribute("autoEviction"));
+                     Element evictElement = firstElementByName(element.getChildNodes(), "evictionName");
+                     
+                     HfsDataStoreConf hfsCache = new HfsDataStoreConf();
+                     hfsCache.setName(name + "-" + HFS_CACHE_NAME);
+                     hfsCache.setPath(hfsLocation);
+                     hfsCache.setRestriction(DataStoreRestriction.NONE);
+                     hfsCache.setMaximumSize(maximumSize);
+                     hfsCache.setCurrentSize(currentSize);
+                     hfsCache.setAutoEviction(autoEviction);
+                     hfsCache.setMaxFileNo(10);
+                     hfsCache.setMaxItems(1024);
+                     if (evictElement != null)
+                     {
+                        String evictionName = evictElement.getTextContent();
+                        hfsCache.setEvictionName(evictionName);
+                     }
+
+                     async.setDataStore(hfsCache);
+                     async.setAutoEviction(false);
+                     async.setEvictionName(null);
+                     async.setMaximumSize(null);
+                     async.setCurrentSize(null);
+                  }
+               }
+            }
+         }
+      }
    }
 
    /* Returns a stream of Elements from the given NodeList. */

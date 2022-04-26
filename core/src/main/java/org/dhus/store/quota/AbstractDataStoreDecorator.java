@@ -19,6 +19,7 @@
  */
 package org.dhus.store.quota;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
@@ -109,6 +110,12 @@ public abstract class AbstractDataStoreDecorator<DST extends DataStore> implemen
    public boolean addProductReference(String uuid, Product product) throws DataStoreException
    {
       return this.decorated.addProductReference(uuid, product);
+   }
+
+   @Override
+   public Iterator<String> getScrollableProductResults()
+   {
+      return this.decorated.getScrollableProductResults();
    }
 
    @Override

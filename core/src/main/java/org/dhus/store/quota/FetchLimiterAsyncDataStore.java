@@ -39,6 +39,7 @@ import org.dhus.Product;
 import org.dhus.ProductConstants;
 import org.dhus.api.JobStatus;
 import org.dhus.store.StoreException;
+import org.dhus.store.datastore.DataStore;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.async.AsyncDataStore;
 import org.dhus.store.datastore.async.AsyncProduct;
@@ -296,5 +297,11 @@ public final class FetchLimiterAsyncDataStore extends AbstractDataStoreDecorator
    public Order getAndLogExistingOrder(String uuid, String localIdentifier, Long size)
    {
       return decorated.getAndLogExistingOrder(uuid, localIdentifier, size);
+   }
+
+   @Override
+   public DataStore getCache()
+   {
+      return decorated.getCache();
    }
 }

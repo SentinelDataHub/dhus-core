@@ -19,25 +19,6 @@
  */
 package org.dhus.olingo.v2.data;
 
-import com.vividsolutions.jts.geom.Geometry;
-import com.vividsolutions.jts.io.gml2.GMLReader;
-
-import fr.gael.dhus.database.object.Order;
-import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.database.object.Product.Download;
-import fr.gael.dhus.database.object.Role;
-import fr.gael.dhus.database.object.Transformation;
-import fr.gael.dhus.service.EvictionService;
-import fr.gael.dhus.service.OrderService;
-import fr.gael.dhus.service.ProductService;
-import fr.gael.dhus.service.TransformationService;
-import fr.gael.dhus.spring.context.ApplicationContextProvider;
-import fr.gael.dhus.system.init.WorkingDirectory;
-
-import fr.gael.odata.engine.data.DataHandlerUtil;
-import fr.gael.odata.engine.data.DatabaseDataHandler;
-import fr.gael.odata.engine.processor.MediaResponseBuilder;
-
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -49,20 +30,23 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.apache.olingo.commons.api.data.ComplexValue;
 import org.apache.olingo.commons.api.data.Entity;
 import org.apache.olingo.commons.api.data.EntityCollection;
+import org.apache.olingo.commons.api.data.EntityIterator;
 import org.apache.olingo.commons.api.data.GeoUtils;
 import org.apache.olingo.commons.api.data.Parameter;
 import org.apache.olingo.commons.api.data.Property;
@@ -71,6 +55,7 @@ import org.apache.olingo.commons.api.edm.EdmAction;
 import org.apache.olingo.commons.api.edm.EdmFunction;
 import org.apache.olingo.commons.api.edm.EdmNavigationProperty;
 import org.apache.olingo.commons.api.edm.EdmPrimitiveTypeKind;
+import org.apache.olingo.commons.api.edm.FullQualifiedName;
 import org.apache.olingo.commons.api.edm.geo.Geospatial;
 import org.apache.olingo.commons.api.edm.geo.LineString;
 import org.apache.olingo.commons.api.edm.geo.Point;
@@ -79,23 +64,25 @@ import org.apache.olingo.commons.api.http.HttpStatusCode;
 import org.apache.olingo.server.api.ODataApplicationException;
 import org.apache.olingo.server.api.ODataRequest;
 import org.apache.olingo.server.api.ODataResponse;
+import org.apache.olingo.server.api.uri.UriInfo;
 import org.apache.olingo.server.api.uri.UriParameter;
 import org.apache.olingo.server.api.uri.queryoption.CountOption;
 import org.apache.olingo.server.api.uri.queryoption.FilterOption;
 import org.apache.olingo.server.api.uri.queryoption.OrderByOption;
 import org.apache.olingo.server.api.uri.queryoption.SkipOption;
 import org.apache.olingo.server.api.uri.queryoption.TopOption;
-
+import org.dhus.ProductConstants;
 import org.dhus.api.transformation.TransformationException;
-
 import org.dhus.olingo.v2.ODataSecurityManager;
-import org.dhus.olingo.v2.datamodel.JobModel;
 import org.dhus.olingo.v2.datamodel.DataStoreModel;
 import org.dhus.olingo.v2.datamodel.ItemModel;
+import org.dhus.olingo.v2.datamodel.JobModel;
 import org.dhus.olingo.v2.datamodel.NodeModel;
 import org.dhus.olingo.v2.datamodel.OrderModel;
 import org.dhus.olingo.v2.datamodel.ProductModel;
 import org.dhus.olingo.v2.datamodel.TransformationModel;
+import org.dhus.olingo.v2.datamodel.UserModel;
+import org.dhus.olingo.v2.datamodel.action.DeleteProductsAction;
 import org.dhus.olingo.v2.datamodel.action.OrderProductAction;
 import org.dhus.olingo.v2.datamodel.action.RepairProductAction;
 import org.dhus.olingo.v2.datamodel.action.RepairProductsAction;
@@ -117,6 +104,7 @@ import org.dhus.store.datastore.DataStoreProduct;
 import org.dhus.store.datastore.ProductNotFoundException;
 import org.dhus.store.datastore.async.AsyncDataStoreException;
 import org.dhus.store.datastore.async.AsyncProduct;
+import org.dhus.store.datastore.openstack.OpenStackProduct;
 import org.dhus.store.derived.DerivedProductStore;
 import org.dhus.store.derived.DerivedProductStoreService;
 import org.dhus.store.ingestion.IngestibleRawProduct;
@@ -124,13 +112,36 @@ import org.dhus.store.ingestion.ProcessingManager;
 import org.dhus.store.quota.QuotaException;
 import org.dhus.transformation.TransformationManager;
 import org.dhus.transformation.TransformationQuotasException;
-
 import org.xml.sax.SAXException;
+
+import com.vividsolutions.jts.geom.Geometry;
+import com.vividsolutions.jts.io.gml2.GMLReader;
+
+import fr.gael.dhus.database.dao.PagedIterator;
+import fr.gael.dhus.database.object.Order;
+import fr.gael.dhus.database.object.Product;
+import fr.gael.dhus.database.object.Product.Download;
+import fr.gael.dhus.database.object.ProductCart;
+import fr.gael.dhus.database.object.Role;
+import fr.gael.dhus.database.object.Transformation;
+import fr.gael.dhus.database.object.User;
+import fr.gael.dhus.datastore.Destination;
+import fr.gael.dhus.service.EvictionService;
+import fr.gael.dhus.service.OrderService;
+import fr.gael.dhus.service.ProductCartService;
+import fr.gael.dhus.service.ProductService;
+import fr.gael.dhus.service.TransformationService;
+import fr.gael.dhus.service.UserService;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.system.init.WorkingDirectory;
+import fr.gael.odata.engine.data.DataHandlerUtil;
+import fr.gael.odata.engine.data.DatabaseStreamDataHandler;
+import fr.gael.odata.engine.processor.MediaResponseBuilder;
 
 /**
  * Provides data for Product entities.
  */
-public class ProductDataHandler implements DatabaseDataHandler
+public class ProductDataHandler implements DatabaseStreamDataHandler
 {
    private static final DataStoreManager DATASTORE_MANAGER =
          ApplicationContextProvider.getBean(DataStoreManager.class);
@@ -155,6 +166,12 @@ public class ProductDataHandler implements DatabaseDataHandler
 
    private static final OrderService ORDER_SERVICE =
          ApplicationContextProvider.getBean(OrderService.class);
+
+   private static final ProductCartService PRODUCT_CART_SERVICE =
+      ApplicationContextProvider.getBean(ProductCartService.class);
+
+   private static final UserService USER_SERVICE =
+      ApplicationContextProvider.getBean(UserService.class);
 
    private final TypeStore typeStore;
 
@@ -554,55 +571,71 @@ public class ProductDataHandler implements DatabaseDataHandler
             complexValue);
    }
 
-   @Override
-   public EntityCollection getRelatedEntityCollectionData(Entity sourceEntity, EdmNavigationProperty edmNavigationProperty)
-         throws ODataApplicationException
+   private EntityIterator getDataStoreNavLink(Entity sourceEntity) throws ODataApplicationException
    {
-      String entityType = sourceEntity.getType();
-      // No product available from derived product
-      if (sourceEntity instanceof DerivedProductEntity)
-      {
-         throw new ODataApplicationException("Invalid navigation from derived product to "
-               + ProductModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString(),
-               HttpStatusCode.BAD_REQUEST.getStatusCode(), Locale.ENGLISH);
-      }
-      else if (DataStoreModel.isDataStoreSubType(entityType))
-      {
-         return getDataStoreNavLink(sourceEntity);
-      }
-      else if (sourceEntity.getType().equals(ProductModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString()))
-      {
-         return getProductsNavLink(sourceEntity);
-      }
-      return null; // ?
-   }
-
-   private EntityCollection getDataStoreNavLink(Entity sourceEntity) throws ODataApplicationException
-   {
-      EntityCollection navigationTargetEntityCollection = new EntityCollection();
       String dataStoreName = (String) sourceEntity.getProperty(DataStoreModel.PROPERTY_NAME).getValue();
-
-      List<DataStore> dataStore = DATASTORE_MANAGER.list();
-      for (int i = 0; i < dataStore.size(); i++)
-      {
-         // retrieve list of product UUIDs from datastore of given name
-         if (dataStore.get(i).getName().equals(dataStoreName))
+      final DataStore ds = DATASTORE_MANAGER.getDataStoreByName(dataStoreName);
+      final Iterator<String> productIterator = ds.getScrollableProductResults();
+      if(productIterator == null)
+      {// In case the datastore does not support product iterator
+         EntityCollection col = new EntityCollection();
+         List<Entity> colEntities = col.getEntities();
+         List<String> uuids = ds.getProductList();
+         for(String uuid : uuids)
          {
-            List<String> productList = dataStore.get(i).getProductList();
-
-            // make entities
-            for (String uuid: productList)
+            Product p = PRODUCT_SERVICE.getProduct(uuid);
+            if(p == null)
             {
-               Product product = PRODUCT_SERVICE.getProduct(uuid);
-               Entity productEntity = toProductEntity(product);
-               navigationTargetEntityCollection.getEntities().add(productEntity);
+               continue;
+            }
+            colEntities.add(toProductEntity(p));
+         }
+         final Iterator<Entity> entityIter = col.iterator();
+         return new EntityIterator()
+         {
+            @Override
+            public Entity next()
+            {
+               return entityIter.next();
+            }
+            @Override
+            public boolean hasNext()
+            {
+               return entityIter.hasNext();
+            }
+         };
+      }
+      return new EntityIterator()
+      {
+         Product cursor = null;
+         @Override
+         public Entity next()
+         {
+            if(cursor != null)
+            {
+               Entity entity = toProductEntity(cursor);
+               cursor = null;
+               return entity;
+            }
+            else
+            {
+               return toProductEntity(PRODUCT_SERVICE.getProduct(productIterator.next()));
             }
          }
-      }
-      return navigationTargetEntityCollection;
+
+         @Override
+         public boolean hasNext()
+         {
+            while(cursor == null && productIterator.hasNext())
+            {
+               cursor = PRODUCT_SERVICE.getProduct(productIterator.next());
+            }
+            return cursor != null;
+         }
+      };
    }
 
-   private EntityCollection getProductsNavLink(Entity sourceEntity)
+   private EntityIterator getProductsNavLink(Entity sourceEntity)
    {
       EntityCollection navigationTargetEntityCollection = new EntityCollection();
 
@@ -617,32 +650,105 @@ public class ProductDataHandler implements DatabaseDataHandler
       {
          navigationTargetEntityCollection.getEntities().add(toThumbnailEntity(product));
       }
-      return navigationTargetEntityCollection;
+      final Iterator<Entity> entityIterator = navigationTargetEntityCollection.iterator();
+      return new EntityIterator()
+      {
+         @Override
+         public Entity next()
+         {
+            return entityIterator.next();
+         }
+
+         @Override
+         public boolean hasNext()
+         {
+            return entityIterator.hasNext();
+         }
+      };
    }
 
+   private EntityIterator getCartNavLink(Entity sourceEntity, FilterOption filterOption, OrderByOption orderByOption,
+         TopOption topOption, SkipOption skipOption) throws ODataApplicationException
+   {
+      ProductSQLVisitor productSqlVisitor =
+         new ProductSQLVisitor(filterOption, orderByOption, topOption, skipOption);
+
+      String username = (String) sourceEntity.getProperty(UserModel.PROPERTY_USERNAME).getValue();
+      User user = UserDataHandler.getUser(username);
+      if (user == null)
+      {
+         throw new ODataApplicationException("Unable to get the user", HttpStatusCode.NOT_FOUND.getStatusCode(),
+               Locale.ENGLISH);
+      }
+      String uuid = user.getUUID();
+
+      final Iterator<Product> productIterator = PRODUCT_CART_SERVICE.getCartProducts(productSqlVisitor, uuid);
+      return new EntityIterator()
+      {
+         @Override
+         public Entity next()
+         {
+            return toProductEntity(productIterator.next());
+         }
+ 
+         @Override
+         public boolean hasNext()
+         {
+            return productIterator.hasNext();
+         }
+      };      
+   }
+   
    @Override
    public Entity getRelatedEntityData(Entity entity, List<UriParameter> navigationKeyParameters, EdmNavigationProperty edmNavigationProperty)
          throws ODataApplicationException
    {
-      String productUuid = (String) entity.getProperty(ItemModel.PROPERTY_ID).getValue();
-
-      Product product = PRODUCT_SERVICE.getProduct(productUuid);
-      for (UriParameter keyParameter: navigationKeyParameters)
+      if (entity.getType().equals(ProductModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString()))
       {
-         if (keyParameter.getName().equals(ItemModel.PROPERTY_ID))
+         String productUuid = (String) entity.getProperty(ItemModel.PROPERTY_ID).getValue();
+
+         Product product = PRODUCT_SERVICE.getProduct(productUuid);
+         for (UriParameter keyParameter : navigationKeyParameters)
          {
-            String keyParameterValue = DataHandlerUtil.trimStringKeyParameter(keyParameter);
-            if (keyParameterValue.equals(QUICKLOOK_ID)
-                  && DERIVED_PS_SERVICE.hasDerivedProduct(productUuid, DerivedProductStoreService.QUICKLOOK_TAG))
+            if (keyParameter.getName().equals(ItemModel.PROPERTY_ID))
             {
-               return toQuicklookEntity(product);
+               String keyParameterValue = DataHandlerUtil.trimStringKeyParameter(keyParameter);
+               if (keyParameterValue.equals(QUICKLOOK_ID) && DERIVED_PS_SERVICE
+                     .hasDerivedProduct(productUuid, DerivedProductStoreService.QUICKLOOK_TAG))
+               {
+                  return toQuicklookEntity(product);
+               }
+               if (keyParameterValue.equals(THUMBNAIL_ID) && DERIVED_PS_SERVICE
+                     .hasDerivedProduct(productUuid, DerivedProductStoreService.THUMBNAIL_TAG))
+               {
+                  return toThumbnailEntity(product);
+               }
             }
-            if (keyParameterValue.equals(THUMBNAIL_ID)
-                  && DERIVED_PS_SERVICE.hasDerivedProduct(productUuid, DerivedProductStoreService.THUMBNAIL_TAG))
+         }
+      }
+      // Users(USERNAME)/Cart(UUID)
+      else if (entity.getType().equals(UserModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString()))
+      {
+         String username = (String) entity.getProperty(UserModel.PROPERTY_USERNAME).getValue();
+         User user = UserDataHandler.getUser(username);
+         if (user == null)
+         {
+            throw new ODataApplicationException("Unable to get the user",
+                  HttpStatusCode.NOT_FOUND.getStatusCode(), Locale.ENGLISH);
+         }
+         ProductCart productCart = PRODUCT_CART_SERVICE.getCartOfUser(user);
+         Set<Product> prductList = productCart.getProducts();
+         for (Product product : prductList)
+         {
+            String uuid = product.getUuid();
+            for (UriParameter uriParameter : navigationKeyParameters)
             {
-               return toThumbnailEntity(product);
+               String key = DataHandlerUtil.trimStringKeyParameter(uriParameter);
+               if (uuid.equals(key))
+               {
+                  return toProductEntity(product);
+               }
             }
-            return null;
          }
       }
       return null;
@@ -689,33 +795,6 @@ public class ProductDataHandler implements DatabaseDataHandler
    }
 
    @Override
-   public EntityCollection getEntityCollectionData(FilterOption filterOption, OrderByOption orderByOption,
-         TopOption topOption, SkipOption skipOption, CountOption countOption)
-         throws ODataApplicationException
-   {
-      // Retrieve data applying the different options
-      ProductSQLVisitor productSqlVisitor = new ProductSQLVisitor(filterOption, orderByOption, topOption, skipOption);
-      // FIXME full list in memory: paginate or stream
-      List<Product> productsCollection = PRODUCT_SERVICE.getProducts(productSqlVisitor, null);
-
-      EntityCollection entityCollection = new EntityCollection();
-      for (Product product: productsCollection)
-      {
-         Entity entityProduct = toProductEntity(product);
-         entityCollection.getEntities().add(entityProduct);
-      }
-
-      // handle count, must ignore skip & top
-      if (countOption != null && countOption.getValue())
-      {
-         // FIXME unnecessary extra request to database?
-         entityCollection.setCount(countEntities(filterOption));
-      }
-
-      return entityCollection;
-   }
-
-   @Override
    public Integer countEntities(FilterOption filterOption) throws ODataApplicationException
    {
       return PRODUCT_SERVICE.countProducts(new ProductSQLVisitor(filterOption, null, null, null), null);
@@ -724,7 +803,8 @@ public class ProductDataHandler implements DatabaseDataHandler
    @Override
    public EntityCollection getEntityCollectionData() throws ODataApplicationException
    {
-      return getEntityCollectionData(null, null, null, null, null);
+      throw new ODataApplicationException("Not implemented ", HttpStatusCode.NOT_IMPLEMENTED.getStatusCode(),
+            Locale.ENGLISH);
    }
 
    @Override
@@ -786,6 +866,62 @@ public class ProductDataHandler implements DatabaseDataHandler
          return orderProductAction(keyPredicates);
       }
       return null;
+   }
+
+   @Override
+   public Object performBoundActionEntityCollection(UriInfo uriInfo,
+         List<UriParameter> keyPredicates, EdmAction action, Map<String, Parameter> parameters)
+         throws ODataApplicationException
+   {
+      FullQualifiedName actionFQN = action.getFullQualifiedName();
+      if (actionFQN.equals(DeleteProductsAction.ACTION_DELETE_PRODUCTS_FQN))
+      {
+         if (parameters == null || parameters.isEmpty())
+         {
+            LOGGER.error("Parameters need to be filled");
+            throw new ODataApplicationException("Parameters need to be filled",
+                  HttpStatusCode.BAD_REQUEST.getStatusCode(), Locale.ENGLISH);
+         }
+         performDeleteProductListBoundAction(parameters);
+
+         return new Property(null, DeleteProductsAction.PARAMETER_PRODUCT_LIST, ValueType.PRIMITIVE,
+               "The deletion is successfully done");
+      }
+      throw new ODataApplicationException("Action not found",
+            HttpStatusCode.NOT_FOUND.getStatusCode(), Locale.ENGLISH);
+   }
+
+   private void performDeleteProductListBoundAction(Map<String, Parameter> parameters) throws ODataApplicationException
+   {
+      ODataSecurityManager.checkPermission(Role.DATA_MANAGER);
+      EntityCollection productParameters = (EntityCollection) parameters.get(DeleteProductsAction.PARAMETER_PRODUCT_LIST).getValue();
+
+      List<Entity> entities = productParameters.getEntities();
+
+      for (Entity entity : entities)
+      {
+         String uuid = (String) entity.getProperty("Id").getValue();
+
+         Product product = PRODUCT_SERVICE.systemGetProduct(uuid);
+         if (product == null)
+         {
+            LOGGER.error("The product id is not valid");
+         }
+         try
+         {
+            long start = System.currentTimeMillis();
+            STORE_SERVICE.deleteProduct(uuid, Destination.TRASH, true, "");
+
+            long totalTime = System.currentTimeMillis() - start;
+            LOGGER.info("Deletion of product '{}' ({} bytes) successful spent {}ms",
+                  product.getIdentifier(), product.getSize(), totalTime);
+
+         }
+         catch (StoreException e)
+         {
+            LOGGER.warn("Cannot delete product {}: {}", uuid, e.getMessage());
+         }
+      }
    }
 
    private Property singleProductRepairAction(List<UriParameter> keyPredicates)
@@ -1048,6 +1184,13 @@ public class ProductDataHandler implements DatabaseDataHandler
          try
          {
             data = STORE_SERVICE.getPhysicalProduct(productUuid);
+            // particular case of MOST scenario (product no more available in DHuS format but in uuid.zip format)
+            if (data instanceof OpenStackProduct && ((OpenStackProduct)data).getUUID() != null)
+            {
+               ((OpenStackProduct)data).prepareDownloadInformation();
+               contentLength = (Long) data.getProperty(ProductConstants.DATA_SIZE);
+               checksumValue = (String) data.getProperty(ProductConstants.CHECKSUM_MD5);
+            }
             MediaResponseBuilder.prepareMediaResponse(
                   checksumValue,
                   data.getName(),
@@ -1168,4 +1311,77 @@ public class ProductDataHandler implements DatabaseDataHandler
                HttpStatusCode.INTERNAL_SERVER_ERROR.getStatusCode(), Locale.ENGLISH);
       }
    }
+
+   @Override
+   public void deleteEntityData(List<UriParameter> keyParameters) throws ODataApplicationException
+   {
+      ODataSecurityManager.checkPermission(Role.DATA_MANAGER);
+      String productId = DataHandlerUtil.getSingleStringKeyParameterValue(keyParameters, ItemModel.PROPERTY_ID);
+      try
+      {
+         STORE_SERVICE.deleteProduct(productId, Destination.TRASH, true, "");
+      }
+      catch (StoreException e)
+      {
+         LOGGER.error("Cannot delete product {}: {}", productId, e.getMessage());
+      }
+   }
+
+   @Override
+   public EntityIterator getEntityIteratorData(FilterOption filterOption, OrderByOption orderByOption,
+         TopOption topOption, SkipOption skipOption, CountOption countOption) throws ODataApplicationException
+   {
+      ProductSQLVisitor productSqlVisitor = new ProductSQLVisitor(filterOption, orderByOption, topOption, skipOption);
+      PagedIterator<Product> pIter = PRODUCT_SERVICE.getProducts(productSqlVisitor);
+      return new EntityIterator()
+      {
+         @Override
+         public Entity next()
+         {
+            return toProductEntity(pIter.next());
+         }
+
+         @Override
+         public boolean hasNext()
+         {
+            return pIter.hasNext();
+         }
+
+         @Override
+         public Integer getCount()
+         {
+            return pIter.getCount();
+         }
+      };
+   }
+
+   @Override
+   public EntityIterator getRelatedEntityIteratorData(Entity sourceEntity, EdmNavigationProperty edmNavigationProperty,
+         FilterOption filterOption, OrderByOption orderByOption, TopOption topOption, SkipOption skipOption,
+         CountOption countOption) throws ODataApplicationException
+   {
+      String entityType = sourceEntity.getType();
+      // No product available from derived product
+      if (sourceEntity instanceof DerivedProductEntity)
+      {
+         throw new ODataApplicationException(
+               "Invalid navigation from derived product to "
+                     + ProductModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString(),
+               HttpStatusCode.BAD_REQUEST.getStatusCode(), Locale.ENGLISH);
+      }
+      else if (DataStoreModel.isDataStoreSubType(entityType))
+      {
+         return getDataStoreNavLink(sourceEntity);
+      }
+      else if (entityType.equals(ProductModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString()))
+      {
+         return getProductsNavLink(sourceEntity);
+      }
+      else if (entityType.equals(UserModel.FULL_QUALIFIED_NAME.getFullQualifiedNameAsString()))
+      {
+         return getCartNavLink(sourceEntity, filterOption, orderByOption, topOption, skipOption);
+      }
+      return null;
+   }
+
 }

@@ -19,12 +19,6 @@
  */
 package fr.gael.dhus.database.dao;
 
-import fr.gael.dhus.database.dao.interfaces.HibernateDao;
-import fr.gael.dhus.database.object.Collection;
-import fr.gael.dhus.database.object.MetadataIndex;
-import fr.gael.dhus.database.object.Product;
-import fr.gael.dhus.database.object.User;
-
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -34,15 +28,19 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.dhus.olingo.v2.visitor.SQLVisitorParameter;
 import org.dhus.store.LoggableProduct;
-
 import org.hibernate.FetchMode;
-import org.hibernate.query.Query;
 import org.hibernate.Session;
 import org.hibernate.criterion.DetachedCriteria;
-
+import org.hibernate.query.Query;
 import org.hibernate.type.StandardBasicTypes;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
+
+import fr.gael.dhus.database.dao.interfaces.HibernateDao;
+import fr.gael.dhus.database.object.Collection;
+import fr.gael.dhus.database.object.MetadataIndex;
+import fr.gael.dhus.database.object.Product;
+import fr.gael.dhus.database.object.User;
 
 /**
  * Product Data Access Object provides interface to Product Table into the
@@ -133,15 +131,12 @@ public class ProductDao extends HibernateDao<Product, Long>
       Product p = read (product.getId ());
       List<Collection>cls = collectionDao.getCollectionsOfProduct (p.getId ());
       // Remove collection references
-      // Must use rootUser to remove every reference of this product
-      // (or maybe a new non usable user ?)
-      User user = userDao.getRootUser();
       if (cls!=null)
       {
          for (Collection c: cls)
          {
             LOGGER.info("deconnect product from collection " + c.getName ());
-            collectionDao.removeProduct (c.getUUID (), p.getId (), user);
+            collectionDao.removeProduct (c.getUUID (), p.getId ());
          }
       }
       // Remove references
@@ -218,8 +213,8 @@ public class ProductDao extends HibernateDao<Product, Long>
       p.getUuid();
       p.setCreated(new Date());
       p.setUpdated(p.getCreated());
-      p.setOnline(true);
       p.setOnDemand(p.isOnDemand());
+      p.setOnline(p.isOnline() != null ? p.isOnline() : true);
       return super.create(p);
    }
 
@@ -236,6 +231,23 @@ public class ProductDao extends HibernateDao<Product, Long>
    {
       checkProductNumber (top);
       return super.executeHQLQuery (hql, parameters, skip, top);
+   }
+
+   /**
+    * Returns an iterator over results. Results are retrieved by page (page size
+    * = PagedIterator.DEFAULT_PAGE_SIZE).
+    *
+    * @param hql : core query
+    * @param parameters : query parameters
+    * @param skip : results to skip
+    * @param top : results count
+    * @return an iterator on results
+    */
+   public PagedIterator<Product> executeHQLQueryAndIterate(final String hql, final List<SQLVisitorParameter> parameters,
+         final int skip, final int top)
+   {
+      checkProductNumber(top);
+      return new PagedIterator<>(this, hql, parameters, skip, PagedIterator.DEFAULT_PAGE_SIZE, top);
    }
 
    /**

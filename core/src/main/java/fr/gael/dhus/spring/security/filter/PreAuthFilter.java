@@ -31,21 +31,32 @@ import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.savedrequest.DefaultSavedRequest;
+import org.springframework.security.web.savedrequest.DefaultSavedRequest.Builder;
 import org.springframework.web.filter.GenericFilterBean;
 
 import fr.gael.dhus.database.object.User.PasswordEncryption;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.spring.context.SecurityContextProvider;
 import fr.gael.dhus.spring.security.CookieKey;
+import fr.gael.dhus.spring.security.saml.SAMLSavedRequestCache;
+import fr.gael.dhus.system.config.ConfigurationManager;
 import fr.gael.dhus.util.encryption.EncryptPassword;
 
 public class PreAuthFilter extends GenericFilterBean 
 {
    private static final SecurityContextProvider SEC_CTX_PROVIDER =
          ApplicationContextProvider.getBean(SecurityContextProvider.class);
+
+   private static final ConfigurationManager cfg =
+	         ApplicationContextProvider.getBean(ConfigurationManager.class);
+
+   @Autowired
+   private SAMLSavedRequestCache requestCache;
 
    /**
     * Check whether all required properties have been set.
@@ -82,8 +93,33 @@ public class PreAuthFilter extends GenericFilterBean
                SecurityContextHolder.getContext ().getAuthentication ();
       if (currentUser == null)
       {
-         doAuthenticate ((HttpServletRequest) request,
-            (HttpServletResponse) response);
+         HttpServletRequest req = (HttpServletRequest) request;
+         final String extPath =  cfg.getServerConfiguration().getExternalPath();
+         // if GDPR + external path is not '/' + request url = 'httpx://server/external_path/saml/'
+         // + no saved request with this session
+         // then set a saved request with dhus home including external path = 'httpx://server/external_path'
+         // in order to load home page after keycloak auth
+         if(cfg.isGDPREnabled() && extPath != null && !extPath.trim().isEmpty() && !"/".equals(extPath))
+         {
+            if("/saml/".equalsIgnoreCase(req.getRequestURI()))
+            {
+               final String sessionId = req.getSession(true).getId();
+               if(requestCache.load(sessionId) == null)
+               {
+                  Builder builder = new Builder()
+                          .setMethod(req.getMethod())
+                          .setScheme(req.getScheme())
+                          .setServerName(req.getServerName())
+                          .setServerPort(req.getServerPort())
+                          .setContextPath(extPath)
+                          .setRequestURI(extPath)
+                          .setServletPath(req.getServletPath());
+                  DefaultSavedRequest savedRequest = builder.build();
+                  requestCache.save(sessionId, savedRequest);
+               }
+            }
+         }
+         doAuthenticate (req, (HttpServletResponse) response);
       }
 
       chain.doFilter (request, response);

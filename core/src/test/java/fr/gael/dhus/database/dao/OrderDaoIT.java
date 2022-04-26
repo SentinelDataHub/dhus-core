@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2019 GAEL Systems
+ * Copyright (C) 2019,2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -154,6 +154,17 @@ public class OrderDaoIT extends AbstractTransactionalTestNGSpringContextTests
       assertEquals(dao.countOrdersByDataStore(STORE_NAME, JobStatus.COMPLETED, JobStatus.PENDING), 3);
       assertEquals(dao.countOrdersByDataStore(STORE_NAME, JobStatus.COMPLETED, JobStatus.PENDING, JobStatus.FAILED, JobStatus.PAUSED, JobStatus.RUNNING, JobStatus.UNKNOWN), 3);
       assertEquals(dao.countOrdersByDataStore(STORE_NAME, JobStatus.PENDING, JobStatus.FAILED, JobStatus.PAUSED, JobStatus.RUNNING, JobStatus.UNKNOWN), 1);
+   }
+
+   @Test
+   public void testGetOrderByJobId()
+   {
+      assertNull(dao.getOrderByJobId("invalid"));
+
+      Order order = dao.getOrderByJobId("foo");
+      assertNotNull(order);
+      assertEquals(order.getJobId(), "foo");
+      assertEquals(order.getOrderId().getProductUuid(), UUID0);
    }
 
 }

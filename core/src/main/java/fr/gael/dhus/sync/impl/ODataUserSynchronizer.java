@@ -29,10 +29,12 @@ import fr.gael.dhus.olingo.v1.entityset.SystemRoleEntitySet;
 import fr.gael.dhus.olingo.v1.entityset.UserEntitySet;
 import fr.gael.dhus.service.ISynchronizerService;
 import fr.gael.dhus.service.UserService;
+import fr.gael.dhus.service.exception.GDPREnabledException;
 import fr.gael.dhus.service.exception.RequiredFieldMissingException;
 import fr.gael.dhus.service.exception.RootNotModifiableException;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.sync.Synchronizer;
+import fr.gael.dhus.system.config.ConfigurationManager;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -74,6 +76,9 @@ public class ODataUserSynchronizer extends Synchronizer
    /** User Service, to create user objects.  */
    private static final UserService USER_SERVICE =
          ApplicationContextProvider.getBean(UserService.class);
+   
+   private ConfigurationManager cfgManager =
+         ApplicationContextProvider.getBean(ConfigurationManager.class);
 
    /** An {@link ODataClient} configured to query another DHuS OData service. */
    private final ODataClient client;
@@ -158,6 +163,12 @@ public class ODataUserSynchronizer extends Synchronizer
    @Override
    public boolean synchronize() throws InterruptedException
    {
+    //FIXME: Check if GDPR is enabled
+      if (!cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. Cannot synchronisze users.");
+         throw new InterruptedException ("GDPR enabled. User management not done by DHuS. Cannot synchronize users.");
+      }
       log(Level.INFO, "started");
       int created = 0, updated = 0, skipped = 0;
       try
@@ -374,7 +385,7 @@ public class ODataUserSynchronizer extends Synchronizer
                   log(Level.ERROR, "Namesake '" + username + "' detected!");
                }
             }
-            catch (RootNotModifiableException e) { } // Ignored exception
+            catch (GDPREnabledException | RootNotModifiableException e) { } // Ignored exception
             catch (RequiredFieldMissingException | RuntimeException e)
             {
                // The user service throws runtime exceptions, which is bad practice

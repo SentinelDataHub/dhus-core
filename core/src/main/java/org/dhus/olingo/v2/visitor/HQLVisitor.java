@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2019 GAEL Systems
+ * Copyright (C) 2019,2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -96,6 +96,14 @@ public abstract class HQLVisitor implements ExpressionVisitor<Object>
    public Object visitAlias(String arg0) throws ExpressionVisitException, ODataApplicationException
    {
       return null;
+   }
+
+   @Override
+   public Object visitBinaryOperator(BinaryOperatorKind operator, Object left, List<Object> right)
+         throws ExpressionVisitException, ODataApplicationException
+   {
+      throw new ODataApplicationException("Unsupported operator: " + operator.name(),
+            HttpStatusCode.NOT_IMPLEMENTED.getStatusCode(), Locale.ENGLISH);
    }
 
    @Override

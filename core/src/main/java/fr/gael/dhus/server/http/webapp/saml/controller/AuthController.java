@@ -20,6 +20,7 @@
 package fr.gael.dhus.server.http.webapp.saml.controller;
 
 import java.io.IOException;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
@@ -30,6 +31,13 @@ import org.springframework.web.bind.annotation.RequestMethod;
 @Controller
 public class AuthController
 {
+   @RequestMapping(value = "/**", method = {RequestMethod.GET})
+   public void slashRedirect(HttpServletRequest req, HttpServletResponse res)
+         throws IOException
+   {
+      res.sendRedirect("../");
+   }
+   
    @RequestMapping(value = "/auth", method = {RequestMethod.POST})
    public void auth(String returnUrl, HttpServletRequest req, HttpServletResponse res)
          throws IOException

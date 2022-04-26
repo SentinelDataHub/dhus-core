@@ -127,22 +127,22 @@ public class MetadataStoreService implements MetadataStore
       return relationalMetadataStore.getDatabaseProduct(uuid);
    }
 
-   public List<LoggableProduct> getProductUUIDs(String filter, String orderBy, String collectionName, int skip, int top)
+   public List<LoggableProduct> getProductUUIDs(String filter, String orderBy, String collectionName, boolean safe, int skip, int top)
          throws StoreException
    {
-      return relationalMetadataStore.getProductUUIDs(filter, orderBy, collectionName, skip, top);
+      return relationalMetadataStore.getProductUUIDs(filter, orderBy, collectionName, safe, skip, top);
    }
 
-   public List<LoggableProduct> getOnlineProductUUIDs(String filter, String orderBy, String collectionName, int skip, int top)
+   public List<LoggableProduct> getOnlineProductUUIDs(String filter, String orderBy, String collectionName, boolean safe, int skip, int top)
          throws StoreException
    {
-      return relationalMetadataStore.getOnlineProductUUIDs(filter, orderBy, collectionName, skip, top);
+      return relationalMetadataStore.getOnlineProductUUIDs(filter, orderBy, collectionName, safe, skip, top);
    }
 
    public List<LoggableProduct> getProductUUIDsWithin(String filter, String orderBy,
-         String collectionName, List<String> productUUIDs) throws StoreException
+         String collectionName, boolean safe, List<String> productUUIDs) throws StoreException
    {
-      return relationalMetadataStore.getProductUUIDsWithin(filter, orderBy, collectionName, productUUIDs);
+      return relationalMetadataStore.getProductUUIDsWithin(filter, orderBy, collectionName, safe, productUUIDs);
    }
 
    public void restoreProduct(String uuid, Long size, Map<String, String> checksums)

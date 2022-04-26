@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2019 GAEL Systems
+ * Copyright (C) 2019,2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -39,6 +39,7 @@ import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 
 import org.dhus.Util;
+import org.dhus.store.datastore.DataStore;
 import org.dhus.store.datastore.async.AsyncDataStoreException;
 import org.dhus.store.datastore.config.PatternReplace;
 
@@ -72,13 +73,12 @@ public class ParamPdgsDataStore extends PdgsDataStore
     * @param name                      of this DataStore
     * @param priority                  DataStores are ordered
     * @param isManager                 true to enable the ingest job in this instance of the DHuS (only one instance per cluster)
-    * @param hfsLocation               path to the local HFS cache
     * @param patternReplaceIn          transform PDGS identifiers to DHuS identifiers
     * @param patternReplaceOut         transform DHuS identifiers to PDGS identifiers
     * @param maxPendingRequests        maximum number of pending orders at the same time
-    * @param maxPendingRequests        maximum number of running orders at the same time
-    * @param maximumSize               maximum size in bytes of the local HFS cache DataStore
-    * @param currentSize               overall size of the local HFS cache DataStore (disk usage)
+    * @param maxRunningRequests        maximum number of running orders at the same time
+    * @param maximumSize               maximum size in bytes of the local cache DataStore
+    * @param currentSize               overall size of the local cache DataStore (disk usage)
     * @param autoEviction              true to activate auto-eviction based on disk usage on the local HFS cache DataStore
     * @param urlService                URL to connect to the PDGS Service
     * @param login                     user to log to PDGS Service
@@ -86,20 +86,21 @@ public class ParamPdgsDataStore extends PdgsDataStore
     * @param interval                  interval
     * @param maxConcurrentsDownloads   maximum number of product download occurring in parallel
     * @param hashAlgorithms            to compute on restore
+    * @param cache                     local cache, can be HFS or OpenStack
     * @param getProductUrlParamPattern pattern of product request URL to perform
     * @param productNamePattern        shape of product "names" in responses
     *
     * @throws URISyntaxException could not create PDGSDataStore
     * @throws IOException        could not create PDGS repo location directory
     */
-   public ParamPdgsDataStore(String name, int priority, boolean isManager, String hfsLocation,
+   public ParamPdgsDataStore(String name, int priority, boolean isManager,
          PatternReplace patternReplaceIn, PatternReplace patternReplaceOut, Integer maxPendingRequests, Integer maxRunningRequests,
          long maximumSize, long currentSize, boolean autoEviction, String urlService, String login, String password,
-         long interval, int maxConcurrentsDownloads, String[] hashAlgorithms, String getProductUrlParamPattern, String productNamePattern)
+         long interval, int maxConcurrentsDownloads, String[] hashAlgorithms, DataStore cache, String getProductUrlParamPattern, String productNamePattern)
          throws URISyntaxException, IOException
    {
-      super(name, priority, isManager, hfsLocation, patternReplaceIn, patternReplaceOut, maxPendingRequests, maxRunningRequests,
-            maximumSize, currentSize, autoEviction, urlService, login, password, interval, maxConcurrentsDownloads, hashAlgorithms);
+      super(name, priority, isManager, patternReplaceIn, patternReplaceOut, maxPendingRequests, maxRunningRequests,
+            maximumSize, currentSize, autoEviction, urlService, login, password, interval, maxConcurrentsDownloads, hashAlgorithms, cache);
 
       LOGGER.debug("Initializing ParamPdgsDataStore: {}", name);
 

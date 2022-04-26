@@ -23,7 +23,7 @@ import fr.gael.dhus.datastore.processing.ProcessingUtils;
 
 import fr.gael.drb.DrbAttribute;
 import fr.gael.drb.DrbNode;
-import fr.gael.drb.impl.spi.DrbNodeSpi;
+import fr.gael.drb.impl.DrbNodeImpl;
 import fr.gael.drb.value.Value;
 
 import fr.gael.odata.engine.data.DataHandlerUtil;
@@ -121,65 +121,57 @@ public class NodeEntity extends Entity
 
    private static Long getContentLength(DrbNode drbNode)
    {
-      Long contentLength = -1L;
-      if (hasStream(drbNode))
+      if (!hasStream(drbNode))
       {
-         InputStream stream = getStream(drbNode);
-         if (contentLength == -1)
+         return 0L;
+      }
+      // Using 'contentLength' attribute
+      DrbAttribute attr = drbNode.getAttribute("contentLength");
+      if (attr != null)
+      {
+         try
          {
-            DrbAttribute attr = drbNode.getAttribute("size");
-            if (attr != null)
-            {
-               try
-               {
-                  contentLength = Long.decode(attr.getValue().toString());
-               }
-               catch (NumberFormatException nfe)
-               {
-                  // Error in attribute...
-               }
-            }
+            return Long.decode(attr.getValue().toString());
          }
-         // Still not initialized ?
+         catch (NumberFormatException suppressed) {}
+      }
+      // Using 'size' attribute
+      attr = drbNode.getAttribute("size");
+      if (attr != null)
+      {
+         try
+         {
+            return Long.decode(attr.getValue().toString());
+         }
+         catch (NumberFormatException suppressed) {}
+      }
+      // If the input stream is a FileInputStream
+      try (InputStream stream = getStream(drbNode))
+      {
          if (stream instanceof FileInputStream)
          {
-            try
-            {
-               contentLength = ((FileInputStream) stream).getChannel().size();
-            }
-            catch (IOException e)
-            {
-               // Error while accessing file size: using -1L
-            }
-         }
-         // Stil not iniitalized, forcing to 0
-         if (contentLength == -1)
-         {
-            contentLength = 0L;
+            return ((FileInputStream) stream).getChannel().size();
          }
       }
-      else
-      {
-         contentLength = 0L;
-      }
+      catch (IOException suppressed) {}
 
-      return contentLength;
+      return 0L;
    }
 
    public static boolean hasStream(DrbNode drbNode)
    {
-      if (drbNode instanceof DrbNodeSpi)
+      if (drbNode instanceof DrbNodeImpl)
       {
-         return ((DrbNodeSpi) drbNode).hasImpl(InputStream.class);
+         return ((DrbNodeImpl) drbNode).hasImpl(InputStream.class);
       }
       return false;
    }
 
    public static InputStream getStream(DrbNode drbNode)
    {
-      if (drbNode instanceof DrbNodeSpi)
+      if (drbNode instanceof DrbNodeImpl)
       {
-         return (InputStream) ((DrbNodeSpi) drbNode).getImpl(InputStream.class);
+         return (InputStream) ((DrbNodeImpl) drbNode).getImpl(InputStream.class);
       }
       return null;
    }

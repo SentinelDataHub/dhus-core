@@ -19,6 +19,7 @@
  */
 package org.dhus.olingo.v2.datamodel;
 
+import fr.gael.dhus.database.object.config.eviction.EvictionBaseDate;
 import fr.gael.dhus.database.object.config.eviction.EvictionStatusEnum;
 
 import fr.gael.odata.engine.model.EntityModel;
@@ -57,6 +58,9 @@ public class EvictionModel implements EntityModel
    public static final String SOFT_EVICTION = "SoftEviction";
    public static final String STATUS = "Status";
    public static final String CRON = "Cron";
+   public static final String SAFE_MODE = "SafeMode";
+   public static final String TARGET_DATASTORE = "TargetDataStore";
+   public static final String BASE_DATE = "BaseDate";
 
    private static final Map<String, Object> DEFAULT_VALUES = new HashMap<>();
 
@@ -66,7 +70,9 @@ public class EvictionModel implements EntityModel
       DEFAULT_VALUES.put(KEEP_PERIOD_UNIT, "DAYS");
       DEFAULT_VALUES.put(MAX_EVICTED_PRODUCTS, 1000);
       DEFAULT_VALUES.put(SOFT_EVICTION, false);
+      DEFAULT_VALUES.put(SAFE_MODE, false);
       DEFAULT_VALUES.put(STATUS, EvictionStatusEnum.STOPPED.toString());
+      DEFAULT_VALUES.put(BASE_DATE, EvictionBaseDate.MODIFICATION_DATE.value());
    }
 
    @Override
@@ -111,6 +117,18 @@ public class EvictionModel implements EntityModel
             .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
             .setNullable(false)
             .setDefaultValue(DEFAULT_VALUES.get(STATUS).toString());
+      
+      CsdlProperty safeMode = new CsdlProperty().setName(SAFE_MODE)
+            .setType(EdmPrimitiveTypeKind.Boolean.getFullQualifiedName())
+            .setDefaultValue(DEFAULT_VALUES.get(SAFE_MODE).toString());
+      
+      CsdlProperty targetDatastore = new CsdlProperty().setName(TARGET_DATASTORE)
+            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName());
+
+      CsdlProperty baseDate = new CsdlProperty().setName(BASE_DATE)
+            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
+            .setNullable(false)
+            .setDefaultValue(DEFAULT_VALUES.get(BASE_DATE).toString());
 
       CsdlProperty cron = new CsdlProperty()
             .setName(CRON)
@@ -129,7 +147,11 @@ public class EvictionModel implements EntityModel
                         targetCollection,
                         softEviction,
                         status,
-                        cron))
+                        cron,
+                        safeMode,
+                        targetDatastore,
+                        baseDate
+                        ))
             .setKey(Collections.singletonList(nameKey));
    }
 

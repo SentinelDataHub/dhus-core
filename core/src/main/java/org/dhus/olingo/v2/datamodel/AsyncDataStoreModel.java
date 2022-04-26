@@ -42,7 +42,6 @@ public class AsyncDataStoreModel implements EntityModel
    public static final FullQualifiedName FULL_QUALIFIED_NAME =
          new FullQualifiedName(DHuSODataServlet.NAMESPACE, ENTITY_TYPE_NAME);
 
-   public static final String PROPERTY_HFS_LOCATION = "HFSLocation";
    public static final String PROPERTY_IS_MASTER = "IsMaster";
    public static final String PROPERTY_PATRE_IN = "PatternReplaceIn";
    public static final String PROPERTY_PATRE_OUT = "PatternReplaceOut";
@@ -55,11 +54,6 @@ public class AsyncDataStoreModel implements EntityModel
    @Override
    public CsdlEntityType getEntityType()
    {
-      CsdlProperty hfsLocation = new CsdlProperty()
-            .setName(PROPERTY_HFS_LOCATION)
-            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
-            .setNullable(false);
-
       CsdlProperty isMaster = new CsdlProperty()
             .setName(PROPERTY_IS_MASTER)
             .setType(EdmPrimitiveTypeKind.Boolean.getFullQualifiedName())
@@ -92,7 +86,6 @@ public class AsyncDataStoreModel implements EntityModel
             .setBaseType(DataStoreModel.ABSTRACT_FULL_QUALIFIED_NAME)
             .setName(ENTITY_TYPE_NAME)
             .setProperties(Arrays.asList(
-                  hfsLocation,
                   isMaster,
                   patreIn,
                   patreOut,

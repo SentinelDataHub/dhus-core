@@ -19,29 +19,6 @@
  */
 package org.dhus.store.ingestion;
 
-import fr.gael.dhus.database.object.MetadataIndex;
-import fr.gael.dhus.database.object.config.product.ProductConfiguration;
-import fr.gael.dhus.datastore.processing.InconsistentImageScale;
-import fr.gael.dhus.datastore.processing.ProcessingUtils;
-import fr.gael.dhus.factory.MetadataFactory;
-import fr.gael.dhus.spring.context.ApplicationContextProvider;
-import fr.gael.dhus.system.config.ConfigurationManager;
-import fr.gael.dhus.system.init.WorkingDirectory;
-import fr.gael.dhus.util.DrbChildren;
-import fr.gael.dhus.util.WKTFootprintParser;
-
-import fr.gael.drb.DrbAttribute;
-import fr.gael.drb.DrbNode;
-import fr.gael.drb.DrbSequence;
-import fr.gael.drb.impl.DrbNodeImpl;
-import fr.gael.drb.impl.xml.XmlWriter;
-import fr.gael.drb.query.Query;
-import fr.gael.drb.value.Value;
-import fr.gael.drbx.cortex.DrbCortexItemClass;
-import fr.gael.drbx.image.ImageFactory;
-import fr.gael.drbx.image.impl.sdi.SdiImageFactory;
-import fr.gael.drbx.image.jai.RenderingFactory;
-
 import java.awt.image.RenderedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -60,11 +37,11 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
 import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,18 +55,37 @@ import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.dhus.Product;
 import org.dhus.ProductFactory;
 import org.dhus.store.datastore.DataStoreProduct;
 import org.dhus.store.datastore.hfs.HfsProduct;
-
 import org.geotools.gml2.GMLConfiguration;
 import org.geotools.xml.Configuration;
 import org.geotools.xml.Parser;
-
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+
+import fr.gael.dhus.database.object.MetadataIndex;
+import fr.gael.dhus.database.object.config.product.ProductConfiguration;
+import fr.gael.dhus.datastore.processing.InconsistentImageScale;
+import fr.gael.dhus.datastore.processing.ProcessingUtils;
+import fr.gael.dhus.factory.MetadataFactory;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.system.config.ConfigurationManager;
+import fr.gael.dhus.system.init.WorkingDirectory;
+import fr.gael.dhus.util.DrbChildren;
+import fr.gael.dhus.util.WKTFootprintParser;
+import fr.gael.drb.DrbAttribute;
+import fr.gael.drb.DrbNode;
+import fr.gael.drb.DrbSequence;
+import fr.gael.drb.impl.DrbNodeImpl;
+import fr.gael.drb.impl.xml.XmlWriter;
+import fr.gael.drb.query.Query;
+import fr.gael.drb.value.Value;
+import fr.gael.drbx.cortex.DrbCortexItemClass;
+import fr.gael.drbx.image.ImageFactory;
+import fr.gael.drbx.image.impl.sdi.SdiImageFactory;
+import fr.gael.drbx.image.jai.RenderingFactory;
 
 /**
  * Lazy raw product used during the ingestion process, it is identified by a UUID.
@@ -103,8 +99,13 @@ public class IngestibleRawProduct implements IngestibleProduct
    private static final String METADATA_NAMESPACE = "http://www.gael.fr/dhus#";
    private static final String PROPERTY_IDENTIFIER = "identifier";
    private static final String PROPERTY_METADATA_EXTRACTOR = "metadataExtractor";
+   private static final String PROPERTY_BEGIN_POSITION = "beginposition";
+   private static final String PROPERTY_END_POSITION = "endposition";
    private static final String MIME_PLAIN_TEXT = "plain/text";
    private static final String MIME_APPLICATION_GML = "application/gml+xml";
+   private static final String MIME_APPLICATION_JTS = "application/jts";
+   private static final String MIME_APPLICATION_WKT = "application/wkt";
+
 
    private static final DateTimeFormatter DATETIME_FORMAT =
       new DateTimeFormatterBuilder ().appendPattern ("yyyy-MM-dd'T'HH:mm:ss")
@@ -116,6 +117,8 @@ public class IngestibleRawProduct implements IngestibleProduct
    private final DrbNode productNode;
    private final Product physicalProduct;
    private Boolean onDemand;
+   
+   private Boolean online;
 
    // set when called
    private Date ingestionDate = null;
@@ -146,6 +149,12 @@ public class IngestibleRawProduct implements IngestibleProduct
    // timer
    private long timerStartMillis;
    private long timerStopMillis;
+
+   // collected metadata while main loop (indexed by type and queryable)
+   final List<String> collectedTypes = Arrays.asList(MIME_APPLICATION_GML, MIME_APPLICATION_JTS, MIME_APPLICATION_WKT);
+   final List<String> collectedQueryables = Arrays.asList(PROPERTY_BEGIN_POSITION, PROPERTY_END_POSITION);
+   HashMap<String, MetadataIndex> collectedMetadataIndexesByType = new HashMap<String, MetadataIndex>();
+   HashMap<String, MetadataIndex> collectedMetadataIndexesByQueryable = new HashMap<String, MetadataIndex>();
 
    public static IngestibleRawProduct fromURL(URL productUrl)
    {
@@ -272,20 +281,17 @@ public class IngestibleRawProduct implements IngestibleProduct
    {
       if (contentStart == null)
       {
-         for (MetadataIndex index: getMetadataIndexes())
+         MetadataIndex mdi = collectedMetadataIndexesByQueryable.get(PROPERTY_BEGIN_POSITION);
+         if(mdi != null)
          {
-            if (index.getQueryable() != null && index.getQueryable().equalsIgnoreCase("beginposition"))
-            {
-               TemporalAccessor parsedDate = DATETIME_FORMAT.parse (index.getValue ());
+            TemporalAccessor parsedDate = DATETIME_FORMAT.parse (mdi.getValue ());
 
-               LocalDateTime localDateTime = LocalDateTime.from (parsedDate);
-               ZonedDateTime zonedDateTime = ZonedDateTime.of(localDateTime, ZoneId.systemDefault());
-               Instant instant = Instant.from(zonedDateTime);
-               contentStart = java.util.Date.from (instant);
-            }
+            LocalDateTime localDateTime = LocalDateTime.from (parsedDate);
+            ZonedDateTime zonedDateTime = ZonedDateTime.of(localDateTime, ZoneId.systemDefault());
+            Instant instant = Instant.from(zonedDateTime);
+            contentStart = java.util.Date.from (instant);
          }
       }
-
       // mandatory metadataindex
       if (contentStart == null)
       {
@@ -300,21 +306,17 @@ public class IngestibleRawProduct implements IngestibleProduct
    {
       if (contentEnd == null)
       {
-         for (MetadataIndex index: getMetadataIndexes())
+         MetadataIndex mdi = collectedMetadataIndexesByQueryable.get(PROPERTY_END_POSITION);
+         if(mdi != null)
          {
-            if (index.getQueryable() != null
-                  && index.getQueryable().equalsIgnoreCase("endposition"))
-            {
-               TemporalAccessor parsedDate = DATETIME_FORMAT.parse (index.getValue ());
+            TemporalAccessor parsedDate = DATETIME_FORMAT.parse (mdi.getValue ());
 
-               LocalDateTime localDateTime = LocalDateTime.from (parsedDate);
-               ZonedDateTime zonedDateTime = ZonedDateTime.of(localDateTime, ZoneId.systemDefault());
-               Instant instant = Instant.from(zonedDateTime);
-               contentEnd = java.util.Date.from (instant);
-            }
+            LocalDateTime localDateTime = LocalDateTime.from (parsedDate);
+            ZonedDateTime zonedDateTime = ZonedDateTime.of(localDateTime, ZoneId.systemDefault());
+            Instant instant = Instant.from(zonedDateTime);
+            contentEnd = java.util.Date.from (instant);
          }
       }
-
       // mandatory metadataindex
       if (contentEnd == null)
       {
@@ -329,20 +331,18 @@ public class IngestibleRawProduct implements IngestibleProduct
    {
       if (footprint == null)
       {
-         for (MetadataIndex index: getMetadataIndexes())
+         MetadataIndex mdi = collectedMetadataIndexesByType.get(MIME_APPLICATION_GML);
+         if(mdi != null)
          {
-            if (index.getType() != null && index.getType().equalsIgnoreCase(MIME_APPLICATION_GML))
+            String gmlFootprint = mdi.getValue();
+            if ((gmlFootprint != null) && checkGMLFootprint(gmlFootprint))
             {
-               String gmlFootprint = index.getValue();
-               if ((gmlFootprint != null) && checkGMLFootprint(gmlFootprint))
-               {
-                  footprint = gmlFootprint;
-                  return footprint;
-               }
-               else
-               {
-                  LOGGER.error("Incorrect or empty footprint for product {}", productUrl);
-               }
+               footprint = gmlFootprint;
+               return footprint;
+            }
+            else
+            {
+               LOGGER.error("Incorrect or empty footprint for product {}", productUrl);
             }
          }
       }
@@ -811,6 +811,24 @@ public class IngestibleRawProduct implements IngestibleProduct
                }
                MetadataIndex index = MetadataFactory.createMetadataIndex(name, metadateType, category, queryable, value);
                indexes.add(index);
+               // index by type
+               if(metadateType != null)
+               {
+                  final String lowerMetadataType = metadateType.toLowerCase();
+                  if (collectedTypes.contains(lowerMetadataType))
+                  {
+                     collectedMetadataIndexesByType.put(lowerMetadataType, index);
+                  }
+               }
+               // index by queryable
+               if(queryable != null)
+               {
+                  final String lowerQueryable = queryable.toLowerCase();
+                  if(collectedQueryables.contains(lowerQueryable))
+                  {
+                     collectedMetadataIndexesByQueryable.put(lowerQueryable, index);
+                  }
+               }
             }
             else
             {
@@ -841,46 +859,34 @@ public class IngestibleRawProduct implements IngestibleProduct
    private void finalizeIndexes(List<MetadataIndex> indexes)
    {
       boolean invalidWkt = false;
-      Iterator<MetadataIndex> iterator = indexes.iterator();
-      while (iterator.hasNext())
+      MetadataIndex mdi = collectedMetadataIndexesByType.get(MIME_APPLICATION_JTS);
+      if(mdi == null)
       {
-         MetadataIndex index = iterator.next();
-         // Extract the footprints according to its types (GML or WKT)
-         if (index.getType() != null)
+         mdi = collectedMetadataIndexesByType.get(MIME_APPLICATION_WKT);
+      }
+      if(mdi != null)
+      {
+         String wktFootprint = mdi.getValue();
+         String parsedWktFootprint = WKTFootprintParser.reformatWKTFootprint(wktFootprint);
+         if (parsedWktFootprint != null)
          {
-            // Should not have been application/wkt ?
-            if (index.getType().equalsIgnoreCase("application/jts")
-                  || index.getType().equalsIgnoreCase("application/wkt"))
-            {
-               String wktFootprint = index.getValue();
-               String parsedWktFootprint = WKTFootprintParser.reformatWKTFootprint(wktFootprint);
-               if (parsedWktFootprint != null)
-               {
-                  index.setValue(parsedWktFootprint);
-               }
-               else if (wktFootprint != null)
-               {
-                  // Invalid WKT footprint; remove the corrupted footprint
-                  invalidWkt = true;
-                  LOGGER.error("Incorrect or empty footprint for product {}", productUrl);
-                  iterator.remove();
-               }
-            }
+            mdi.setValue(parsedWktFootprint);
+         }
+         else if (wktFootprint != null)
+         {
+            // Invalid WKT footprint; remove the corrupted footprint
+            invalidWkt = true;
+            LOGGER.error("Incorrect or empty footprint for product {}", productUrl);
+            indexes.remove(mdi);
          }
       }
-
-      // remove GML footprint as well if WKT is invalid
-      if (invalidWkt)
+      if(invalidWkt)
       {
          LOGGER.error("WKT footprint not existing or not valid, removing GML footprint on {}", productUrl);
-         iterator = indexes.iterator();
-         while (iterator.hasNext())
+         mdi = collectedMetadataIndexesByType.get(MIME_APPLICATION_GML);
+         if(mdi != null)
          {
-            MetadataIndex index = iterator.next();
-            if (index.getType().equalsIgnoreCase(MIME_APPLICATION_GML))
-            {
-               iterator.remove();
-            }
+            indexes.remove(mdi);
          }
       }
 
@@ -966,5 +972,16 @@ public class IngestibleRawProduct implements IngestibleProduct
    public long getIngestionTimeMillis()
    {
       return timerStopMillis - timerStartMillis;
+   }
+
+   @Override
+   public Boolean isOnline()
+   {
+      return online;
+   }
+   
+   public void setOnline(Boolean online)
+   {
+      this.online = online;
    }
 }

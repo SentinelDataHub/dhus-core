@@ -36,7 +36,8 @@ public enum Role implements Serializable
    SYSTEM_MANAGER("ROLE_SYSTEM_MANAGER", "System manager"),
    ARCHIVE_MANAGER("ROLE_ARCHIVE_MANAGER", "Archive manager"),
    STATISTICS("ROLE_STATS", "Statistics"),
-   EVENT_MANAGER("ROLE_EVENT_MANAGER", "Event manager");
+   EVENT_MANAGER("ROLE_EVENT_MANAGER", "Event manager"),
+   FEDERATION_USER("ROLE_FEDERATION_USER", "Federation user");
 
    private static final long serialVersionUID = -3552817193045379891L;
    private static List<Role> displayableRoles;

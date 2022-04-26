@@ -30,13 +30,4 @@
    <context:component-scan base-package="fr.gael.dhus.server.http.webapp.saml.controller" />
    <security:global-method-security pre-post-annotations="enabled" />
    <mvc:annotation-driven />
-
-   <bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
-      <property name="prefix">
-         <value>/WEB-INF/pages/</value>
-      </property>
-      <property name="suffix">
-         <value>.jsp</value>
-      </property>
-   </bean>
 </beans>

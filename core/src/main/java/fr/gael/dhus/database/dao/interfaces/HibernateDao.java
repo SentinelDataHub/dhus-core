@@ -22,22 +22,20 @@ package fr.gael.dhus.database.dao.interfaces;
 import java.io.Serializable;
 import java.lang.reflect.ParameterizedType;
 import java.util.List;
+
 import javax.swing.event.EventListenerList;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.dhus.olingo.v2.visitor.SQLVisitorParameter;
-
 import org.hibernate.Criteria;
 import org.hibernate.HibernateException;
-import org.hibernate.query.Query;
-import org.hibernate.query.NativeQuery;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.criterion.DetachedCriteria;
 import org.hibernate.criterion.Projections;
-
+import org.hibernate.query.NativeQuery;
+import org.hibernate.query.Query;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.support.DataAccessUtils;
@@ -302,7 +300,7 @@ public class HibernateDao<T, PK extends Serializable>
     * @see org.hibernate.Query
     */
    @Override
-   public List<T> getPage(final String query, final int skip, final int top)
+   public List<T> getPage(final String query, final List<SQLVisitorParameter> parameters, final int skip, final int top)
    {
       return getHibernateTemplate().execute(new HibernateCallback<List<T>>()
       {
@@ -314,6 +312,11 @@ public class HibernateDao<T, PK extends Serializable>
             Query hql_query = session.createQuery(query);
             hql_query.setFirstResult(skip);
             hql_query.setMaxResults(top);
+
+            if (parameters != null && !parameters.isEmpty())
+            {
+              parameters.forEach((t) -> hql_query.setParameter(t.getPosition(), t.getValue(), t.getType()));
+            }
             return hql_query.list();
          }
       });
@@ -360,6 +363,21 @@ public class HibernateDao<T, PK extends Serializable>
    public List<T> executeHQLQuery(final String hql,
          final List<SQLVisitorParameter> parameters, final int skip, final int top)
    {
+      return getQuery(hql, parameters, skip, top).list();
+   }
+
+   /**
+    * Build query using arguments passed.
+    *
+    * @param hql : core query
+    * @param parameters : query parameters
+    * @param skip : results to skip
+    * @param top : results count
+    * @return the built query
+    */
+   @SuppressWarnings("rawtypes")
+   protected Query getQuery(final String hql, final List<SQLVisitorParameter> parameters, final int skip, final int top)
+   {
       Session session = getSessionFactory().getCurrentSession();
       Query query = session.createQuery(hql);
 
@@ -376,7 +394,7 @@ public class HibernateDao<T, PK extends Serializable>
          query.setMaxResults(top);
       }
       query.setReadOnly(true);
-      return query.list();
+      return query;
    }
 
    public int countHQLQuery(String hql, List<SQLVisitorParameter> parameters)

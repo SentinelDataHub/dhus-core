@@ -62,10 +62,7 @@ public interface DataStoreManager extends DataStore
     * @param name of the DataStore
     * @return the instance or {@code null}
     */
-   public default DataStore getDataStoreByName(String name)
-   {
-      return list().stream().filter(dataStore -> dataStore.getName().equals(name)).findFirst().orElse(null);
-   }
+   public DataStore getDataStoreByName(String name);
 
    /**
     * Deletes a product from all the DataStores managed by this service.
@@ -75,7 +72,7 @@ public interface DataStoreManager extends DataStore
     * @throws DataStoreException could not perform operation
     */
    // TODO remove destination from parameters and handle it in DataStoreManager implementation
-   public void deleteProduct(String uuid, Destination destination) throws DataStoreException;
+   public void deleteProduct(String uuid, Destination destination, boolean safeMode) throws DataStoreException;
 
    /**
     * Delete the product from the DataStore

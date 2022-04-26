@@ -76,6 +76,7 @@ public class HfsDataStore extends AbstractDataStore
    {
       if (product.hasImpl(File.class))
       {
+         LOGGER.debug("Copying '{}' from file.",product.getName());
          Path productPath = product.getImpl(File.class).toPath();
          try
          {
@@ -89,6 +90,7 @@ public class HfsDataStore extends AbstractDataStore
       }
       else if (product.hasImpl(InputStream.class))
       {
+         LOGGER.debug("Copying '{}' from stream.",product.getName());
          copyProduct(product, destination);
       }
       else
@@ -100,6 +102,7 @@ public class HfsDataStore extends AbstractDataStore
       // handle size and eviction
       long dataSize = Files.size(destination);
       product.setProperty(ProductConstants.DATA_SIZE, dataSize);
+      LOGGER.debug("Size received for '{}' : {}",product.getName(), dataSize);
 
       // TODO increase current size of datastore BEFORE calling
       // on insert eviction, and change the way onInsertEviction
@@ -136,7 +139,7 @@ public class HfsDataStore extends AbstractDataStore
       {
          Path path = getNextLocation(product);
          String destination = HfsDataStoreUtils.generateResource(hfs.getPath(), path.toString());
-
+         LOGGER.debug("Put product '{}' / {} into {}",product.getName(), uuid, destination);
          putResource(uuid, tag, destination);
          put(product, path);
       }

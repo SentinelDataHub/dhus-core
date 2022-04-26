@@ -56,6 +56,7 @@ public class DataStoreModel implements EntityModel
 
    public static final String NAVIGATION_PRODUCTS = "Products";
    public static final String NAVIGATION_EVICTION = "Eviction";
+   public static final String NAVIGATION_CACHE = "DataStoreCache";
 
    public static boolean isDataStoreSubType(String type)
    {
@@ -113,6 +114,11 @@ public class DataStoreModel implements EntityModel
             .setName(NAVIGATION_EVICTION)
             .setType(EvictionModel.FULL_QUALIFIED_NAME);
 
+      CsdlNavigationProperty cacheNavigationProperty = new CsdlNavigationProperty()
+            .setName(NAVIGATION_CACHE)
+            .setType(DataStoreModel.ABSTRACT_FULL_QUALIFIED_NAME)
+            .setCollection(false);
+
       // TODO handle authorizations
       return new CsdlEntityType()
             .setName(ABSTRACT_ENTITY_TYPE_NAME)
@@ -128,7 +134,8 @@ public class DataStoreModel implements EntityModel
             .setAbstract(true)
             .setNavigationProperties(Arrays.asList(
                   productNavigationProperty,
-                  evictionNavigationProperty
+                  evictionNavigationProperty,
+                  cacheNavigationProperty
             ));
    }
 
@@ -145,7 +152,14 @@ public class DataStoreModel implements EntityModel
       evictionNavigPropBinding.setTarget(EvictionModel.ENTITY_SET_NAME);
       evictionNavigPropBinding.setPath(NAVIGATION_EVICTION);
 
-      return entitySet.setNavigationPropertyBindings(Arrays.asList(productNavigPropBinding, evictionNavigPropBinding));
+      CsdlNavigationPropertyBinding cacheNavigPropBinding = new CsdlNavigationPropertyBinding();
+      cacheNavigPropBinding.setTarget(DataStoreModel.ABSTRACT_ENTITY_SET_NAME);
+      cacheNavigPropBinding.setPath(NAVIGATION_CACHE);
+
+      return entitySet.setNavigationPropertyBindings(Arrays.asList(
+            productNavigPropBinding,
+            evictionNavigPropBinding,
+            cacheNavigPropBinding));
    }
 
    @Override

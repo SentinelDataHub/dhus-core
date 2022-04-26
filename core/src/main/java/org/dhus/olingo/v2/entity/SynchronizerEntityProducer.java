@@ -28,13 +28,14 @@ import org.apache.olingo.commons.api.data.ValueType;
 
 import org.dhus.api.olingo.v2.EntityProducer;
 import org.dhus.api.olingo.v2.TypeInfo;
-
 import org.dhus.olingo.v2.datamodel.SynchronizerModel;
 import org.dhus.olingo.v2.datamodel.complex.CronComplexType;
 
 @TypeInfo(type = SynchronizerConfiguration.class)
 public class SynchronizerEntityProducer<I extends SynchronizerConfiguration> implements EntityProducer<I>
 {
+   private static final Object DEFAULT_PASSWORD = "***";
+
    @Override
    public Entity transform(I syncConf)
    {
@@ -65,7 +66,36 @@ public class SynchronizerEntityProducer<I extends SynchronizerConfiguration> imp
             SynchronizerModel.PROPERTY_UPDATED_DATE,
             ValueType.PRIMITIVE,
             syncConf.getModified().toGregorianCalendar()));
+      
+      //Service Url
+      entity.addProperty(new Property(
+            null,
+            SynchronizerModel.PROPERTY_SERVICE_URL,
+            ValueType.PRIMITIVE,
+            syncConf.getServiceUrl()));
+      
+      //Service login
+      entity.addProperty(new Property(
+            null,
+            SynchronizerModel.PROPERTY_SERVICE_LOGIN,
+            ValueType.PRIMITIVE,
+            syncConf.getServiceLogin()));
+      
+      //Service Password
+      entity.addProperty(new Property(
+            null,
+            SynchronizerModel.PROPERTY_SERVICE_PASSWD,
+            ValueType.PRIMITIVE,
+            DEFAULT_PASSWORD));
+      
+      // Page size
+      entity.addProperty(new Property(
+            null,
+            SynchronizerModel.PROPERTY_PAGE_SIZE,
+            ValueType.PRIMITIVE,
+            syncConf.getPageSize()));
 
+      //Schedule for Cron
       ComplexValue complexValue = new ComplexValue();
       complexValue.getValue().add(new Property(
             null,
@@ -83,7 +113,7 @@ public class SynchronizerEntityProducer<I extends SynchronizerConfiguration> imp
             CronComplexType.COMPLEX_TYPE_NAME,
             ValueType.COMPLEX,
             complexValue));
-
+      
       return entity;
    }
 }

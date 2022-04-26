@@ -22,6 +22,7 @@ package fr.gael.dhus.database.dao.interfaces;
 import java.util.List;
 
 import org.hibernate.query.Query;
+import org.dhus.olingo.v2.visitor.SQLVisitorParameter;
 
 /**
  * This interface represents a list that can be accessed by limited blocks of 
@@ -43,7 +44,7 @@ public interface Pageable<E>
     * @param top max element under the result page.
     * @return a list of {@code E} elements representing the asked page.
     */
-   List<E> getPage (final String query, final int skip, final int top);
+   List<E> getPage (final String query, final List<SQLVisitorParameter> parameters, final int skip, final int top);
 
    /**
     * Deletes the {@code element} from underlying list.

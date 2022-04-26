@@ -88,6 +88,31 @@ public class SecurityContextProvider
       getCache().remove(key);
    }
 
+   public SecurityContext getSecurityContextByUsername(final String userName)
+   {
+      if (userName == null)
+      {
+         return null;
+      }
+      final Cache cache = getCache();
+      final List<?> keys = cache.getKeysWithExpiryCheck();
+      for (Object key : keys)
+      {
+         final Object value = cache.get(key).getObjectValue();
+         if (value instanceof SecurityContext)
+         {
+            SecurityContext sc = (SecurityContext) value;
+            final Authentication auth = sc.getAuthentication();
+            if (auth != null && userName.contentEquals(auth.getName()))
+            {
+               return sc;
+            }
+         }
+      }
+
+      return null;
+   }
+
    public void forceLogout(String userName)
    {
       if (userName == null)
@@ -111,6 +136,29 @@ public class SecurityContextProvider
                   securityContext.setAuthentication(null);
                   getCache().remove(key);
                }
+            }
+            else // if not SecurityContext, delete it !
+            {
+               getCache().remove(key);
+            }
+         }
+      }
+   }
+   
+   public void forceLogoutAllUsers()
+   {
+      List keys = getCache().getKeysWithExpiryCheck();
+
+      for (Object key: keys)
+      {
+         if (getCache().isKeyInCache(key))
+         {
+            Object value = getCache().get(key).getObjectValue();
+            if (value instanceof SecurityContext)
+            {
+               SecurityContext securityContext = (SecurityContext) value;
+               securityContext.setAuthentication(null);
+               getCache().remove(key);
             }
             else // if not SecurityContext, delete it !
             {

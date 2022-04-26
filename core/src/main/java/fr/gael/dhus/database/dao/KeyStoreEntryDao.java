@@ -19,14 +19,10 @@
  */
 package fr.gael.dhus.database.dao;
 
-import fr.gael.dhus.database.dao.interfaces.HibernateDao;
-import fr.gael.dhus.database.object.KeyStoreEntry;
-import fr.gael.dhus.database.object.KeyStoreEntry.Key;
-
+import java.util.Iterator;
 import java.util.List;
 
 import org.dhus.store.datastore.DataStore;
-
 import org.hibernate.Criteria;
 import org.hibernate.HibernateException;
 import org.hibernate.ScrollMode;
@@ -37,6 +33,10 @@ import org.hibernate.criterion.Restrictions;
 import org.hibernate.query.Query;
 import org.springframework.orm.hibernate5.HibernateCallback;
 import org.springframework.stereotype.Repository;
+
+import fr.gael.dhus.database.dao.interfaces.HibernateDao;
+import fr.gael.dhus.database.object.KeyStoreEntry;
+import fr.gael.dhus.database.object.KeyStoreEntry.Key;
 
 @Repository
 public class KeyStoreEntryDao extends HibernateDao<KeyStoreEntry, Key>
@@ -117,6 +117,22 @@ public class KeyStoreEntryDao extends HibernateDao<KeyStoreEntry, Key>
             return query.list();
          }
       });
+   }
+
+   public Iterator<KeyStoreEntry> getUnalteredScrollableProductEntries(final String keyStoreName, Integer skip,
+         Integer top)
+   {
+      StringBuilder sb = new StringBuilder("FROM KeyStoreEntry WHERE keyStore='");
+      sb.append(keyStoreName).append("' AND tag='").append(DataStore.UNALTERED_PRODUCT_TAG).append("'");
+      if (skip == null)
+      {
+         skip = 0;
+      }
+      if (top == null)
+      {
+         top = -1;
+      }
+      return new PagedIterator<>(this, sb.toString(), skip, PagedIterator.DEFAULT_PAGE_SIZE, top);
    }
 
    public List<KeyStoreEntry> getUnalteredProductEntries(final String keyStoreName, Integer skip, Integer top)

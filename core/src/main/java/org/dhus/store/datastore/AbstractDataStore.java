@@ -24,6 +24,7 @@ import fr.gael.dhus.service.DataStoreService;
 import fr.gael.dhus.service.EvictionService;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
@@ -392,6 +393,11 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
       }
 
       String resource = product.getImpl(DataStoreProduct.class).getResourceLocation();
+      
+      if (resource == null)
+      {
+         LOGGER.debug("Cannot get resource for product {} ({})", uuid, tag);
+      }
       if (!canAccess(resource))
       {
          // throws new ProductNotFoundException ();
@@ -496,6 +502,26 @@ public abstract class AbstractDataStore implements DataStore, DerivedProductStor
    public int hashCode()
    {
       return name.hashCode() + restriction.hashCode() + priority;
+   }
+
+   @Override
+   public Iterator<String> getScrollableProductResults()
+   {
+      final Iterator<KeyStoreEntry> resultsIter = keystore.getUnalteredScrollableProductEntries();
+      return new Iterator<String>()
+      {
+         @Override
+         public String next()
+         {
+            return resultsIter.next().getEntryKey();
+         }
+
+         @Override
+         public boolean hasNext()
+         {
+            return resultsIter.hasNext();
+         }
+      };
    }
 
    @Override

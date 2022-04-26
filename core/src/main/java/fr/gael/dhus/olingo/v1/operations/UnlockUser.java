@@ -23,6 +23,7 @@ import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.olingo.v1.ExpectedException;
 import fr.gael.dhus.service.UserService;
+import fr.gael.dhus.service.exception.GDPREnabledException;
 import fr.gael.dhus.service.exception.RootNotModifiableException;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 
@@ -111,6 +112,10 @@ public class UnlockUser extends AbstractOperation
          {
             throw new ExpectedException("No restriction corresponding to given UUID '" + restriction + "' was found", HttpStatusCodes.BAD_REQUEST);
          }
+      }
+      catch (GDPREnabledException ex)
+      {
+         throw new ExpectedException(ex.getMessage(), HttpStatusCodes.BAD_REQUEST);
       }
       catch (RootNotModifiableException e)
       {

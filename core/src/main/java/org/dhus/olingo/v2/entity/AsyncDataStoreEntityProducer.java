@@ -48,11 +48,6 @@ public class AsyncDataStoreEntityProducer<I extends AsyncDataStoreConf> extends 
       dataStoreEntity
             .addProperty(new Property(
                   null,
-                  AsyncDataStoreModel.PROPERTY_HFS_LOCATION,
-                  ValueType.PRIMITIVE,
-                  asyncDataStore.getHfsLocation()))
-            .addProperty(new Property(
-                  null,
                   AsyncDataStoreModel.PROPERTY_IS_MASTER,
                   ValueType.PRIMITIVE,
                   asyncDataStore.isIsMaster()))

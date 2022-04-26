@@ -48,11 +48,11 @@ public class SynchronizerManager extends Synchronizers
    {
       if (nextId < 0)
       {
-         for (SynchronizerConfiguration scan: getSynchronizer())
+         for (SynchronizerConfiguration sync: getSynchronizer())
          {
-            if (scan.getId() > nextId)
+            if (sync.getId() > nextId)
             {
-               nextId = scan.getId();
+               nextId = sync.getId();
             }
          }
       }
@@ -91,8 +91,8 @@ public class SynchronizerManager extends Synchronizers
 
          for (int i = 0; i < getSynchronizer().size(); i++)
          {
-            SynchronizerConfiguration scan = getSynchronizer().get(i);
-            if (scan != null && scan.getId() == update.getId())
+            SynchronizerConfiguration sync = getSynchronizer().get(i);
+            if (sync != null && sync.getId() == update.getId())
             {
                getSynchronizer().set(i, update);
                break;
@@ -110,11 +110,11 @@ public class SynchronizerManager extends Synchronizers
    public List<SynchronizerConfiguration> getActiveSynchronizers()
    {
       List<SynchronizerConfiguration> result = new ArrayList<>();
-      for (SynchronizerConfiguration scan: getSynchronizer())
+      for (SynchronizerConfiguration sync: getSynchronizer())
       {
-         if (scan != null && scan.isActive())
+         if (sync != null && sync.isActive())
          {
-            result.add(scan);
+            result.add(sync);
          }
       }
       return result;
@@ -122,23 +122,40 @@ public class SynchronizerManager extends Synchronizers
 
    public SynchronizerConfiguration get(Long id)
    {
-      for (SynchronizerConfiguration scan: getSynchronizer())
+      for (SynchronizerConfiguration sync: getSynchronizer())
       {
-         if (scan != null && scan.getId() == id)
+         if (sync != null && sync.getId() == id)
          {
-            return (SynchronizerConfiguration) scan;
+            return (SynchronizerConfiguration) sync;
+         }
+      }
+      return null;
+   }
+   
+   /**
+    * Get a synchronize by its label
+    * @param label
+    * @return
+    */
+   public SynchronizerConfiguration get(String label)
+   {
+      for (SynchronizerConfiguration sync: getSynchronizer())
+      {
+         if (sync != null && sync.getLabel().equalsIgnoreCase(label))
+         {
+            return (SynchronizerConfiguration) sync;
          }
       }
       return null;
    }
 
-   public void delete(SynchronizerConfiguration scan)
+   public void delete(SynchronizerConfiguration syncConf)
    {
       synchronized(this)
       {
-         if (scan != null)
+         if (syncConf != null)
          {
-            getSynchronizer().remove(scan);
+            getSynchronizer().remove(syncConf);
             save();
          }
       }

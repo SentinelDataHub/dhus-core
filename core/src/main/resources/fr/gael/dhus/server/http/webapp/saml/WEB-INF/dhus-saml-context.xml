@@ -28,7 +28,15 @@
    <bean class="fr.gael.dhus.spring.context.DHuSContextLoader" />
    <context:annotation-config/>
    <context:component-scan base-package="org.springframework.security.saml"/>
-   <bean id="contextProvider" class="org.springframework.security.saml.context.SAMLContextProviderImpl"/>
+
+   <!-- this bean (SAMLContextProviderLB) is used to make keycloak saml auth working with external path and reverse proxy -->
+   <bean id="contextProvider" class="org.springframework.security.saml.context.SAMLContextProviderLB">
+      <property name="scheme" value="#{ configurationManager.getServerConfiguration().getExternalProtocol() }"/>
+      <property name="serverName" value="#{ configurationManager.getServerConfiguration().getExternalHostname() }"/>
+      <property name="serverPort" value="#{ configurationManager.getServerConfiguration().getExternalPort() }"/>
+      <property name="includeServerPortInRequestURL" value="true"/>
+      <property name="contextPath" value="#{ configurationManager.getServerConfiguration().getExternalPath() }saml"/>
+   </bean>
 
    <!-- Initialization of OpenSAML library-->
    <bean class="org.springframework.security.saml.SAMLBootstrap"/>
@@ -66,6 +74,7 @@
          <security:filter-chain pattern="/saml/SSOHoK/**" filters="samlWebSSOHoKProcessingFilter"/>
          <security:filter-chain pattern="/saml/SingleLogout/**" filters="samlLogoutProcessingFilter"/>
          <security:filter-chain pattern="/saml/discovery/**" filters="samlIDPDiscovery"/>
+         <security:filter-chain pattern="/saml/k_logout" filters="keycloakLogoutAll"/>
       </security:filter-chain-map>
    </bean>
 
@@ -83,6 +92,10 @@
       <constructor-arg index="0" ref="logoutSuccessHandler"/>
       <constructor-arg index="1" ref="logoutHandler"/>
       <constructor-arg index="2" ref="logoutHandler"/>
+   </bean>
+   
+   <bean id="keycloakLogoutAll" class="fr.gael.dhus.spring.security.keycloak.KeycloakLogoutAll">
+   	<constructor-arg index="0" ref="idpMetadata"/>
    </bean>
 
    <!-- Filter automatically generates default SP metadata -->
@@ -104,7 +117,7 @@
 
    <!-- Filter processing incoming logout messages -->
    <!-- First argument determines URL user will be redirected to after successful global logout -->
-   <bean id="samlLogoutProcessingFilter" class="org.springframework.security.saml.SAMLLogoutProcessingFilter">
+   <bean id="samlLogoutProcessingFilter" class="fr.gael.dhus.spring.security.saml.SAMLLogoutProcessingFilter">
       <constructor-arg index="0" ref="logoutSuccessHandler"/>
       <constructor-arg index="1" ref="logoutHandler"/>
    </bean>
@@ -113,7 +126,7 @@
    <bean id="samlIDPDiscovery" class="org.springframework.security.saml.SAMLDiscovery" />
 
    <!-- Logger for SAML messages and events -->
-   <bean id="samlLogger" class="org.springframework.security.saml.log.SAMLDefaultLogger"/>
+   <bean id="samlLogger" class="fr.gael.dhus.spring.security.saml.SAMLLogger"/>
 
    <!-- SAML Authentication Provider responsible for validating of received SAML messages -->
    <bean id="samlAuthenticationProvider" class="fr.gael.dhus.spring.security.saml.SAMLAuthProvider" />

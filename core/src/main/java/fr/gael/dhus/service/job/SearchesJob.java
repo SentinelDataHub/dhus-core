@@ -83,7 +83,7 @@ public class SearchesJob extends AbstractJob
    protected void executeInternal (JobExecutionContext arg0)
       throws JobExecutionException
    {
-      if (!configurationManager.getSearchesCronConfiguration ().isActive ())
+      if (!configurationManager.getSearchesCronConfiguration ().isActive () || configurationManager.isGDPREnabled())
          return;
       long time_start = System.currentTimeMillis ();
       LOGGER.info("SCHEDULER : User searches mailings.");

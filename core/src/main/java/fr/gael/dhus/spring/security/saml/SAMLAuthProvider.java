@@ -19,23 +19,22 @@
  */
 package fr.gael.dhus.spring.security.saml;
 
-import fr.gael.dhus.database.object.User;
-import fr.gael.dhus.database.object.restriction.AccessRestriction;
-import fr.gael.dhus.service.UserService;
+import java.util.Date;
 
 import javax.servlet.http.HttpServletRequest;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.authentication.LockedException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.providers.ExpiringUsernameAuthenticationToken;
 import org.springframework.security.saml.SAMLAuthenticationProvider;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+
+import fr.gael.dhus.database.object.User;
+import fr.gael.dhus.service.UserService;
 
 public class SAMLAuthProvider extends SAMLAuthenticationProvider
 {
@@ -43,9 +42,6 @@ public class SAMLAuthProvider extends SAMLAuthenticationProvider
 
    @Autowired
    private UserService userService;
-
-   @Autowired
-   private IDPManager idpManager;
 
    protected final String errorMessage = "There was an error with your "
          + "login/password combination. Please try again.";
@@ -61,6 +57,7 @@ public class SAMLAuthProvider extends SAMLAuthenticationProvider
       {
          return auth;
       }
+            
       ServletRequestAttributes attributes =
             (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
       HttpServletRequest request = attributes.getRequest();
@@ -76,29 +73,31 @@ public class SAMLAuthProvider extends SAMLAuthenticationProvider
          proxy = " (proxy: " + request.getRemoteAddr() + ")";
       }
 
-      LOGGER.info("Connection attempted by '{}' from {}",
-            authentication.getName(), (proxy != null ? ip + proxy : ip));
+      String uuid = ((User)auth.getDetails()).getUUID();
+      String username = SAMLUtil.hash(auth.getPrincipal().toString());
+      LOGGER.info("Connection attempted by user '{}' from {}",
+            username, (proxy != null ? ip + proxy : ip));
 
-      String username = idpManager.getIdpName() + "~" + auth.getPrincipal();
       User user = userService.getUserNoCheck(username);
       if (user == null)
       {
          User u = new User();
          u.setUsername(username);
+         u.setUUID(uuid);
+         u.setRoles(((User)auth.getDetails()).getRoles());
          u.generatePassword();
          user = userService.systemCreateSSOUser(u);
       }
       else
       {
-         for (AccessRestriction restriction: user.getRestrictions())
-         {
-            LOGGER.warn("Connection refused for '{}' from {} : account is locked ({})",
-                  username, ip, restriction.getBlockingReason());
-            throw new LockedException(restriction.getBlockingReason());
-         }
+         user.setRoles(((User)auth.getDetails()).getRoles());
+         userService.systemUpdateSSOUser(user);
       }
+      user.setExtendedRoles(((User)auth.getDetails()).getExtendedRoles());
 
-      LOGGER.info("Connection success for '{}' from {}", username, ip);
-      return new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+      Date tokenExpiration = ((ExpiringUsernameAuthenticationToken) auth).getTokenExpiration();
+      
+      LOGGER.info("Connection success for user '{}' from {} - token expires on {}", user.getUsername(), ip, tokenExpiration);
+      return new ExpiringUsernameAuthenticationToken(((ExpiringUsernameAuthenticationToken)auth).getTokenExpiration(), user, null, user.getAuthorities());
    }
 }

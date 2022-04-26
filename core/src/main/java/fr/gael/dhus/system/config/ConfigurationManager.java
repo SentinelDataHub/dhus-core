@@ -445,6 +445,24 @@ public class ConfigurationManager
       return loader.getConf().getSystemConfiguration().getAdministratorConfiguration();
    }
 
+   public boolean isGDPREnabled()
+   {
+      if (loader.getConf().getSystemConfiguration().getGdprConfiguration() == null)
+      {
+         return false;
+      }
+      return loader.getConf().getSystemConfiguration().getGdprConfiguration().isActive();
+   }
+   
+   public String getSAMLUserId()
+   {
+      if (loader.getConf().getSystemConfiguration().getGdprConfiguration() == null)
+      {
+         return null;
+      }
+      return loader.getConf().getSystemConfiguration().getGdprConfiguration().getSAMLUserId();
+   }
+
    public NameConfiguration getNameConfiguration()
    {
       return loader.getConf().getSystemConfiguration().getNameConfiguration();

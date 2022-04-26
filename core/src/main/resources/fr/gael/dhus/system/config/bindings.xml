@@ -60,22 +60,37 @@
 
    <jxb:bindings schemaLocation="dhus-datastore.xsd">
       <namespace:prefix name="ds" />
+      <jxb:bindings node="//xs:complexType[@name='dataStores']/xs:sequence">
+         <jxb:property collectionType="java.util.Vector"/>
+      </jxb:bindings>
    </jxb:bindings>
 
    <jxb:bindings schemaLocation="dhus-scanner.xsd">
       <namespace:prefix name="scanner" />
+      <jxb:bindings node="//xs:complexType[@name='scanners']/xs:sequence">
+         <jxb:property collectionType="java.util.Vector"/>
+      </jxb:bindings>
    </jxb:bindings>
 
    <jxb:bindings schemaLocation="dhus-synchronizer.xsd">
       <namespace:prefix name="sync" />
+      <jxb:bindings node="//xs:complexType[@name='synchronizers']/xs:sequence">
+         <jxb:property collectionType="java.util.Vector"/>
+      </jxb:bindings>
    </jxb:bindings>
 
    <jxb:bindings schemaLocation="dhus-eviction.xsd">
       <namespace:prefix name="evict" />
+      <jxb:bindings node="//xs:complexType[@name='evictions']/xs:sequence">
+         <jxb:property collectionType="java.util.Vector"/>
+      </jxb:bindings>
    </jxb:bindings>
 
    <jxb:bindings schemaLocation="dhus-source.xsd">
       <namespace:prefix name="source" />
+      <jxb:bindings node="//xs:complexType[@name='sources']/xs:sequence">
+         <jxb:property collectionType="java.util.Vector"/>
+      </jxb:bindings>
    </jxb:bindings>
 
 </jxb:bindings>

@@ -4,6 +4,7 @@
 /*/*/target/
 /core/local_dhus_test/
 /core/test-output/
+/core/etc/
 
 # IDE files
 .~lock.*

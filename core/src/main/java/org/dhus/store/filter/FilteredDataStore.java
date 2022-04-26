@@ -28,11 +28,9 @@ import java.util.Objects;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.apache.olingo.odata2.api.exception.ODataApplicationException;
 import org.apache.olingo.odata2.api.exception.ODataMessageException;
 import org.apache.olingo.odata2.api.uri.expression.FilterExpression;
-
 import org.dhus.Product;
 import org.dhus.store.datastore.DataStore;
 import org.dhus.store.datastore.DataStoreException;
@@ -120,15 +118,34 @@ public class FilteredDataStore<DST extends DataStore> extends AbstractDataStoreD
          extends FilteredDataStore<DPDST>
          implements AbstractDataStoreDecorator.DataStoreDecoratorHelper
    {
+      private final ProductSQLVisitor visitor;
+      
       public FileteredDerivedDataStore(DPDST decorated, ProductSQLVisitor visitor)
       {
          super(decorated, visitor);
+         this.visitor = visitor;
       }
 
       @Override
       public DerivedProductStore getDecorated()
       {
          return this.decorated;
+      }
+
+      @Override
+      public boolean hasDerivedProduct(String uuid, String tag)
+      {
+         fr.gael.dhus.database.object.Product product = PRODUCT_SERVICE.getFilteredProduct(uuid, visitor);
+         if (product != null)
+         {
+            return this.decorated.hasDerivedProduct(uuid, tag);
+         }
+         else
+         {
+            // means the product doesn't match the filter
+            LOGGER.debug("Filtered DataStore (hasDerivedProduct): Product {} does not match filter for {}", uuid, getName());
+            return false;
+         }
       }
 
    }

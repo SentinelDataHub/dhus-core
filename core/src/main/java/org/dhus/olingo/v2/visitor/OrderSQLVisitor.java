@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2019 GAEL Systems
+ * Copyright (C) 2019,2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -71,6 +71,9 @@ public class OrderSQLVisitor extends SQLVisitor
 
             case JobModel.PROPERTY_SUBMISSION_TIME:
                return "ord.submissionTime";
+
+            case JobModel.PROPERTY_STATUS_MESSAGE:
+               return "ord.statusMessage";
 
             default:
                throw new ODataApplicationException("Property not supported: " + segmentVal,

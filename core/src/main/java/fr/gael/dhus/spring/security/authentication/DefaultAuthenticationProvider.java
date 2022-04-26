@@ -44,6 +44,8 @@ import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.database.object.User.PasswordEncryption;
 import fr.gael.dhus.database.object.restriction.AccessRestriction;
 import fr.gael.dhus.service.UserService;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.system.config.ConfigurationManager;
 
 @Component
 public class DefaultAuthenticationProvider implements AuthenticationProvider
@@ -55,6 +57,9 @@ public class DefaultAuthenticationProvider implements AuthenticationProvider
 
    @Autowired
    private UserService userService;
+
+   private static final ConfigurationManager cfg =
+         ApplicationContextProvider.getBean(ConfigurationManager.class);
 
    @Override
    @Transactional (propagation=Propagation.REQUIRED)
@@ -127,6 +132,10 @@ public class DefaultAuthenticationProvider implements AuthenticationProvider
    @Override
    public boolean supports (Class<?> authentication)
    {
+      if (cfg.isGDPREnabled())
+      {
+         return false;
+      }
       return UsernamePasswordAuthenticationToken.class
          .isAssignableFrom (authentication);
    }

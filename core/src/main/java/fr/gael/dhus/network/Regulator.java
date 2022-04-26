@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.tomcat.util.digester.Rules;
 
 import fr.gael.dhus.database.object.User;
 import fr.gael.dhus.database.object.config.network.ChannelType;
@@ -205,6 +206,7 @@ class Regulator
 
                rules.setEmailPattern(include_type.getUserEmailPattern());
                rules.setServiceName(include_type.getService());
+               rules.setRolePattern(include_type.getRolePattern());
 
                classifier.addIncludeRules(rules);
             }
@@ -220,6 +222,7 @@ class Regulator
 
                rules.setEmailPattern(exclude_type.getUserEmailPattern());
                rules.setServiceName(exclude_type.getService());
+               rules.setRolePattern(exclude_type.getRolePattern());
 
                classifier.addExcludeRules(rules);
             }

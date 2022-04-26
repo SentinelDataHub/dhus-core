@@ -46,6 +46,7 @@
 
    <security:http entry-point-ref="searchAuthEntryPoint" use-expressions="true" disable-url-rewriting="true" create-session="never">
       <security:custom-filter position="PRE_AUTH_FILTER" ref="preAuthFilter" />
+      <security:custom-filter before="BASIC_AUTH_FILTER" ref="gdprAuthFilter" />
       <security:custom-filter position="BASIC_AUTH_FILTER" ref="basicAuthFilter" />
       <security:intercept-url pattern="/**" access="isAuthenticated()" />
       <security:session-management session-fixation-protection="none" />

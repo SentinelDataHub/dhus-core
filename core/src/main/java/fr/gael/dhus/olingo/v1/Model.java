@@ -19,34 +19,6 @@
  */
 package fr.gael.dhus.olingo.v1;
 
-import fr.gael.dhus.olingo.Security;
-import fr.gael.dhus.olingo.v1.entityset.AttributeEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.ClassEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.CollectionEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.ConnectionEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.DeletedProductEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.EventEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.IngestEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.ItemEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.NetworkEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.NetworkStatisticEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.NodeEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.ProductEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.RestrictionEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.ScannerEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.SynchronizerEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.SystemRoleEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.UserEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.UserSynchronizerEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.AbstractEntitySet;
-import fr.gael.dhus.olingo.v1.entityset.EventSynchronizerEntitySet;
-import fr.gael.dhus.olingo.v1.operations.AbstractOperation;
-import fr.gael.dhus.olingo.v1.operations.LockUser;
-import fr.gael.dhus.olingo.v1.operations.Sparql;
-import fr.gael.dhus.olingo.v1.operations.StartScanner;
-import fr.gael.dhus.olingo.v1.operations.StopScanner;
-import fr.gael.dhus.olingo.v1.operations.UnlockUser;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -70,11 +42,43 @@ import org.apache.olingo.odata2.api.edm.provider.Schema;
 import org.apache.olingo.odata2.api.edm.provider.SimpleProperty;
 import org.apache.olingo.odata2.api.exception.ODataException;
 
+import fr.gael.dhus.olingo.Security;
+import fr.gael.dhus.olingo.v1.entityset.AbstractEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.AttributeEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.ClassEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.CollectionEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.ConnectionEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.DeletedProductEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.EventEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.EventSynchronizerEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.IngestEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.ItemEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.NetworkEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.NetworkStatisticEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.NodeEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.ProductEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.RestrictionEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.ScannerEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.SynchronizerEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.SystemRoleEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.UserEntitySet;
+import fr.gael.dhus.olingo.v1.entityset.UserSynchronizerEntitySet;
+import fr.gael.dhus.olingo.v1.operations.AbstractOperation;
+import fr.gael.dhus.olingo.v1.operations.LockUser;
+import fr.gael.dhus.olingo.v1.operations.Sparql;
+import fr.gael.dhus.olingo.v1.operations.StartScanner;
+import fr.gael.dhus.olingo.v1.operations.StopScanner;
+import fr.gael.dhus.olingo.v1.operations.UnlockUser;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.system.config.ConfigurationManager;
+
 /**
  * Builds an Entity Data Model (schema).
  */
 public class Model extends EdmProvider
 {
+   private static final ConfigurationManager CONFIG_MANAGER = ApplicationContextProvider.getBean(ConfigurationManager.class);
+   
    /** The namespace prefixes each entity in the Schema */
    public static final String NAMESPACE = "DHuS";
 
@@ -141,7 +145,10 @@ public class Model extends EdmProvider
       addEntitySet(NETWORKSTATISTIC);
       addEntitySet(RESTRICTION);
       addEntitySet(SYSTEM_ROLE);
-      addEntitySet(USER_SYNCHRONIZER);
+      if (!CONFIG_MANAGER.isGDPREnabled())
+      {
+         addEntitySet(USER_SYNCHRONIZER);
+      }
       addEntitySet(INGEST);
       addEntitySet(SCANNER);
       addEntitySet(EVENT);
@@ -157,8 +164,12 @@ public class Model extends EdmProvider
       OPERATIONS.put(SPARQL.getName(), SPARQL);
       OPERATIONS.put(START_SCANNER.getName(), START_SCANNER);
       OPERATIONS.put(STOP_SCANNER.getName(), STOP_SCANNER);
-      OPERATIONS.put(LOCK_USER.getName(), LOCK_USER);
-      OPERATIONS.put(UNLOCK_USER.getName(), UNLOCK_USER);
+
+      if (!CONFIG_MANAGER.isGDPREnabled())
+      {
+         OPERATIONS.put(LOCK_USER.getName(), LOCK_USER);
+         OPERATIONS.put(UNLOCK_USER.getName(), UNLOCK_USER);
+      }
    }
 
    private static void addEntitySet(AbstractEntitySet<?> entity_set)

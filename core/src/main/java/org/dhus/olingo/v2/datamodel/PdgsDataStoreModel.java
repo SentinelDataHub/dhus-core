@@ -1,6 +1,6 @@
 /*
  * Data Hub Service (DHuS) - For Space data distribution.
- * Copyright (C) 2018,2019 GAEL Systems
+ * Copyright (C) 2018-2020 GAEL Systems
  *
  * This file is part of DHuS software sources.
  *
@@ -19,68 +19,27 @@
  */
 package org.dhus.olingo.v2.datamodel;
 
-import java.util.Arrays;
-
-import org.apache.olingo.commons.api.edm.EdmPrimitiveTypeKind;
 import org.apache.olingo.commons.api.edm.FullQualifiedName;
 import org.apache.olingo.commons.api.edm.provider.CsdlEntityType;
-import org.apache.olingo.commons.api.edm.provider.CsdlProperty;
 
 import org.dhus.olingo.v2.web.DHuSODataServlet;
 
 /**
  * Describes the PdgsDataStore entity type.
  */
-public class PdgsDataStoreModel extends DataStoreModel
+public class PdgsDataStoreModel extends HttpAsyncDataStoreModel
 {
 
    public static final String ENTITY_TYPE_NAME = "PDGSDataStore";
    public static final FullQualifiedName FULL_QUALIFIED_NAME =
          new FullQualifiedName(DHuSODataServlet.NAMESPACE, ENTITY_TYPE_NAME);
 
-   public static final String PROPERTY_SERVICE_URL = "ServiceUrl";
-   public static final String PROPERTY_LOGIN = "Login";
-   public static final String PROPERTY_PASSWORD = "Password";
-   public static final String PROPERTY_MAX_CONCURRENTS_DOWNLOADS = "MaxConcurrentsDownloads";
-   public static final String PROPERTY_INTERVAL = "Interval";
-
    @Override
    public CsdlEntityType getEntityType()
    {
-      CsdlProperty url = new CsdlProperty()
-            .setName(PROPERTY_SERVICE_URL)
-            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
-            .setNullable(false);
-
-      CsdlProperty login = new CsdlProperty()
-            .setName(PROPERTY_LOGIN)
-            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
-            .setNullable(false);
-
-      CsdlProperty password = new CsdlProperty()
-            .setName(PROPERTY_PASSWORD)
-            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName())
-            .setNullable(false);
-
-      CsdlProperty maxConcurrentsDownloads = new CsdlProperty()
-            .setName(PROPERTY_MAX_CONCURRENTS_DOWNLOADS)
-            .setType(EdmPrimitiveTypeKind.Int32.getFullQualifiedName())
-            .setNullable(true);
-
-      CsdlProperty interval = new CsdlProperty()
-            .setName(PROPERTY_INTERVAL)
-            .setType(EdmPrimitiveTypeKind.Int64.getFullQualifiedName())
-            .setNullable(true);
-
       return new CsdlEntityType()
-            .setBaseType(AsyncDataStoreModel.FULL_QUALIFIED_NAME)
-            .setName(ENTITY_TYPE_NAME)
-            .setProperties(Arrays.asList(
-                  url,
-                  login,
-                  password,
-                  maxConcurrentsDownloads,
-                  interval));
+            .setBaseType(HttpAsyncDataStoreModel.FULL_QUALIFIED_NAME)
+            .setName(ENTITY_TYPE_NAME);
    }
 
    @Override

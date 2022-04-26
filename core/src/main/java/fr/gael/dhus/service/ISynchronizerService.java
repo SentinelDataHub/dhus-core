@@ -188,4 +188,5 @@ public interface ISynchronizerService extends
     * <b>YOU MUST NOT CALL THIS METHOD!</b>
     */
    void init ();
+
 }

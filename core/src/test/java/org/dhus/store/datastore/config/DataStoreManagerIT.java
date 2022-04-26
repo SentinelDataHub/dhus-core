@@ -75,13 +75,12 @@ public class DataStoreManagerIT extends AbstractTestNGSpringContextTests
       Assert.assertTrue(dataStores.get(2) instanceof GmpDataStoreConf);
       Assert.assertEquals(dataStores.get(2).getPriority(), 75);
       Assert.assertEquals(((GmpDataStoreConf) dataStores.get(2)).getName(), "gmp");
-      Assert.assertEquals(((GmpDataStoreConf) dataStores.get(2)).isIsMaster(), true);
+      Assert.assertEquals((Boolean)((GmpDataStoreConf) dataStores.get(2)).isIsMaster(), Boolean.TRUE);
       Assert.assertNotNull(((GmpDataStoreConf) dataStores.get(2)).getMysqlConnectionInfo());
       Assert.assertEquals(((GmpDataStoreConf) dataStores.get(2)).getMysqlConnectionInfo().getValue(), "url");
       Assert.assertEquals(((GmpDataStoreConf) dataStores.get(2)).getMysqlConnectionInfo().getUser(), "user");
       Assert.assertEquals(((GmpDataStoreConf) dataStores.get(2)).getMysqlConnectionInfo().getPassword(), "sa");
       Assert.assertEquals(((GmpDataStoreConf) dataStores.get(2)).getRepoLocation(), "gmpRepo");
-      Assert.assertEquals(((GmpDataStoreConf) dataStores.get(2)).getHfsLocation(), "hfsLoc");
       Assert.assertEquals(((GmpDataStoreConf) dataStores.get(2)).getMaxPendingRequests(), Integer.valueOf(5));
       Assert.assertEquals(((GmpDataStoreConf) dataStores.get(2)).getMaxRunningRequests(), Integer.valueOf(5));
    }

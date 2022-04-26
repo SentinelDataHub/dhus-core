@@ -163,4 +163,10 @@ public class VolatileKeyStore implements KeyStore
          return key.concat(tag).hashCode();
       }
    }
+
+   @Override
+   public Iterator<KeyStoreEntry> getUnalteredScrollableProductEntries()
+   {
+      return null;
+   }
 }

@@ -118,6 +118,12 @@ public class PersistentKeyStore implements KeyStore
    }
 
    @Override
+   public Iterator<KeyStoreEntry> getUnalteredScrollableProductEntries()
+   {
+      return keyStoreService.getUnalteredScrollableProductEntries(name);
+   }
+
+   @Override
    public List<KeyStoreEntry> getUnalteredProductEntries()
    {
       return keyStoreService.getUnalteredProductEntries(name);

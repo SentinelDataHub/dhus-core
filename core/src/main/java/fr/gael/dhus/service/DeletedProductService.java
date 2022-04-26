@@ -30,7 +30,8 @@ import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
+import org.apache.olingo.server.api.ODataApplicationException;
+import org.dhus.olingo.v2.visitor.DeletedProductSqlVisitor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -58,6 +59,21 @@ public class DeletedProductService extends WebService
     */
    @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
    public List<DeletedProduct> getProducts(DeletedProductSQLVisitor visitor, int skip, int top)
+   {
+      return deletedProductDao.executeHQLQuery(visitor.getHqlQuery(), visitor.getHqlParameters(), skip, top);
+   }
+   
+   /**
+    * OData dedicated Services.
+    *
+    * @param visitor OData expression visitor
+    * @param skip $skip parameter
+    * @param top $top parameter
+    * @return a list of results
+    * @throws ODataApplicationException 
+    */
+   @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
+   public List<DeletedProduct> getProducts(DeletedProductSqlVisitor visitor, int skip, int top) throws ODataApplicationException
    {
       return deletedProductDao.executeHQLQuery(visitor.getHqlQuery(), visitor.getHqlParameters(), skip, top);
    }

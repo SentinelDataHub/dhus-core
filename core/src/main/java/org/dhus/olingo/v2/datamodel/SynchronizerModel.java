@@ -26,7 +26,10 @@ import java.util.Collections;
 
 import org.apache.olingo.commons.api.edm.EdmPrimitiveTypeKind;
 import org.apache.olingo.commons.api.edm.FullQualifiedName;
+import org.apache.olingo.commons.api.edm.provider.CsdlEntitySet;
 import org.apache.olingo.commons.api.edm.provider.CsdlEntityType;
+import org.apache.olingo.commons.api.edm.provider.CsdlNavigationProperty;
+import org.apache.olingo.commons.api.edm.provider.CsdlNavigationPropertyBinding;
 import org.apache.olingo.commons.api.edm.provider.CsdlProperty;
 import org.apache.olingo.commons.api.edm.provider.CsdlPropertyRef;
 
@@ -45,6 +48,11 @@ public class SynchronizerModel implements EntityModel
    public static final String PROPERTY_UPDATED_DATE = "ModificationDate";
    public static final String PROPERTY_LABEL = "Label";
    public static final String PROPERTY_CRON = "Cron";
+   public static final String PROPERTY_SERVICE_URL = "ServiceUrl";
+   public static final String PROPERTY_SERVICE_LOGIN = "ServiceLogin";
+   public static final String PROPERTY_SERVICE_PASSWD = "ServicePassword";
+   public static final String PROPERTY_PAGE_SIZE = "PageSize";
+   public static final String NAVIGATION_TARGET_COLLECTION = "TargetCollection";
 
    @Override
    public CsdlEntityType getEntityType()
@@ -76,11 +84,36 @@ public class SynchronizerModel implements EntityModel
             .setName(PROPERTY_CRON)
             .setType(CronComplexType.FULL_QUALIFIED_NAME)
             .setNullable(false);
+      
+      CsdlProperty serviceUrl = new CsdlProperty()
+            .setName(PROPERTY_SERVICE_URL)
+            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName());
+      
+      CsdlProperty serviceLogin = new CsdlProperty()
+            .setName(PROPERTY_SERVICE_LOGIN)
+            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName());
+      
+      CsdlProperty servicePasswd = new CsdlProperty()
+            .setName(PROPERTY_SERVICE_PASSWD)
+            .setType(EdmPrimitiveTypeKind.String.getFullQualifiedName());
+      
+      CsdlProperty pageSize = new CsdlProperty()
+            .setName(PROPERTY_PAGE_SIZE)
+            .setType(EdmPrimitiveTypeKind.Int64.getFullQualifiedName())
+            .setNullable(false)
+            .setDefaultValue("2");
+      
+      CsdlNavigationProperty collectionsNav = new CsdlNavigationProperty()
+            .setName(NAVIGATION_TARGET_COLLECTION)
+            .setType(CollectionModel.FULL_QUALIFIED_NAME)
+            .setCollection(true);
 
       return new CsdlEntityType()
             .setName(ABSTRACT_ENTITY_TYPE_NAME)
             .setKey(Collections.singletonList(propertyRef))
-            .setProperties(Arrays.asList(id, created, updated, label, cron))
+            .setProperties(Arrays.asList(id, created, updated, label, cron, serviceUrl, serviceLogin, 
+                  servicePasswd, pageSize))
+            .setNavigationProperties(Arrays.asList(collectionsNav))
             .setAbstract(true);
    }
 
@@ -100,5 +133,16 @@ public class SynchronizerModel implements EntityModel
    public FullQualifiedName getFQN()
    {
       return ABSTRACT_FULL_QUALIFIED_NAME;
+   }
+   
+   @Override
+   public CsdlEntitySet getEntitySet()
+   {
+      CsdlEntitySet entitySet = EntityModel.super.getEntitySet();
+      CsdlNavigationPropertyBinding collectionNavPropBinding = new CsdlNavigationPropertyBinding();
+      collectionNavPropBinding.setTarget(CollectionModel.ENTITY_SET_NAME);
+      collectionNavPropBinding.setPath(NAVIGATION_TARGET_COLLECTION);
+      
+      return entitySet.setNavigationPropertyBindings(Arrays.asList(collectionNavPropBinding));
    }
 }

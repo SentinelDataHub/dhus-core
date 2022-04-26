@@ -78,4 +78,11 @@ public interface AsyncDataStore extends DataStore
     * @return the Order corresponding to the given product UUID or null
     */
    Order getAndLogExistingOrder(String uuid, String localIdentifier, Long size);
+
+   /**
+    * Return the cache of the asyncDataStore
+    *
+    * @return the cache if it exists or null
+    */
+   DataStore getCache();
 }

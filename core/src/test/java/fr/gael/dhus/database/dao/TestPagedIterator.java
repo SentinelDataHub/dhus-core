@@ -30,6 +30,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+import org.dhus.olingo.v2.visitor.SQLVisitorParameter;
+
 public class TestPagedIterator
 {
    private final String query = "*";
@@ -151,7 +153,7 @@ public class TestPagedIterator
       }
 
       @Override
-      public List<Integer> getPage (String query, int skip, int top)
+      public List<Integer> getPage (String query, List<SQLVisitorParameter> parameters, int skip, int top)
       {
          if (skip < list.size ())
          {

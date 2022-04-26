@@ -154,4 +154,17 @@ public class OrderDao extends HibernateDao<Order, String>
          return "";
       }
    }
+
+   @SuppressWarnings("unchecked")
+   public Order getOrderByJobId(final String jobId)
+   {
+      String hql = "FROM Order WHERE job_id=?1";
+      return getHibernateTemplate().execute(session ->
+      {
+         Query query = session.createQuery(hql);
+         query.setParameter(1, jobId, StandardBasicTypes.STRING);
+         List<?> list = query.list();
+         return (Order) (list.isEmpty() ? null : list.get(0));
+      });
+   }
 }

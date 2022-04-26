@@ -24,6 +24,7 @@ import fr.gael.dhus.olingo.v1.visitor.ProductSQLVisitor;
 
 import java.util.List;
 
+import org.dhus.store.datastore.DataStore;
 import org.dhus.store.datastore.DataStoreException;
 import org.dhus.store.datastore.DataStoreFactory.InvalidConfigurationException;
 import org.dhus.store.datastore.async.AsyncDataStore;
@@ -69,5 +70,11 @@ public final class FilteredAsyncDataStore extends FilteredDataStore<AsyncDataSto
    public Order getAndLogExistingOrder(String uuid, String localIdentifier, Long size)
    {
       return decorated.getAndLogExistingOrder(uuid, localIdentifier, size);
+   }
+
+   @Override
+   public DataStore getCache()
+   {
+      return decorated.getCache();
    }
 }

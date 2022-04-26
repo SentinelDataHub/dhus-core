@@ -77,8 +77,10 @@ import org.apache.olingo.odata2.api.processor.ODataSingleProcessor;
 import org.apache.olingo.odata2.api.uri.NavigationSegment;
 
 import org.dhus.store.datastore.async.AsyncDataStoreException;
+import org.dhus.ProductConstants;
 import org.dhus.metrics.DownloadMetrics;
 import org.dhus.store.datastore.async.AsyncProduct;
+import org.dhus.store.datastore.openstack.OpenStackProduct;
 import org.dhus.store.derived.DerivedProductStore;
 import org.dhus.store.derived.DerivedProductStoreService;
 import org.dhus.store.StoreException;
@@ -562,6 +564,15 @@ public class Product extends Node implements Closeable
          String user_name = (u == null ? null : u.getUsername());
          DownloadMetrics.DownloadActionListener metrics = null;
 
+         long length = getContentLength();
+         DataStoreProduct data = getPhysicalProduct();
+         // particular case of MOST scenario (product no more available in DHuS format but in uuid.zip format)
+         if (data instanceof OpenStackProduct && ((OpenStackProduct)data).getUUID() != null)
+         {
+            ((OpenStackProduct)data).prepareDownloadInformation();
+            length = (Long) data.getProperty(ProductConstants.DATA_SIZE);
+         }
+         
          InputStream is = null;
          if (attach_stream)
          {
@@ -580,7 +591,7 @@ public class Product extends Node implements Closeable
                      new RegulatedInputStream.Builder(is, TrafficDirection.OUTBOUND);
                builder.userName(user_name);
                builder.copyStreamListener(adapter);
-               builder.streamSize(getContentLength());
+               builder.streamSize(length);
 
                is = builder.build();
             }
@@ -597,20 +608,20 @@ public class Product extends Node implements Closeable
          {
             etag = getId();
          }
-
+         
          // Prepare the HTTP header for stream transfer.
          rsp = MediaResponseBuilder.prepareMediaResponse(
                etag, getPhysicalProduct().getName(),
                getContentType(),
                getCreationDate().getTime(),
-               getContentLength(),
+               length,
                processor.getContext(),
                is);
          if (metrics != null)
          {
             DL_METRICS.get().recordDownloadStart(getItemClass().getUri(), user_name);
             String contentLength = rsp.getHeader("Content-Length");
-            metrics.setRequestedBytes(contentLength != null ? Long.decode(contentLength) : getContentLength());
+            metrics.setRequestedBytes(contentLength != null ? Long.decode(contentLength) : length);
          }
       }
       // RegulationException must be handled separately as they are

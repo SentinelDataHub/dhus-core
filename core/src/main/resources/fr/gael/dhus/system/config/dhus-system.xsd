@@ -35,6 +35,13 @@
 
    <xs:complexType name="systemConfiguration">
       <xs:all>
+         <xs:element minOccurs="0" name="gdpr" type="dhusSystem:gdprConfiguration">
+            <xs:annotation>
+               <xs:appinfo>
+                  <jxb:property name="gdprConfiguration" />
+               </xs:appinfo>
+            </xs:annotation>
+         </xs:element>
          <xs:element minOccurs="0" name="administrator" type="dhusSystem:administratorConfiguration">
             <xs:annotation>
                <xs:appinfo>
@@ -106,6 +113,12 @@
             </xs:annotation>
          </xs:element>
       </xs:all>
+   </xs:complexType>
+
+   <xs:complexType name="gdprConfiguration">
+      <xs:all />
+      <xs:attribute name="active" type="xs:boolean" default="false" />
+      <xs:attribute name="SAMLUserId" type="xs:string" default="samlId"/>
    </xs:complexType>
 
    <xs:complexType name="administratorConfiguration">

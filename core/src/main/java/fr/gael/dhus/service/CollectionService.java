@@ -154,7 +154,7 @@ public class CollectionService extends WebService
    @CacheEvict (value = "products", allEntries = true)
    public void removeProducts (String uuid, Long[] pids)
    {
-      collectionDao.removeProducts (uuid, pids, null);
+      collectionDao.removeProducts (uuid, pids);
       long start = new Date ().getTime ();
       for (Long pid: pids)
       {

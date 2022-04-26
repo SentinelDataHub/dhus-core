@@ -164,6 +164,18 @@ public class OrderService
    }
 
    /**
+    * Returns the list of product orders that are RUNNING in a specific DataStore.
+    *
+    * @param dataStoreName
+    * @return
+    */
+   @Transactional(readOnly = true)
+   public List<Order> getRunningOrdersByDataStore(String dataStoreName)
+   {
+      return orderDao.getOrdersByDataStore(dataStoreName, JobStatus.RUNNING);
+   }
+
+   /**
     * Returns the number of product orders whose status is RUNNING from a specific DataStore.
     *
     * @param dataStoreName a non null DataStore name
@@ -321,5 +333,17 @@ public class OrderService
    public Order getOrder(OrderId orderId)
    {
       return orderDao.getOrderByOrderId(orderId);
+   }
+
+   /**
+    * Get an Order by its JobId.
+    *
+    * @param jobId a non null JobId
+    * @return an Order or null if not found
+    */
+   @Transactional(readOnly = true)
+   public Order getOrderByJobId(String jobId)
+   {
+      return orderDao.getOrderByJobId(jobId);
    }
 }

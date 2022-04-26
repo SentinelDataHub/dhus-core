@@ -75,6 +75,7 @@ import fr.gael.dhus.database.object.config.Configuration;
 import fr.gael.dhus.database.object.config.messaging.MailConfiguration;
 import fr.gael.dhus.database.object.config.search.SolrConfiguration;
 import fr.gael.dhus.database.object.config.system.SupportConfiguration;
+import fr.gael.dhus.service.exception.GDPREnabledException;
 import fr.gael.dhus.service.exception.UserBadEncryptionException;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.system.config.ConfigurationException;
@@ -175,8 +176,13 @@ public class SystemService extends WebService
    @Caching (evict = {
       @CacheEvict (value = "user", allEntries = true),
       @CacheEvict (value = "userByName", allEntries = true)})
-   public void changeRootPassword (String new_pwd, String old_pwd)
+   public void changeRootPassword (String new_pwd, String old_pwd) throws GDPREnabledException
    {
+      if (cfgManager.isGDPREnabled())
+      {
+         LOGGER.warn ("GDPR enabled. User management not done by DHuS. No 'root' user defined.");
+         throw new GDPREnabledException ("GDPR enabled. User management not done by DHuS. No 'root' user defined.");
+      }
       User root =
          userDao.getByName (
                cfgManager.getAdministratorConfiguration ().getName ());

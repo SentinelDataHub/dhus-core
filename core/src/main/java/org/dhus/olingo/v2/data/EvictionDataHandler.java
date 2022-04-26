@@ -21,6 +21,7 @@ package org.dhus.olingo.v2.data;
 
 import fr.gael.dhus.database.object.Role;
 import fr.gael.dhus.database.object.config.eviction.Eviction;
+import fr.gael.dhus.database.object.config.eviction.EvictionBaseDate;
 import fr.gael.dhus.database.object.config.eviction.EvictionConfiguration.Cron;
 import fr.gael.dhus.database.object.config.eviction.EvictionStatusEnum;
 import fr.gael.dhus.service.DataStoreService;
@@ -111,10 +112,25 @@ public class EvictionDataHandler implements DataHandler
                   eviction.isSoftEviction()))
             .addProperty(new Property(
                   null,
+                  EvictionModel.BASE_DATE,
+                  ValueType.PRIMITIVE,
+                  eviction.getBaseDate().value()))
+            .addProperty(new Property(
+                  null,
+                  EvictionModel.SAFE_MODE,
+                  ValueType.PRIMITIVE,
+                  eviction.isSafeMode()))
+            .addProperty(new Property(
+                  null,
+                  EvictionModel.TARGET_DATASTORE,
+                  ValueType.PRIMITIVE,
+                  eviction.getTargetDataStore()))
+            .addProperty(new Property(
+                  null,
                   EvictionModel.STATUS,
                   ValueType.PRIMITIVE,
                   eviction.getStatus()));
-
+      
       // cron may be null
       if (eviction.getCron() != null)
       {
@@ -153,7 +169,10 @@ public class EvictionDataHandler implements DataHandler
    @Override
    public EntityCollection getEntityCollectionData() throws ODataApplicationException
    {
-      ODataSecurityManager.checkPermission(Role.SYSTEM_MANAGER);
+      if(!ODataSecurityManager.hasPermission(Role.FEDERATION_USER))
+      {
+         ODataSecurityManager.checkPermission(Role.SYSTEM_MANAGER);
+      }
 
       List<Eviction> evictions = EVICTION_SERVICE.getEvictions();
 
@@ -168,7 +187,10 @@ public class EvictionDataHandler implements DataHandler
    @Override
    public Entity getEntityData(List<UriParameter> keyParameters) throws ODataApplicationException
    {
-      ODataSecurityManager.checkPermission(Role.SYSTEM_MANAGER);
+      if(!ODataSecurityManager.hasPermission(Role.FEDERATION_USER))
+      {
+         ODataSecurityManager.checkPermission(Role.SYSTEM_MANAGER);
+      }
 
       for (UriParameter keyParameter: keyParameters)
       {
@@ -334,6 +356,32 @@ public class EvictionDataHandler implements DataHandler
          eviction.setTargetCollection((String) DataHandlerUtil.getPropertyValue(entity, EvictionModel.TARGET_COLLECTION));
       }
       // targetCollection is nullable
+      if (DataHandlerUtil.containsProperty(entity, EvictionModel.TARGET_DATASTORE))
+      {
+         eviction.setTargetDataStore((String) DataHandlerUtil.getPropertyValue(entity, EvictionModel.TARGET_DATASTORE));
+      }
+      // targetCollection is nullable
+      if (DataHandlerUtil.containsProperty(entity, EvictionModel.SAFE_MODE))
+      {
+         eviction.setSafeMode(
+               (Boolean) DataHandlerUtil.getPropertyValue(entity, EvictionModel.SAFE_MODE));
+      }
+      else
+      {
+         eviction.setSafeMode(
+               (Boolean) EvictionModel.getDefaultValue(EvictionModel.SAFE_MODE));
+      }
+      if (DataHandlerUtil.containsProperty(entity, EvictionModel.BASE_DATE))
+      {
+         eviction.setBaseDate(EvictionBaseDate.fromValue(
+               (String) DataHandlerUtil.getPropertyValue(entity, EvictionModel.BASE_DATE)));
+      }
+      else
+      {
+         eviction.setBaseDate(EvictionBaseDate.fromValue(
+               (String) EvictionModel.getDefaultValue(EvictionModel.BASE_DATE)));
+      }
+
 
       EVICTION_SERVICE.create(eviction);
 
@@ -397,6 +445,9 @@ public class EvictionDataHandler implements DataHandler
       String orderBy = (String) DataHandlerUtil.getPropertyValue(updatedEntity, EvictionModel.ORDER_BY);
       String targetCollection = (String) DataHandlerUtil.getPropertyValue(updatedEntity, EvictionModel.TARGET_COLLECTION);
       Boolean softEviction = (Boolean) DataHandlerUtil.getPropertyValue(updatedEntity, EvictionModel.SOFT_EVICTION);
+      String targetDatastore = (String) DataHandlerUtil.getPropertyValue(updatedEntity, EvictionModel.TARGET_DATASTORE);
+      String baseDate = (String) DataHandlerUtil.getPropertyValue(updatedEntity, EvictionModel.BASE_DATE);
+      Boolean safeMode = (Boolean) DataHandlerUtil.getPropertyValue(updatedEntity, EvictionModel.SAFE_MODE);
 
       EvictionStatusEnum previousStatus = eviction.getStatus();
 
@@ -438,6 +489,18 @@ public class EvictionDataHandler implements DataHandler
          if (propertyName.equals(EvictionModel.TARGET_COLLECTION))
          {
             eviction.setTargetCollection(targetCollection);
+         }
+         if (propertyName.equals(EvictionModel.TARGET_DATASTORE))
+         {
+            eviction.setTargetDataStore(targetDatastore);
+         }
+         if (propertyName.equals(EvictionModel.BASE_DATE))
+         {
+            eviction.setBaseDate(EvictionBaseDate.fromValue(baseDate));
+         }
+         if (propertyName.equals(EvictionModel.SAFE_MODE))
+         {
+            eviction.setSafeMode(safeMode);
          }
          if (propertyName.equals(EvictionModel.SOFT_EVICTION))
          {

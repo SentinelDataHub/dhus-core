@@ -610,7 +610,7 @@ public class Processor extends ODataSingleProcessor
          }
          else if (target_et.getName().equals(Model.USER_SYNCHRONIZER.getEntityName()))
          {
-            if (Model.USER_SYNCHRONIZER.isAuthorized(current_user))
+            if (!CONFIGURATION_MANAGER.isGDPREnabled() && Model.USER_SYNCHRONIZER.isAuthorized(current_user))
             {
                UserSynchronizer sync = new UserSynchronizer(entry);
                res = sync.toEntityResponse(makeLink().toString());
@@ -812,7 +812,7 @@ public class Processor extends ODataSingleProcessor
          }
          else if (target_entity.equals(Model.USER_SYNCHRONIZER.getEntityName()))
          {
-            if (Model.USER_SYNCHRONIZER.isAuthorized(current_user))
+            if (!CONFIGURATION_MANAGER.isGDPREnabled() && Model.USER_SYNCHRONIZER.isAuthorized(current_user))
             {
                long key = Long.decode(uri_info.getKeyPredicates().get(0).getLiteral());
                UserSynchronizer s = new UserSynchronizer(key);
@@ -893,7 +893,7 @@ public class Processor extends ODataSingleProcessor
       }
       else if (target_name.equals(Model.USER_SYNCHRONIZER.getEntityName()))
       {
-         if (Model.USER_SYNCHRONIZER.isAuthorized(current_user))
+         if (!CONFIGURATION_MANAGER.isGDPREnabled() && Model.USER_SYNCHRONIZER.isAuthorized(current_user))
          {
             long key = Long.decode(uri_info.getKeyPredicates().get(0).getLiteral());
             Synchronizer.delete(key); // using the same method to delete

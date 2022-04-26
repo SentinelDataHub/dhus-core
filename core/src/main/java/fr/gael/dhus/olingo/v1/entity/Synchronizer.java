@@ -177,6 +177,23 @@ public final class Synchronizer extends AbstractEntity
       {
          this.syncConf.setSkipOnError(Boolean.TRUE);
       }
+      
+      Boolean syncOfllineProducts = (Boolean) props.get(SynchronizerEntitySet.SYNC_OFFLINE_PRODUCTS);
+      if (syncOfllineProducts == null)
+      {
+         this.syncConf.setSyncOfflineProducts(Boolean.FALSE);
+      }
+      Integer retries = (Integer) props.get(SynchronizerEntitySet.RETRIES_SKIPPED_PRODUCTS);
+      if (retries == null)
+      {
+         this.syncConf.setRetriesForSkippedProducts(3);
+      }
+      //Timeout for skipped products in milliseconds
+      Integer timeout = (Integer) props.get(SynchronizerEntitySet.TIMEOUT_SKIPPED_PRODUCTS);
+      if (timeout == null)
+      {
+         this.syncConf.setTimeoutSkippedProducts(Long.valueOf(60000));
+      }
    }
 
    /**
@@ -224,6 +241,8 @@ public final class Synchronizer extends AbstractEntity
       Integer page_size = (Integer) props.remove(SynchronizerEntitySet.PAGE_SIZE);
       Boolean copy_product = (Boolean) props.remove(SynchronizerEntitySet.COPY_PRODUCT);
       Boolean skipOnError = (Boolean) props.remove(SynchronizerEntitySet.SKIP_ON_ERROR);
+      Integer retries = (Integer) props.remove(SynchronizerEntitySet.RETRIES_SKIPPED_PRODUCTS);
+      Integer timeout = (Integer) props.remove(SynchronizerEntitySet.TIMEOUT_SKIPPED_PRODUCTS);
 
       // Nullable fields
       boolean has_label = props.containsKey(SynchronizerEntitySet.LABEL);
@@ -245,6 +264,7 @@ public final class Synchronizer extends AbstractEntity
       GregorianCalendar last_ingestion_date =
             (GregorianCalendar) props.remove(SynchronizerEntitySet.LAST_CREATION_DATE);
       String geo_filter = (String) props.remove(SynchronizerEntitySet.GEO_FILTER);
+      Boolean syncOfflineProd = (Boolean) props.remove (SynchronizerEntitySet.SYNC_OFFLINE_PRODUCTS);
 
       // Navigation
       Collection target_collection = getTargetCollection(odata_entry);
@@ -359,6 +379,19 @@ public final class Synchronizer extends AbstractEntity
       {
          this.syncConf.setSkipOnError(skipOnError);
       }
+      if (syncOfflineProd != null)
+      {
+         this.syncConf.setSyncOfflineProducts(syncOfflineProd);
+      }
+      if(retries != null)
+      {
+         this.syncConf.setRetriesForSkippedProducts(retries);
+      }
+
+      if(timeout != null)
+      {
+         this.syncConf.setTimeoutSkippedProducts(Long.valueOf(timeout.longValue()));
+      }
 
       try
       {
@@ -394,6 +427,9 @@ public final class Synchronizer extends AbstractEntity
       res.put(SynchronizerEntitySet.SOURCE_COLLECTION, this.syncConf.getSourceCollection ());
       res.put(SynchronizerEntitySet.GEO_FILTER, getGeoFilter());
       res.put(SynchronizerEntitySet.SKIP_ON_ERROR, this.syncConf.isSkipOnError());
+      res.put(SynchronizerEntitySet.SYNC_OFFLINE_PRODUCTS, this.syncConf.isSyncOfflineProducts());
+      res.put(SynchronizerEntitySet.RETRIES_SKIPPED_PRODUCTS, this.syncConf.getRetriesForSkippedProducts());
+      res.put(SynchronizerEntitySet.TIMEOUT_SKIPPED_PRODUCTS, this.syncConf.getTimeoutSkippedProducts());
 
       XMLGregorianCalendar last_created = this.syncConf.getLastCreated();
       if (last_created != null)
@@ -490,6 +526,18 @@ public final class Synchronizer extends AbstractEntity
       if (prop_name.equals(SynchronizerEntitySet.SKIP_ON_ERROR))
       {
          return this.syncConf.isSkipOnError();
+      }
+      if (prop_name.equals(SynchronizerEntitySet.SYNC_OFFLINE_PRODUCTS))
+      {
+         return this.syncConf.isSyncOfflineProducts();
+      }
+      if (prop_name.equals(SynchronizerEntitySet.RETRIES_SKIPPED_PRODUCTS))
+      {
+         return this.syncConf.getRetriesForSkippedProducts();
+      }
+      if (prop_name.equals(SynchronizerEntitySet.TIMEOUT_SKIPPED_PRODUCTS))
+      {
+         return this.syncConf.getTimeoutSkippedProducts();
       }
 
       throw new ODataException ("Unknown property " + prop_name);

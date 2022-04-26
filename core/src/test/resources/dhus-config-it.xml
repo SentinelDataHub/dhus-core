@@ -262,8 +262,11 @@
          <ds:region>region</ds:region>
       </ds:dataStore>
       <ds:dataStore xsi:type="ds:gmpDataStoreConf" priority="75" name="gmp">
+         <ds:dataStore xsi:type="ds:hfsDataStoreConf" name="gmp-cache">
+            <ds:path>/gmp-cache</ds:path>
+            <ds:maxFileNo>5</ds:maxFileNo>
+         </ds:dataStore>
          <ds:isMaster>true</ds:isMaster>
-         <ds:hfsLocation>hfsLoc</ds:hfsLocation>
          <ds:maxPendingRequests>5</ds:maxPendingRequests>
          <ds:maxRunningRequests>5</ds:maxRunningRequests>
          <ds:repoLocation>gmpRepo</ds:repoLocation>

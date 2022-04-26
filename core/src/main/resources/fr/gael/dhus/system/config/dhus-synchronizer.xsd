@@ -78,7 +78,12 @@
                <xs:element name="geofilterShape" type="xs:string" minOccurs="0" maxOccurs="1" />
                <xs:element name="lastCreated" type="xs:dateTime" minOccurs="0" maxOccurs="1" />
                <xs:element name="skipOnError" type="xs:boolean" minOccurs="0" maxOccurs="1" default="true"/>
+               <xs:element name="syncOfflineProducts" type="xs:boolean" minOccurs="0" maxOccurs="1" default="false"/>
             </xs:sequence>
+            <!-- number of retries for each skipped product -->
+            <xs:attribute name="retriesForSkippedProducts" type="xs:int" default="3"/>
+   			<!-- timeout in milliseconds of each request of synchronization for skipped products-->
+   			<xs:attribute name="timeoutSkippedProducts" type="xs:long" default="60000"/>
          </xs:extension>
       </xs:complexContent>
    </xs:complexType>

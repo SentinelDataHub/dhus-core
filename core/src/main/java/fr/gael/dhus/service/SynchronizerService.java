@@ -133,7 +133,7 @@ public class SynchronizerService implements ISynchronizerService
       }
       return null;
    }
-
+   
    @Override
    public Iterator<SynchronizerConfiguration> getSynchronizerConfs()
    {
@@ -334,6 +334,10 @@ public class SynchronizerService implements ISynchronizerService
       {
          if (sc instanceof UserSynchronizer)
          {
+            if(cfgManager.isGDPREnabled())
+            {
+               throw new InvokeSynchronizerException("GDPR enabled. UserSynchronizers are disabled.");
+            }
             return new ODataUserSynchronizer((UserSynchronizer) sc);
          }
          else if (sc instanceof ProductSynchronizer)

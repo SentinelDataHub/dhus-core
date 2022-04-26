@@ -31,6 +31,7 @@ import org.apache.logging.log4j.Logger;
 import fr.gael.dhus.spring.context.ApplicationContextProvider;
 import fr.gael.dhus.system.config.ConfigurationException;
 import fr.gael.dhus.system.config.ConfigurationManager;
+import fr.gael.dhus.DHuS;
 
 /**
  * Manages DataStores defined in configuration file (dhus.xml).
@@ -67,13 +68,21 @@ public class DataStoreManager extends DataStores
     */
    public NamedDataStoreConf getNamed(String name)
    {
-      for (DataStoreConf dataStoreConf: getDataStore())
+      for (DataStoreConf dataStoreConf : getDataStore())
       {
-         if (dataStoreConf != null
-               && dataStoreConf instanceof NamedDataStoreConf
-               && ((NamedDataStoreConf) dataStoreConf).getName().equals(name))
+         if (dataStoreConf != null)
          {
-            return (NamedDataStoreConf) dataStoreConf;
+            if (dataStoreConf instanceof AsyncDataStoreConf
+                  && ((NamedDataStoreConf) ((AsyncDataStoreConf) dataStoreConf).getDataStore())
+                        .getName().equals(name))
+            {
+               return (NamedDataStoreConf) ((AsyncDataStoreConf) dataStoreConf).getDataStore();
+            }
+            else if (dataStoreConf instanceof NamedDataStoreConf
+                  && ((NamedDataStoreConf) dataStoreConf).getName().equals(name))
+            {
+               return (NamedDataStoreConf) dataStoreConf;
+            }
          }
       }
       return null;
@@ -187,7 +196,22 @@ public class DataStoreManager extends DataStores
             }
             else
             {
-               LOGGER.warn("Found duplicate DataStoreConfiguration of name: {}", namedDsc.getName());
+               LOGGER.error("Found duplicate DataStoreConfiguration of name: {}", namedDsc.getName());
+               DHuS.stop(4);
+            }
+         }
+         if (dataStoreConf instanceof AsyncDataStoreConf)
+         {
+            AsyncDataStoreConf async = (AsyncDataStoreConf) dataStoreConf;
+            NamedDataStoreConf namedDsc = (NamedDataStoreConf)async.getDataStore();
+            if (!dataStoreNames.contains(namedDsc.getName()))
+            {
+               dataStoreNames.add(namedDsc.getName());
+            }
+            else
+            {
+               LOGGER.error("Found duplicate DataStoreConfiguration of name: {}", namedDsc.getName());
+               DHuS.stop(4);
             }
          }
       }
@@ -212,7 +236,8 @@ public class DataStoreManager extends DataStores
 
    public synchronized long varyCurrentSize(String dataStoreName, long amount)
    {
-      NamedDataStoreConf dataStoreConf = getNamed(dataStoreName);
+      NamedDataStoreConf dataStoreConf;
+      dataStoreConf = getNamed(dataStoreName);
       if (dataStoreConf != null)
       {
          dataStoreConf.setCurrentSize(dataStoreConf.getCurrentSize() + amount);

@@ -84,13 +84,13 @@
    <xs:complexType name="classifierCriteriaType">
       <xs:all minOccurs="0">
          <xs:element type="xs:string" name="userEmailPattern" minOccurs="0" />
-         <xs:element type="xs:string" name="service" minOccurs="0" />
+         <xs:element type="xs:string" name="service" minOccurs="0" />        
+         <xs:element type="xs:string"  name="rolePattern" minOccurs="0" />
       </xs:all>
    </xs:complexType>
 
    <xs:complexType name="userQuotasType">
       <xs:sequence>
-
          <xs:element name="maxConcurrent" type="dhusNetwork:positiveInt" minOccurs="0" />
          <xs:element name="maxCount" type="dhusNetwork:periodicalPositiveInt" minOccurs="0" />
          <xs:element name="maxSize" type="dhusNetwork:positiveLong" minOccurs="0" />

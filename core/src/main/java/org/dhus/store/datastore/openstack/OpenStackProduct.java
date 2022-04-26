@@ -24,14 +24,17 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.Objects;
 
+import org.dhus.AbstractProduct;
+import org.dhus.ProductConstants;
+import org.dhus.store.datastore.DataStoreProduct;
+import org.jclouds.openstack.swift.v1.domain.SwiftObject;
+
 import fr.gael.drb.DrbNode;
 import fr.gael.drb.impl.DrbNodeImpl;
 import fr.gael.drb.impl.swift.DrbSwiftObject;
 import fr.gael.drb.impl.swift.SwiftFactory;
 import fr.gael.drb.impl.swift.SwiftObjectURL;
-import org.dhus.AbstractProduct;
-import org.dhus.store.datastore.DataStoreProduct;
-import org.jclouds.openstack.swift.v1.domain.SwiftObject;
+
 
 public class OpenStackProduct extends AbstractProduct implements DataStoreProduct
 {
@@ -44,6 +47,7 @@ public class OpenStackProduct extends AbstractProduct implements DataStoreProduc
    private final OpenStackLocation location;
 
    private SwiftObjectURL url;
+   private final String uuid;
 
    /**
     *
@@ -62,11 +66,28 @@ public class OpenStackProduct extends AbstractProduct implements DataStoreProduc
     * @param swiftServer
     * @param location
     */
-   OpenStackProduct(DrbSwiftObject swiftServer, OpenStackLocation location)
+   public OpenStackProduct(DrbSwiftObject swiftServer, OpenStackLocation location)
+   {    
+      this(swiftServer, location, null);
+   }
+   
+   /**
+   *
+   * @param swiftServer
+   * @param location
+   * @param uuid
+   */
+   public OpenStackProduct(DrbSwiftObject swiftServer, OpenStackLocation location, String uuid)
    {
       this.swift = Objects.requireNonNull(swiftServer);
       this.location = Objects.requireNonNull(location);
+      this.uuid = uuid;
       setName(location.getObjectName());
+   }
+  
+   public String getUUID()
+   {
+      return uuid;
    }
 
    @Override
@@ -82,7 +103,14 @@ public class OpenStackProduct extends AbstractProduct implements DataStoreProduc
       {
          try
          {
-            return cl.cast(getURL().getUrl().openStream());
+            if (uuid != null)
+            {
+               return cl.cast(getObjectStorageURL().getUrl().openStream());
+            }
+            else
+            {
+               return cl.cast(getURL().getUrl().openStream());
+            }
          }
          catch (IOException e)
          {
@@ -97,8 +125,14 @@ public class OpenStackProduct extends AbstractProduct implements DataStoreProduc
 
       if (cl.isAssignableFrom(DrbNodeImpl.class))
       {
-         return cl.cast(SwiftFactory.node(swift, location.getRegion(),
-               location.getContainer(), location.getObjectName()));
+         if (uuid != null)
+         {
+            return cl.cast(swiftFactory(uuid.concat(".zip")));
+         }
+         else
+         {
+            return cl.cast(swiftFactory(location.getObjectName()));
+         }
       }
 
       if (cl.isAssignableFrom(DataStoreProduct.class))
@@ -136,5 +170,42 @@ public class OpenStackProduct extends AbstractProduct implements DataStoreProduc
                location.getContainer(), location.getRegion(), 0));
       }
       return url;
+   }
+   
+   private SwiftObjectURL getObjectStorageURL()
+   {
+      if (this.url == null)
+      {
+         this.url = new SwiftObjectURL(swift.getUrl(uuid.concat(".zip"),
+               location.getContainer(), location.getRegion(), 0));
+      }
+      return url;
+   }
+
+   private DrbNode swiftFactory(String objectName)
+   {
+      return SwiftFactory.node(swift, location.getRegion(), location.getContainer(), objectName);
+   }
+
+   public String getRemoteName()
+   {
+      if (uuid != null)
+      {
+         return uuid.concat(".zip");
+      }
+      else
+      {
+         return getName();
+      }
+   }
+   
+   public void prepareDownloadInformation()
+   {
+      if (uuid != null)
+      {
+         DrbNode node = swiftFactory(uuid.concat(".zip"));
+         setProperty(ProductConstants.CHECKSUM_MD5, node.getAttribute("contentMD5").getValue().toString());
+         setProperty(ProductConstants.DATA_SIZE, Long.parseLong(node.getAttribute("contentLength").getValue().toString()));
+      }
    }
 }

@@ -31,6 +31,7 @@
       <security:authentication-provider ref="defaultAuthenticationProvider" />
    </security:authentication-manager>
 
+   <bean id="gdprAuthFilter" class="fr.gael.dhus.spring.security.filter.GDPRAuthFilter" />
    <bean id="preAuthFilter" class="fr.gael.dhus.spring.security.filter.PreAuthFilter" />
 
    <bean id="proxyWebAuthenticationDetailsSource" class="fr.gael.dhus.spring.security.authentication.ProxyWebAuthenticationDetailsSource" />
@@ -50,6 +51,7 @@
    <bean id="firewall" class="org.springframework.security.web.firewall.StrictHttpFirewall">
       <property name="allowUrlEncodedDoubleSlash" value="true" />
       <property name="allowUrlEncodedSlash" value="true" />
+      <property name="allowUrlEncodedPercent" value="true" />
    </bean>
    <security:http-firewall ref="firewall" />
 </beans>

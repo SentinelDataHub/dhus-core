@@ -26,10 +26,17 @@ import java.nio.channels.Channels;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.InterruptibleChannel;
 import java.nio.channels.WritableByteChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
+import fr.gael.dhus.sync.impl.ODataProductSynchronizer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import org.apache.commons.net.util.Base64;
 import org.apache.http.HttpException;
+import org.apache.http.HttpHeaders;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.HttpDelete;
@@ -59,6 +66,7 @@ import org.apache.http.protocol.HttpContext;
  */
 public class InterruptibleHttpClient
 {
+   private static final Logger LOGGER = LogManager.getLogger(InterruptibleHttpClient.class);
 
    /** An HttpClient producer. */
    private final HttpAsyncClientProducer clientProducer;
@@ -113,6 +121,28 @@ public class InterruptibleHttpClient
       // Creates a new client for each request, because we want to close it to interrupt the request.
       try (CloseableHttpAsyncClient httpClient = clientProducer.generateClient())
       {
+         if (clientProducer instanceof BasicAuthHttpClientProducer)
+         {
+            BasicAuthHttpClientProducer cp = (BasicAuthHttpClientProducer) clientProducer;
+            String username = cp.getUsername();
+            String password = cp.getPassword();
+            // Force basic auth in request
+            String auth = username + ":" + password;
+            byte[] encodedAuth = Base64.encodeBase64(auth.getBytes(StandardCharsets.ISO_8859_1));
+            String authHeader = "Basic " + new String(encodedAuth);
+            request.addHeader(HttpHeaders.AUTHORIZATION, authHeader);
+         }
+         else if (clientProducer instanceof ODataProductSynchronizer.BasicAuthHttpClientProducer)
+         {
+            ODataProductSynchronizer.BasicAuthHttpClientProducer cp = (ODataProductSynchronizer.BasicAuthHttpClientProducer) clientProducer;
+            String username = cp.getUsername();
+            String password = cp.getPassword();
+            // Force basic auth in request
+            String auth = username + ":" + password;
+            byte[] encodedAuth = Base64.encodeBase64(auth.getBytes(StandardCharsets.ISO_8859_1));
+            String authHeader = "Basic " + new String(encodedAuth);
+            request.addHeader(HttpHeaders.AUTHORIZATION, authHeader);
+         }
 
          HttpAsyncRequestProducer producer = HttpAsyncMethods.create(request);
          // Creates a consumer callback that is called each time bytes are received

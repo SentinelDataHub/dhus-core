@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-final class OpenStackLocation
+public final class OpenStackLocation
 {
    private static final Logger LOGGER = LogManager.getLogger();
    private static final String STR_PATTERN = "%s;%s;%s";

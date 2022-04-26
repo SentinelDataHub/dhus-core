@@ -62,10 +62,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 import javax.xml.datatype.XMLGregorianCalendar;
 
 import org.apache.http.auth.AuthScope;
@@ -99,16 +104,18 @@ import org.dhus.store.StoreService;
 import org.dhus.store.datastore.DataStore;
 import org.dhus.store.datastore.DataStoreFactory.InvalidConfigurationException;
 import org.dhus.store.datastore.DataStoreManager;
+import org.dhus.store.datastore.ProductOfflineReference;
 import org.dhus.store.datastore.ProductReference;
 import org.dhus.store.datastore.config.DataStoreManager.UnavailableNameException;
+import org.dhus.store.derived.DerivedProductStoreService;
 import org.dhus.store.datastore.config.DataStoreRestriction;
 import org.dhus.store.ingestion.IngestibleODataProduct;
 import org.dhus.store.ingestion.IngestibleODataProduct.MissingProductsException;
 import org.dhus.store.datastore.config.HfsDataStoreConf;
 import org.dhus.store.ingestion.ProcessingManager;
-
+import org.dhus.store.metadatastore.MetadataStoreService;
 import org.hibernate.exception.LockAcquisitionException;
-
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.CannotAcquireLockException;
 
 /**
@@ -121,6 +128,9 @@ public class ODataProductSynchronizer extends Synchronizer
 
    /** Number of download attempts (-1 for infinite, must be at least 1). */
    private static final int DL_TRIES = Integer.getInteger("dhus.sync.download_attempts", 10);
+   
+   /* Number of turns before process the skipped products */
+   private static final int MAX_TURNS_SKIPPED_PRODUCTS = Integer.getInteger("dhus.sync.skipped_turns", 10);
 
    /** Synchronizer Service, for this sync to save its own settings. */
    private static final ISynchronizerService SYNC_SERVICE =
@@ -133,10 +143,18 @@ public class ODataProductSynchronizer extends Synchronizer
    /** Metadata Type Service, MetadataIndex name to Queryable. */
    private static final MetadataTypeService METADATA_TYPE_SERVICE =
          ApplicationContextProvider.getBean(MetadataTypeService.class);
+   
+   /** Metadata service that manages metadata **/
+   private static final MetadataStoreService METADATA_SERVICE = 
+         ApplicationContextProvider.getBean(MetadataStoreService.class);
 
    /** Service that manages all Stores. */
    private static final StoreService STORE_SERVICE =
          ApplicationContextProvider.getBean(StoreService.class);
+   
+   /** Derived Store service*/
+   private static final DerivedProductStoreService DERIVED_PRODUCT_STORE_SERVICE =
+         ApplicationContextProvider.getBean(DerivedProductStoreService.class);
 
    /** Service that manages DataStores. */
    private static final DataStoreManager DATA_STORE_MANAGER =
@@ -204,6 +222,20 @@ public class ODataProductSynchronizer extends Synchronizer
 
    /** Controls whether we are updating LastCreationDate or not. */
    private boolean update_created = true;
+   
+   /** Allows to synchronize offline products. By default, it is disabled */
+   private boolean syncOfflineProduct = false;
+   
+   /**  Number of retries for each skipped product */
+   private int retriesSkippedProduct;
+   
+   /** Timeout for skipped products    */
+   private long skippedProductsTimeout;
+
+   private int processSkippedTurns = 0;
+
+   private static Map<String, Integer> skippedProductsMap;
+
 
    static
    {
@@ -231,6 +263,8 @@ public class ODataProductSynchronizer extends Synchronizer
       String urilit = productSynchronizer.getServiceUrl();
       serviceUser = productSynchronizer.getServiceLogin();
       servicePass = productSynchronizer.getServicePassword();
+      syncOfflineProduct = productSynchronizer.isSyncOfflineProducts();
+      skippedProductsMap = new HashMap<String, Integer>();
       if (urilit == null || urilit.isEmpty())
       {
          throw new IllegalStateException("`service_uri` is not set");
@@ -351,6 +385,8 @@ public class ODataProductSynchronizer extends Synchronizer
 
       Boolean skipOnErrorObj = productSynchronizer.isSkipOnError();
       this.skipOnError = skipOnErrorObj != null ? skipOnErrorObj : true;
+      setRetriesSkippedProduct(productSynchronizer.getRetriesForSkippedProducts());
+      setSkippedProductsTimeout(productSynchronizer.getTimeoutSkippedProducts());
    }
 
    /** Logs how much time an OData command consumed. */
@@ -382,21 +418,30 @@ public class ODataProductSynchronizer extends Synchronizer
     *
     * @param optional_skip   an optional $skip parameter, may be null
     * @param expand_navlinks if `true`, the query will contain: `$expand=Class,Attributes,Products`
+    * @param skippedProducts if `true`, we will check only products skipped
     */
-   private ODataFeed getPage(Integer optional_skip, boolean expand_navlinks)
+   private ODataFeed getPage(Integer optional_skip, boolean expand_navlinks, boolean skippedProducts)
          throws ODataException, IOException, InterruptedException
    {
       // Makes the query parameters
       Map<String, String> query_param = new HashMap<>();
-
-      String lup_s = DateFormatter.format(lastCreated);
-      // 'GreaterEqual' because of products with the same CreationDate
-      String filter = "CreationDate ge " + lup_s;
-
-      // Appends custom $filter parameter
-      if (filterParam != null)
+      String filter = null;
+      
+      if (skippedProducts)
       {
-         filter += " and (" + filterParam + ")";
+         filter = buildQueryFilterForSkippedProducts(optional_skip);
+      }
+      else
+      {
+         String lup_s = DateFormatter.format(lastCreated);
+         // 'GreaterEqual' because of products with the same CreationDate
+         filter = "CreationDate ge " + lup_s;
+
+         // Appends custom $filter parameter
+         if (filterParam != null)
+         {
+            filter += " and (" + filterParam + ")";
+         }
       }
 
       query_param.put("$filter", filter);
@@ -498,9 +543,19 @@ public class ODataProductSynchronizer extends Synchronizer
       // This trick only works with a TreeSet (ordered), overriding the `equals` method would probably work with other Set implementations
       return this.runningDownloads.contains((Comparable<DownloadTask>) (DownloadTask dlt) -> uuid.compareTo(dlt.product.getUuid()));
    }
-
-   /** Creates and returns a new Product from the given entry. */
-   private IngestibleODataProduct entryToProducts(ODataEntry productEntry, boolean getDownloads)
+   
+   /**
+    * Creates and returns a new Product from the given entry. 
+    * @param productEntry
+    * @param getDownloads
+    * @param online
+    * @return
+    * @throws ODataException
+    * @throws IOException
+    * @throws InterruptedException
+    * @throws MissingProductsException
+    */
+   private IngestibleODataProduct entryToProducts(ODataEntry productEntry, boolean getDownloads, boolean onlineProduct)
          throws ODataException, IOException, InterruptedException, MissingProductsException
    {
       long delta;
@@ -538,7 +593,35 @@ public class ODataProductSynchronizer extends Synchronizer
          derivedProductFeed = client.readFeed(odataProductResource + "/Products", null);
          logODataPerf(odataProductResource, "/Products", null, System.currentTimeMillis() - delta);
       }
+      
+      //Perform specific behavior when the product is offline
+      Map<String, ? extends Product> productAndDerived;
+      if (onlineProduct)
+      {
+         productAndDerived = processOnlineProducts(productEntry, derivedProductFeed, odataProductResource, origin, checksumValue, identifier, getDownloads);
+      }
+      else
+      {
+         productAndDerived = performOfflineProducts(productEntry, derivedProductFeed);
+      }
+      
+      IngestibleODataProduct ingestibleODataProduct =
+            IngestibleODataProduct.fromODataEntry(productEntry, origin, itemClass, metadataIndexList, productAndDerived);
 
+      ingestibleODataProduct.setProperty(ProductConstants.CHECKSUM_PREFIX + "." + checksumAlgorithm, checksumValue);
+
+      return ingestibleODataProduct;
+      
+   }
+
+   /** 
+    * @throws ODataException 
+    * @throws InterruptedException 
+    * @throws IOException */
+   private Map<String, ? extends Product> processOnlineProducts(ODataEntry productEntry, ODataFeed derivedProductFeed, String odataProductResource,
+         String origin,  String checksumValue , String identifier,boolean getDownloads) throws IOException, InterruptedException, ODataException
+         
+   {
       Map<String, ? extends Product> productAndDerived;
       if (getDownloads)
       {
@@ -550,14 +633,83 @@ public class ODataProductSynchronizer extends Synchronizer
       {
          productAndDerived = getProductReferences(productEntry, derivedProductFeed);
       }
+      return productAndDerived;
 
-      IngestibleODataProduct ingestibleODataProduct =
-            IngestibleODataProduct.fromODataEntry(productEntry, origin, itemClass, metadataIndexList, productAndDerived);
-
-      ingestibleODataProduct.setProperty(ProductConstants.CHECKSUM_PREFIX + "." + checksumAlgorithm, checksumValue);
-
-      return ingestibleODataProduct;
    }
+   
+   private Map<String, ? extends Product> performOfflineProducts(ODataEntry productEntry, ODataFeed derivedProductFeed)
+   {
+      Map<String, ProductOfflineReference> productReferences = new HashMap<>();
+
+      // handle unaltered product reference
+      ProductOfflineReference unalteredProductReference = new ProductOfflineReference(getResourceLocation(productEntry));
+      unalteredProductReference.setProperty(ProductConstants.DATA_SIZE, (Long) productEntry.getProperties().get("ContentLength"));
+      productReferences.put(IngestibleODataProduct.UNALTERED, unalteredProductReference);
+
+      // make derived product references
+      for (ODataEntry derivedProductEntry: derivedProductFeed.getEntries())
+      {
+         String id = (String) derivedProductEntry.getProperties().get("Id");
+         String path = (String) derivedProductEntry.getProperties().get("LocalPath");
+         
+         checkAccess(path);
+
+         // Retrieves the Quicklook
+         if (id.equals("Quicklook"))
+         {
+            ProductOfflineReference quicklookReference = new ProductOfflineReference(path);
+            quicklookReference.setProperty(ProductConstants.DATA_SIZE, (Long) derivedProductEntry.getProperties().get("ContentLength"));
+            productReferences.put(IngestibleODataProduct.QUICKLOOK, quicklookReference);
+         }
+
+         // Retrieves the Thumbnail
+         else if (id.equals("Thumbnail"))
+         {
+            ProductOfflineReference thumbnailReference = new ProductOfflineReference(path);
+            thumbnailReference.setProperty(ProductConstants.DATA_SIZE, (Long) derivedProductEntry.getProperties().get("ContentLength"));
+            productReferences.put(IngestibleODataProduct.THUMBNAIL, thumbnailReference);
+         }
+      }
+      return productReferences;
+   }
+
+   private void checkAccess(String resource_location)
+   {
+       if (!DATA_STORE_MANAGER.canAccess(resource_location))
+       {
+       // If remoteIncoming set, tries to create DS and check it can access product
+       if (remoteIncoming != null)
+       {
+          String dataStoreName = DATASTORE_SYNC_PREFIX_NAME + String.valueOf(getId());
+          HfsDataStoreConf dataStoreConf;
+          dataStoreConf = new HfsDataStoreConf();
+          dataStoreConf.setName(dataStoreName);
+          dataStoreConf.setRestriction(DataStoreRestriction.REFERENCES_ONLY);
+          dataStoreConf.setPath(remoteIncoming);
+
+          if (!DSC_SERVICE.dataStoreExists(dataStoreName))
+          {
+             try
+             {
+                DSC_SERVICE.createNamed(dataStoreConf);
+                DataStore liveDataStore = DSC_SERVICE.getDataStoreByName(dataStoreName);
+                if (liveDataStore.canAccess(resource_location))
+                {
+                   DATA_STORE_MANAGER.add(liveDataStore);
+                }
+                else
+                {
+                   DSC_SERVICE.delete(dataStoreConf);
+                }
+             }
+             catch (UnavailableNameException | InvalidConfigurationException e)
+             {
+                LOGGER.error("Synchronizer#{}", getId(), e);
+             }
+          }
+      }
+      }
+   }  
 
    private Map<String, ProductReference> getProductReferences(ODataEntry productEntry, ODataFeed derivedProductFeed)
    {
@@ -789,6 +941,7 @@ public class ODataProductSynchronizer extends Synchronizer
                LOGGER.warn("Synchronizer#{} PRODUCT SKIPPED from '{}', creationDate: {}",
                      getId(), product.getOrigin(), product.getCreationDate());
                skip++;
+               skippedProductsMap.put(product.getUuid(), 0);
             }
             else
             {
@@ -832,7 +985,7 @@ public class ODataProductSynchronizer extends Synchronizer
    }
 
    /** Retrieves and download new products, downloads are parallelized. */
-   private int getAndCopyNewProduct() throws InterruptedException
+   private int getAndCopyNewProduct(boolean skippedProducts) throws InterruptedException
    {
       int res = 0;
       int count = this.pageSize - runningDownloads.size();
@@ -846,7 +999,7 @@ public class ODataProductSynchronizer extends Synchronizer
          // Downloads at least `pageSize` products
          while (count > 0)
          {
-            ODataFeed pdf = getPage(skip, true);
+            ODataFeed pdf = getPage(skip, true, skippedProducts);
             this.update_created = true;
             if (pdf.getEntries().isEmpty()) // No more products
             {
@@ -855,9 +1008,27 @@ public class ODataProductSynchronizer extends Synchronizer
 
             skip += pdf.getEntries().size();
 
-            for (ODataEntry pdt: pdf.getEntries())
+            for (ODataEntry pdt : pdf.getEntries())
             {
                String uuid = (String) pdt.getProperties().get("Id");
+
+               if (skippedProducts)
+               {
+                  // Get the number of trials
+                  int cpt = skippedProductsMap.get(uuid);
+
+                  // In this case, we retry too many times. We remove the product from the map
+                  if (cpt >= this.retriesSkippedProduct)
+                  {
+                     LOGGER.info("Synchronizer#{} Product of UUID {} abandonned - Too many trials ", getId(), uuid);
+                     skippedProductsMap.remove(uuid);
+                     continue;
+                  }
+
+                  // Increment the trials for this product
+                  skippedProductsMap.put(uuid, ++cpt);
+               }
+
                if (exists(uuid))
                {
                   LOGGER.info("Synchronizer#{} Product of UUID {} already exists, skipping", getId(), uuid);
@@ -867,48 +1038,59 @@ public class ODataProductSynchronizer extends Synchronizer
                      this.dateChanged = true;
                      if (LOGGER.isDebugEnabled())
                      {
-                        LOGGER.debug("Synchronizer#{} Product {} safely skipped, new LCD={}",
-                              getId(), uuid, DateFormatter.format(updatedLastCreationDate));
+                        LOGGER.debug("Synchronizer#{} Product {} safely skipped, new LCD={}", getId(), uuid,
+                              DateFormatter.format(updatedLastCreationDate));
                      }
                   }
+                  removeProductsFromSkippedMap(skippedProducts, uuid);
                   continue;
                }
                if (!ProductSynchronizerUtils.isOnline(pdt))
                {
-                  LOGGER.debug("Synchronizer#{} Product {} is not online", getId(), pdt.getProperties().get("Name"));
+                  LOGGER.info("Synchronizer#{} Product {} is not online", getId(), pdt.getProperties().get("Name"));
                   if (updateLastCreated)
                   {
                      updatedLastCreationDate = getCreationDate(pdt);
                      this.dateChanged = true;
                   }
+                  if (syncOfflineProduct)
+                  {
+                     LOGGER.info("Synchronizer#{} Offline product UUID {} will be synchronized", getId(), uuid);
+                     int nbOfflineProductsSync = synchronizeOfflineProducts(pdt, null, null);
+                     res += nbOfflineProductsSync;
+                  }
+                  removeProductsFromSkippedMap(skippedProducts, uuid);
                   continue;
                }
 
                if (!validateFootprint(pdt))
                {
-                  LOGGER.info("Synchronizer#{} Product of UUID {} does not match the geographic filter",
-                        getId(), (String) pdt.getProperties().get("Id"));
+                  LOGGER.info("Synchronizer#{} Product of UUID {} does not match the geographic filter", getId(),
+                        (String) pdt.getProperties().get("Id"));
                   if (updateLastCreated)
                   {
                      updatedLastCreationDate = getCreationDate(pdt);
                      this.dateChanged = true;
                   }
+                  removeProductsFromSkippedMap(skippedProducts, uuid);
                   continue;
                }
                updateLastCreated = false;
 
-               IngestibleODataProduct product = entryToProducts(pdt, true);
+               IngestibleODataProduct product = entryToProducts(pdt, true, true);
 
                // Avoid downloading of the same product several times
                // and run post-filters of the product to download
                if (isAlreadyQueued(product))
                {
+                  removeProductsFromSkippedMap(skippedProducts, product.getUuid());
                   continue;
                }
                count--;
                res++;
 
                queue(product);
+               removeProductsFromSkippedMap(skippedProducts, product.getUuid());
                LOGGER.info("Synchronizer#{} added product {} to the queue ", getId(), product.getIdentifier());
             }
          }
@@ -931,46 +1113,102 @@ public class ODataProductSynchronizer extends Synchronizer
       return res;
    }
 
+   private void removeProductsFromSkippedMap(boolean skippedProducts, String uuid)
+   {
+      if (skippedProducts)
+      {
+         skippedProductsMap.remove(uuid);
+      }
+   }
+
    /**
     * Retrieve new/updated products.
     *
     * @return how many products have been retrieved
     */
-   private int getNewProducts() throws InterruptedException
+   private int getNewProducts(boolean skippedProducts) throws InterruptedException
    {
       int res = 0;
       int skip = 0;
       Counter successCounter = METRIC_REGISTRY.counter("prod_sync.sync" + getId() + ".counters.success");
       Counter failureCounter = METRIC_REGISTRY.counter("prod_sync.sync" + getId() + ".counters.failure");
+
       try
       {
-         ODataFeed pdf = getPage(null, true);
+         ODataFeed pdf = getPage(null, true, skippedProducts);
 
          // For each entry, creates a DataBase Object
          for (ODataEntry pdt: pdf.getEntries())
          {
             String uuid = (String) pdt.getProperties().get("Id");
+            
+            if (skippedProducts)
+            {
+             //Get the number of trials
+               int cpt = skippedProductsMap.get(uuid);
+               
+               //In this case, we retry too many times. We remove the product from the map
+               if (cpt >= this.retriesSkippedProduct)
+               {
+                  LOGGER.info("Synchronizer#{} Product of UUID {} abandonned - Too many trials ", getId(), uuid);
+                  skippedProductsMap.remove(uuid);
+                  continue;
+               }
+               
+               //Increment the trials for this product
+               skippedProductsMap.put(uuid, ++cpt);
+            }
+            
             if (exists(uuid))
             {
                LOGGER.info("Synchronizer#{} Product of UUID {} already exists", getId(), uuid);
-               this.lastCreated.setTime(getCreationDate(pdt));
-               this.dateChanged = true;
+               if (skippedProducts)
+               {
+                  //remove the product from skippedMap
+                  skippedProductsMap.remove(uuid);
+               }
+               else
+               {
+                  this.lastCreated.setTime(getCreationDate(pdt));
+                  this.dateChanged = true;
+               }
                continue;
             }
+            //Case product is offline
             if (!ProductSynchronizerUtils.isOnline(pdt))
             {
-               LOGGER.info("Synchronizer#{} Product of UUID {} is not online", getId(), uuid);
-               this.lastCreated.setTime(getCreationDate(pdt));
-               this.dateChanged = true;
+               LOGGER.debug("Synchronizer#{} Product of UUID {} is not online", getId(), uuid);
+               if (!skippedProducts)
+               {
+                  this.lastCreated.setTime(getCreationDate(pdt));
+                  this.dateChanged = true;
+               }
+               if (syncOfflineProduct)
+               {
+                  LOGGER.debug("Synchronizer#{} Offline product UUID {} will be synchronized", getId(), uuid);
+                  int nbOfflineProducstSync = synchronizeOfflineProducts(pdt,failureCounter, successCounter);
+                  res += nbOfflineProducstSync;
+               }
+               else
+               {
+                  removeProductsFromSkippedMap(skippedProducts, uuid);
+               }
                continue;
             }
 
             if (!validateFootprint(pdt))
             {
-               LOGGER.info("Synchronizer#{} Product of UUID {} does not match the geographic filter",
+               LOGGER.debug("Synchronizer#{} Product of UUID {} does not match the geographic filter",
                      getId(), (String) pdt.getProperties().get("Id"));
-               this.lastCreated.setTime(getCreationDate(pdt));
-               this.dateChanged = true;
+               if (skippedProducts)
+               {
+                  skippedProductsMap.remove(uuid);
+               }
+               else
+               {
+                  this.lastCreated.setTime(getCreationDate(pdt));
+                  this.dateChanged = true;
+               }
                continue;
             }
 
@@ -990,14 +1228,19 @@ public class ODataProductSynchronizer extends Synchronizer
                   LOGGER.warn("Synchronizer#{} PRODUCT SKIPPED from '{}', creationDate: {}",
                         getId(), origin, creationDate);
                   skip++;
-                  // force lsatCreated update in case of skip
-                  this.lastCreated.setTime(getCreationDate(pdt));
-                  this.dateChanged = true;
+                  skippedProductsMap.put(uuid, 0);
+                  
+                  if (!skippedProducts)
+                  {
+                     // force lastCreated update in case of skip
+                     this.lastCreated.setTime(getCreationDate(pdt));
+                     this.dateChanged = true;
+                  }
                }
                continue;
             }
 
-            IngestibleODataProduct product = entryToProducts(pdt, false);
+            IngestibleODataProduct product = entryToProducts(pdt, false, true);
 
             String productUuid = product.getUuid();
             // check product accessibility
@@ -1050,9 +1293,13 @@ public class ODataProductSynchronizer extends Synchronizer
                   LOGGER.warn("Synchronizer#{} PRODUCT SKIPPED from '{}', creationDate: {}",
                         getId(), product.getOrigin(), product.getCreationDate());
                   skip++;
-                  // force lsatCreated update in case of skip
-                  this.lastCreated.setTime(getCreationDate(pdt));
-                  this.dateChanged = true;
+                  skippedProductsMap.put(productUuid,0);
+                  if (!skippedProducts)
+                  {
+                     // force lastCreated update in case of skip
+                     this.lastCreated.setTime(getCreationDate(pdt));
+                     this.dateChanged = true;
+                  }
                   continue;
                }
             }
@@ -1073,9 +1320,13 @@ public class ODataProductSynchronizer extends Synchronizer
                LOGGER.warn("Synchronizer#{} PRODUCT SKIPPED from '{}', creationDate: {}",
                      getId(), product.getOrigin(), product.getCreationDate());
                skip++;
-               // force lsatCreated update in case of skip
-               this.lastCreated.setTime(getCreationDate(pdt));
-               this.dateChanged = true;
+               skippedProductsMap.put(productUuid, 0);
+               if (!skippedProducts)
+               {
+                  // force lastCreated update in case of skip
+                  this.lastCreated.setTime(getCreationDate(pdt));
+                  this.dateChanged = true;
+               }
                continue;
             }
 
@@ -1084,8 +1335,15 @@ public class ODataProductSynchronizer extends Synchronizer
 
             res++;
             successCounter.inc();
-            this.lastCreated.setTime(getCreationDate(pdt));
-            this.dateChanged = true;
+            if (skippedProducts)
+            {
+               skippedProductsMap.remove(product.getUuid());
+            }
+            else
+            {
+               this.lastCreated.setTime(getCreationDate(pdt));
+               this.dateChanged = true;
+            }
 
             reportTimelinessMetrics(product);
 
@@ -1110,26 +1368,101 @@ public class ODataProductSynchronizer extends Synchronizer
       return res;
    }
 
+   private int synchronizeOfflineProducts(ODataEntry pdt, Counter failureCounter, Counter successCounter)
+   {
+      try
+      {
+         int res = 0;
+         IngestibleODataProduct product = entryToProducts(pdt, false, false);
+         String productUuid = product.getUuid();
+         try
+         {
+            // adding product and derived products
+            // If there is a problem to access the QL or the thumbnail(resource not available) the process stopped
+            // In fact, no information about the product is added (metadata and derived product references)
+            DERIVED_PRODUCT_STORE_SERVICE.addDefaultDerivedProductReferences(product);
+            METADATA_SERVICE.addProduct(product, targetCollectionName);
+         }
+         catch (StoreException e)
+         {
+            LOGGER.error("Synchronizer#{} Cannot synchronise product '{}'", getId(), productUuid, e);
+            if (failureCounter != null)
+            {
+               failureCounter.inc();
+            }
+            if (!this.skipOnError)
+            {
+               throw new SyncException(e);
+            }
+            LOGGER.warn("Synchronizer#{} PRODUCT SKIPPED from '{}', creationDate: {}", getId(), product.getOrigin(),
+                  product.getCreationDate());
+            skippedProductsMap.put(productUuid, 0);
+            // force lastCreated update in case of skip
+            this.lastCreated.setTime(getCreationDate(pdt));
+            this.dateChanged = true;
+            return res;
+         }
+
+         LOGGER.info("Synchronizer#{} Offline Product {} ({} bytes compressed) successfully synchronized from {}",
+               getId(), product.getIdentifier(), product.getProperty(ProductConstants.DATA_SIZE),
+               this.client.getServiceRoot());
+
+         res++;
+         if (successCounter != null)
+         {
+            successCounter.inc();
+         }
+         this.lastCreated.setTime(getCreationDate(pdt));
+         this.dateChanged = true;
+
+         reportTimelinessMetrics(product);
+
+         // Checks if we have to abandon the current pass
+         if (Thread.interrupted())
+         {
+            throw new InterruptedException();
+         }
+
+         return res;
+      }
+      catch (ODataException | IOException | InterruptedException
+            | MissingProductsException ex)
+      {
+         LOGGER.error("Synchronizer#{} OData failure", getId(), ex);
+         throw new SyncException(ex);
+      }
+   }
+
    @Override
    public boolean synchronize() throws InterruptedException
    {
       int retrieved = 0;
+      int retrievedSkipped = 0;
 
       LOGGER.info("Synchronizer#{} started", getId());
       try (Timer.Context ctx = METRIC_REGISTRY.timer("prod_sync.sync" + getId() + ".timer").time())
       {
+         if (processSkippedTurns >= MAX_TURNS_SKIPPED_PRODUCTS)
+         {
+            checkSkippedProducts();
+         }
+         else
+         {
+            incrementProcessSkippedTurns();
+         }
+         
          if (this.copyProduct)
          {
             // synchronization with copy
             if (checkDownloadTasks())
             {
-               retrieved = getAndCopyNewProduct();
+               retrieved = getAndCopyNewProduct(false);
             }
          }
          else
          {
             // synchronization without copy
-            retrieved = getNewProducts();
+            retrieved = getNewProducts(false);
          }
          if (Thread.interrupted())
          {
@@ -1138,6 +1471,7 @@ public class ODataProductSynchronizer extends Synchronizer
       }
       catch (LockAcquisitionException | CannotAcquireLockException e)
       {
+         LOGGER.warn("Synchronizer#{} - An exception occured {} Skipped products found", getId(), e);
          throw new InterruptedException(e.getMessage());
       }
       finally
@@ -1150,8 +1484,102 @@ public class ODataProductSynchronizer extends Synchronizer
             this.dateChanged = false;
          }
       }
+      return retrieved + retrievedSkipped > 0;
+   }
 
-      return retrieved > 0;
+   private void checkSkippedProducts() throws InterruptedException
+   {
+      //First check skipped product before each sync
+      if (skippedProductsMap != null && !skippedProductsMap.isEmpty())
+      {
+         LOGGER.debug("Synchronizer#{} - Execute the thread for skipped products", getId());
+         ExecutorService executor = Executors.newSingleThreadExecutor();
+         @SuppressWarnings("unchecked")
+         Future<String> future = executor.submit(new Callable()
+         {
+
+            public String call() throws Exception
+            {
+               return String.valueOf(processSkippedProducts());
+            }
+         });
+         try
+         {
+            future.get(this.getSkippedProductsTimeout(), TimeUnit.MILLISECONDS);  //timeout in milliseconds
+         }
+         catch (TimeoutException | ExecutionException e)
+         {
+            LOGGER.warn("Synchronizer#{} - skipped products - Exception {} }", getId(), e);
+         }
+         executor.shutdownNow();
+      }
+      setProcessSkippedTurns(0);
+   }
+
+   private String buildQueryFilterForSkippedProducts(Integer optionalSkip)
+   {
+      // If we do not have skipped products, no need to continue
+      if (skippedProductsMap == null || skippedProductsMap.isEmpty())
+      {
+         return null;
+      }
+
+      StringBuilder filterBuilder = new StringBuilder("(");
+      Object[] tabUuid = skippedProductsMap.keySet().toArray();
+      int length =  tabUuid.length;
+      
+      if (optionalSkip != null && optionalSkip > 0)
+      {
+         length = optionalSkip;
+      }
+      
+      for (int i=0; i<length; i++)
+      {
+         if (i == 0)
+          {
+             filterBuilder.append("Id eq '").append(tabUuid[i].toString()).append("' ");
+          }
+          else
+          {
+             filterBuilder.append("or Id eq '").append(tabUuid[i].toString()).append("' ");
+          }
+      }
+
+      filterBuilder.append(")");
+      LOGGER.debug("Synchronizer#{} - Filter for skipped products: {}", getId(), filterBuilder.toString());
+      return filterBuilder.toString();
+   }
+   
+   /**
+    * Process skipped products which was found during previous launching
+    * @return
+    * @throws InterruptedException 
+    */
+   private int processSkippedProducts() throws InterruptedException
+   {
+      int retrieved = 0;
+      try
+      {
+         if (this.copyProduct)
+         {
+            // synchronization with copy
+            if (checkDownloadTasks())
+            {
+               retrieved = getAndCopyNewProduct(true);
+            }
+         }
+         else
+         {
+            // synchronization without copy
+            retrieved = getNewProducts(true);
+         }
+         LOGGER.info("Synchronizer#{} - {} skipped products copied", getId(), retrieved);
+      }
+      catch (LockAcquisitionException | CannotAcquireLockException e)
+      {
+         throw new InterruptedException(e.getMessage());
+      }
+      return retrieved;
    }
 
    @Override
@@ -1188,9 +1616,54 @@ public class ODataProductSynchronizer extends Synchronizer
       return "OData Product Synchronizer on " + syncConf.getServiceUrl();
    }
 
-   /** Creates a client producer that produces HTTP Basic auth aware clients. */
-   private class BasicAuthHttpClientProducer implements HttpAsyncClientProducer
+   public int getRetriesSkippedProduct()
    {
+      return retriesSkippedProduct;
+   }
+
+   public void setRetriesSkippedProduct(int retriesSkippedProduct)
+   {
+      this.retriesSkippedProduct = retriesSkippedProduct;
+   }
+
+   public long getSkippedProductsTimeout()
+   {
+      return skippedProductsTimeout;
+   }
+
+   public void setSkippedProductsTimeout(long skippedProductsTimeout)
+   {
+      this.skippedProductsTimeout = skippedProductsTimeout;
+   }
+   
+   public int getProcessSkippedTurns()
+   {
+      return processSkippedTurns;
+   }
+
+   private void incrementProcessSkippedTurns()
+   {
+      ++processSkippedTurns;
+   }
+   
+   private void setProcessSkippedTurns(int processSkippedTurn)
+   {
+      this.processSkippedTurns = processSkippedTurn;
+   }
+
+   /** Creates a client producer that produces HTTP Basic auth aware clients. */
+   public class BasicAuthHttpClientProducer implements HttpAsyncClientProducer
+   {
+      public String getUsername()
+      {
+        return serviceUser;
+      }
+
+      public String getPassword()
+      {
+        return servicePass;
+      }
+
       @Override
       public CloseableHttpAsyncClient generateClient()
       {

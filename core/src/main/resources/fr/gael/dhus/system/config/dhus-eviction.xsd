@@ -67,14 +67,24 @@
       <xs:attribute name="targetCollection" type="xs:string" />
       <xs:attribute name="softEviction" type="xs:boolean" default="false" />
       <xs:attribute name="status" type="dhusEviction:evictionStatusEnum" default="STOPPED" />
+      <xs:attribute name="safeMode" type="xs:boolean" default="false"/>
+      <xs:attribute name="targetDataStore" type="xs:string"/>
+      <xs:attribute name="baseDate" type="dhusEviction:evictionBaseDate" default="modificationDate" />
    </xs:complexType>
-
+   
    <xs:simpleType name="evictionStatusEnum">
       <xs:restriction base="xs:string">
          <xs:enumeration value="STARTED" />
          <xs:enumeration value="STOPPED" />
          <xs:enumeration value="QUEUED" />
          <xs:enumeration value="CANCELED" />
+      </xs:restriction>
+   </xs:simpleType>
+   
+   <xs:simpleType name="evictionBaseDate">
+      <xs:restriction base="xs:string">
+         <xs:enumeration value="modificationDate" />
+         <xs:enumeration value="creationDate" />
       </xs:restriction>
    </xs:simpleType>
 

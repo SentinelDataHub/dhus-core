@@ -24,15 +24,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.stereotype.Component;
 
 import fr.gael.dhus.server.http.webapp.WebApp;
 import fr.gael.dhus.server.http.webapp.WebApplication;
+import fr.gael.dhus.server.http.webapp.saml.SamlWebapp;
+import fr.gael.dhus.spring.context.ApplicationContextProvider;
+import fr.gael.dhus.system.config.ConfigurationManager;
 
 @Component
 @WebApp(name = "validation")
 public class ValidationWebapp extends WebApplication
 {
+   private static final Logger LOGGER = LogManager.getLogger(ValidationWebapp.class);
    
    @Override
    public void configure(String dest_folder) throws IOException
@@ -49,6 +55,18 @@ public class ValidationWebapp extends WebApplication
          File webAppFolder = new File(dest_folder);
          copyFolder(new File(u.getFile ()), webAppFolder);
       }
+   }
+
+   @Override
+   public boolean isActive()
+   {
+      ConfigurationManager CONFIG_MANAGER = ApplicationContextProvider.getBean(ConfigurationManager.class);
+      if (CONFIG_MANAGER.isGDPREnabled())
+      {
+         LOGGER.info ("GDPR enabled. User management not done by DHuS. Validation web app disabled.");
+         return false;
+      }
+      return true;
    }
    
    @Override

@@ -206,6 +206,10 @@ public class User extends AbstractTimestampEntity implements Serializable,
    @OnDelete(action = OnDeleteAction.CASCADE)
    private Set<UserTransformation> userTransformations = new HashSet<UserTransformation>();
 
+   // GDPR : extended roles loaded from keycloak, no persistance in database
+   @Transient
+   private List<String> extendedRoles;
+
    public String getUsername ()
    {
       return username;
@@ -255,6 +259,16 @@ public class User extends AbstractTimestampEntity implements Serializable,
    public void setRoles (List<Role> roles)
    {
       this.roles = roles;
+   }
+
+   public void setExtendedRoles(List<String> roles)
+   {
+      this.extendedRoles = roles;
+   }
+
+   public List<String> getExtendedRoles()
+   {
+      return extendedRoles;
    }
 
    public List<Role> getRoles ()
@@ -359,6 +373,14 @@ public class User extends AbstractTimestampEntity implements Serializable,
       for (Role role : roles)
       {
          authorities.add (new SimpleGrantedAuthority(role.getAuthority ()));
+      }
+      if(extendedRoles == null)
+      {
+         return authorities;
+      }
+      for(String extendedRole : extendedRoles)
+      {
+         authorities.add (new SimpleGrantedAuthority(extendedRole));
       }
       return authorities;
    }

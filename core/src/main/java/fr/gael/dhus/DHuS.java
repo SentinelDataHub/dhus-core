@@ -40,6 +40,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.ServiceConfigurationError;
 import java.util.TimeZone;
 
 import org.apache.logging.log4j.Level;
@@ -207,8 +208,15 @@ public class DHuS
 
          context.getBean(DatabasePostInit.class).init();
          context.getBean(ISynchronizerService.class).init();
-         context.getBean(TransformationManager.class).init();
-
+         try
+         {
+            context.getBean(TransformationManager.class).init();
+         }
+         catch (ServiceConfigurationError e)
+         {
+            LOGGER.error ("Error while loading Transformer", e);
+            // avoid not fully starting DHuS if Transformer is not found
+         }
          LOGGER.info ("Server is ready...");
          started = true;
 
