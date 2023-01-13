@@ -611,7 +611,7 @@
       <dependency>
          <groupId>org.keycloak</groupId>
          <artifactId>keycloak-core</artifactId>
-         <version>12.0.4</version>
+         <version>20.0.3</version>
       </dependency>
 
       <!-- Jackson + databind required by Spring 5 -->
